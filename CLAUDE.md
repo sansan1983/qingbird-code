@@ -10,18 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | 尚未开工 — 等待从实现计划领取第一个 Task |
-| **上次完成** | 架构设计审查完成，v4.0 设计文档定稿，v1.0 实现计划已生成，CLAUDE.md 交接机制建立 |
-| **下次动作** | 开工 Milestone 0：初始化 Cargo 项目脚手架 |
-| **阻塞项** | 无 |
+| **当前任务** | M1 已完成，等待开工 M2 |
+| **上次完成** | M1 公共类型与错误处理（EflowError 14 变体 + 25+ 核心类型，build/clippy/fmt 全绿） |
+| **下次动作** | 开工 M2 配置系统（含 Windows 兼容） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-15 | M1 公共类型与错误处理 | `src/common/{mod,error,types}.rs` + uuid serde feature + commit |
+| 2026-06-15 | M0 项目脚手架完成 | `Cargo.toml` + 9 文件 + build 4m10s + commit 2051994 |
 | 2026-06-15 | CLAUDE.md 重构：建立会话交接 + 铁律 + 项目速览 | `CLAUDE.md`, `WORKLOG.md` |
-| 2026-06-15 | 实现计划生成 | `docs/superpowers/plans/2026-06-15-eflow-v1.0-implementation-plan.md` |
-| 2026-06-15 | 架构审查 + 重构 v4.0 | `docs/superpowers/specs/2026-06-15-eflow-design.md` |
 
 ## △ 收工仪式（每次结束前执行）
 
