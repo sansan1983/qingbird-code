@@ -1,0 +1,35 @@
+core:
+  language: zh-CN
+  timezone: Asia/Shanghai
+
+llm:
+  providers:
+    anthropic:
+      api_key: ${ANTHROPIC_API_KEY}
+      default_model: claude-sonnet-4-6
+    openai:
+      api_key: ${OPENAI_API_KEY}
+      default_model: gpt-4o
+  routing:
+    strong: anthropic
+    medium: anthropic
+    light: openai
+  cache:
+    l1_enabled: true
+
+memory:
+  working_memory_limit: 1000
+  project_db_path: ./data/project.db
+  user_db_path: ./data/user.db
+  cleanup_interval_hours: 24
+
+security:
+  risk_threshold: L2
+  allowed_paths:
+    - ~/projects
+    - ~/documents
+
+profiles:
+  default: developer
+  available:
+    - developer
