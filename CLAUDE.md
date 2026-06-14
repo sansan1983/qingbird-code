@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | M3 已完成，等待开工 M4 |
-| **上次完成** | M3 事件通道（Event 6 变体 + EventChannel tokio::broadcast 256 buffer，3 测试通过） |
-| **下次动作** | 开工 M4 LLM 集成（Provider + Router） |
+| **当前任务** | M4 已完成，等待开工 M5 |
+| **上次完成** | M4 LLM 集成（Provider trait + Anthropic 流式 + OpenAI + LlmRouter 限流降级，8 测试通过） |
+| **下次动作** | 开工 M5 记忆系统（三层） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-15 | M4 LLM 集成 (Provider + Router) | `src/infrastructure/llm/{mod,types,anthropic,openai,router}.rs` + futures-util |
 | 2026-06-15 | M3 事件通道 | `src/infrastructure/event.rs` 实装 + `tests/event_test.rs` |
 | 2026-06-15 | M2 配置系统（含 Windows 兼容） | `src/infrastructure/{mod,config}.rs` + 5 stubs + `tests/config_test.rs` + `dirs` crate |
-| 2026-06-15 | M1 公共类型与错误处理 | `src/common/{mod,error,types}.rs` + uuid serde feature + commit |
 
 ## △ 收工仪式（每次结束前执行）
 

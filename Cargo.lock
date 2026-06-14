@@ -315,6 +315,7 @@ dependencies = [
  "chrono",
  "clap",
  "dirs",
+ "futures-util",
  "indexmap",
  "once_cell",
  "regex-lite",

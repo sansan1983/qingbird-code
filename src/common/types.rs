@@ -111,7 +111,7 @@ pub struct ExecutionPlan {
     pub sub_steps: Vec<TaskStep>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModelTier {
     Strong, // Decisioner: Claude Opus / GPT-4
     Medium, // Feedbacker: Claude Sonnet / GPT-4o
