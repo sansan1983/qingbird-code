@@ -1,0 +1,93 @@
+use eflow::infrastructure::config::load_config;
+use std::io::Write;
+
+#[test]
+fn test_load_valid_config() {
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    let yaml = r#"
+core:
+  language: zh-CN
+  timezone: Asia/Shanghai
+llm:
+  providers:
+    anthropic:
+      api_key: test-key
+      default_model: claude-sonnet
+    openai:
+      api_key: test-key-2
+      default_model: gpt-4o
+  routing:
+    strong: anthropic
+    medium: anthropic
+    light: openai
+  cache:
+    l1_enabled: true
+memory:
+  working_memory_limit: 100
+  project_db_path: ./data/p.db
+  user_db_path: ./data/u.db
+  cleanup_interval_hours: 24
+security:
+  risk_threshold: L2
+  allowed_paths: [~/projects]
+profiles:
+  default: developer
+  available: [developer]
+"#;
+    tmp.write_all(yaml.as_bytes()).unwrap();
+    let config = load_config(tmp.path()).unwrap();
+    assert_eq!(config.llm.routing.strong, "anthropic");
+    assert_eq!(config.llm.routing.light, "openai");
+    assert_eq!(config.core.language, "zh-CN");
+    assert_eq!(config.memory.working_memory_limit, 100);
+}
+
+#[test]
+fn test_missing_config_file() {
+    let result = load_config(std::path::Path::new("/nonexistent/eflow.yaml"));
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_env_var_expansion_in_config() {
+    unsafe {
+        std::env::set_var("EFLOW_TEST_KEY", "expanded-key-value");
+    }
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    let yaml = r#"
+core:
+  language: en
+  timezone: UTC
+llm:
+  providers:
+    anthropic:
+      api_key: ${EFLOW_TEST_KEY}
+      default_model: claude-sonnet
+  routing:
+    strong: anthropic
+    medium: anthropic
+    light: anthropic
+  cache:
+    l1_enabled: false
+memory:
+  working_memory_limit: 10
+  project_db_path: ./p.db
+  user_db_path: ./u.db
+  cleanup_interval_hours: 1
+security:
+  risk_threshold: L0
+  allowed_paths: []
+profiles:
+  default: developer
+  available: [developer]
+"#;
+    tmp.write_all(yaml.as_bytes()).unwrap();
+    let config = load_config(tmp.path()).unwrap();
+    assert_eq!(
+        config.llm.providers.anthropic.unwrap().api_key,
+        "expanded-key-value"
+    );
+    unsafe {
+        std::env::remove_var("EFLOW_TEST_KEY");
+    }
+}

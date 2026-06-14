@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | M1 已完成，等待开工 M2 |
-| **上次完成** | M1 公共类型与错误处理（EflowError 14 变体 + 25+ 核心类型，build/clippy/fmt 全绿） |
-| **下次动作** | 开工 M2 配置系统（含 Windows 兼容） |
+| **当前任务** | M2 已完成，等待开工 M3 |
+| **上次完成** | M2 配置系统（YAML 加载 + ${ENV} 展开 + Windows 兼容用 `dirs` crate，5 测试通过） |
+| **下次动作** | 开工 M3 事件通道（tokio::broadcast） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-15 | M2 配置系统（含 Windows 兼容） | `src/infrastructure/{mod,config}.rs` + 5 stubs + `tests/config_test.rs` + `dirs` crate |
 | 2026-06-15 | M1 公共类型与错误处理 | `src/common/{mod,error,types}.rs` + uuid serde feature + commit |
 | 2026-06-15 | M0 项目脚手架完成 | `Cargo.toml` + 9 文件 + build 4m10s + commit 2051994 |
-| 2026-06-15 | CLAUDE.md 重构：建立会话交接 + 铁律 + 项目速览 | `CLAUDE.md`, `WORKLOG.md` |
 
 ## △ 收工仪式（每次结束前执行）
 
