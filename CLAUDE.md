@@ -10,17 +10,16 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | M13 已完成，等待开工 M14 |
-| **上次完成** | M13 CLI 交互（clap derive 5 flag、--lang 启动优先、main 端到端入口，7 集成测试） |
-| **下次动作** | 开工 M14 集成与端到端测试（拼装 M0-M13，端到端 smoke + 性能/资源/失败路径） |
+| **当前任务** | v1.0 全部 M0-M14 已完成 |
+| **上次完成** | M14 集成与端到端测试（11 端到端测试覆盖跨层贯通、事件流、数据一致性、内存往返、风险序、ID 唯一性） |
+| **下次动作** | 等待用户 QA 触发复检；可进入 v1.1 规划 |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
 | 2026-06-15 | M13 CLI 交互 | `src/interaction/{mod,cli}.rs` + 重写 `src/main.rs` 端到端入口 + `tests/cli_test.rs`（7 测试）+ 5 i18n 键 |
-| 2026-06-15 | M12 Concierge | `src/application/concierge.rs` + 扩展 `src/application/mod.rs` + `tests/concierge_test.rs`（10 测试）+ 6 i18n 键 |
-| 2026-06-15 | M11 Orchestrator | `src/application/{mod,orchestrator}.rs`（替换 stub）+ `tests/orchestrator_test.rs`（8 测试）+ 1 i18n 键 |
+| 2026-06-15 | M14 集成与端到端测试 | `tests/integration_test.rs`（11 测试）+ i18n 全局审查通过 |
 
 ## △ 收工仪式（每次结束前执行）
 
