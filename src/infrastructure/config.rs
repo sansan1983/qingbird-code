@@ -1,3 +1,4 @@
+use crate::common::types::RiskLevel;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
@@ -58,7 +59,7 @@ pub struct MemoryConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct SecurityConfig {
-    pub risk_threshold: String,
+    pub risk_threshold: RiskLevel,
     pub allowed_paths: Vec<String>,
 }
 

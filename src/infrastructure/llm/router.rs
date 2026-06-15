@@ -7,7 +7,7 @@ use crate::infrastructure::config::EflowConfig;
 
 use super::anthropic::AnthropicProvider;
 use super::openai::OpenAiProvider;
-use super::types::{ChatRequest, ChatResponse, LlmProvider, Message};
+use super::types::{ChatRequest, ChatResponse, LlmProvider};
 
 /// LLM Router — 统一入口，按 ModelTier 路由到具体 Provider
 pub struct LlmRouter {
@@ -89,6 +89,8 @@ impl LlmRouter {
             .ok_or_else(|| EflowError::Internal(format!("Provider '{}' not found", provider_name)))?
             .clone();
 
+        // 保留一份原请求给降级路径用
+        let fallback_request = request.clone();
         match provider.chat(request).await {
             Ok(response) => {
                 self.rate_limit_counters.remove(&provider_name);
@@ -105,7 +107,8 @@ impl LlmRouter {
                 };
 
                 if count >= 5 {
-                    self.try_degraded_call(tier, provider_name, count).await
+                    self.try_degraded_call(fallback_request, provider_name, count)
+                        .await
                 } else {
                     Err(EflowError::RateLimited(provider_name))
                 }
@@ -117,7 +120,7 @@ impl LlmRouter {
     /// 当主 provider 被限流时尝试降级
     async fn try_degraded_call(
         &mut self,
-        _original_tier: ModelTier,
+        request: ChatRequest,
         failed_provider: String,
         rate_limit_count: u32,
     ) -> Result<ChatResponse> {
@@ -136,7 +139,6 @@ impl LlmRouter {
 
         if let Some(fallback_name) = fallback {
             let provider = self.providers.get(&fallback_name).unwrap().clone();
-            let request = ChatRequest::new(provider.name(), vec![Message::user("retry")]);
             provider.chat(request).await
         } else {
             Err(EflowError::RateLimited(
