@@ -74,17 +74,22 @@ pub struct ProfileListConfig {
 /// 加载配置文件
 pub fn load_config(path: &Path) -> crate::common::error::Result<EflowConfig> {
     let content = std::fs::read_to_string(path).map_err(|e| {
-        crate::common::error::EflowError::Config(t!(
-            "err_config_read",
-            path = path.display().to_string(),
-            msg = e.to_string()
-        ))
+        crate::common::error::EflowError::Config(
+            t!(
+                "err_config_read",
+                path = path.display().to_string(),
+                msg = e.to_string()
+            )
+            .to_string(),
+        )
     })?;
 
     let expanded = expand_env_vars(&content);
 
     let config: EflowConfig = serde_yaml::from_str(&expanded).map_err(|e| {
-        crate::common::error::EflowError::Config(t!("err_config_parse", msg = e.to_string()))
+        crate::common::error::EflowError::Config(
+            t!("err_config_parse", msg = e.to_string()).to_string(),
+        )
     })?;
 
     Ok(config)
@@ -129,9 +134,7 @@ mod tests {
 
     #[test]
     fn expand_env_vars_substitutes_known_var() {
-        unsafe {
-            std::env::set_var("EFLOW_TEST_VAR", "hello");
-        }
+        std::env::set_var("EFLOW_TEST_VAR", "hello");
         let out = expand_env_vars("key=${EFLOW_TEST_VAR}");
         assert_eq!(out, "key=hello");
     }

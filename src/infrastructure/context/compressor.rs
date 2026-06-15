@@ -9,7 +9,7 @@ impl ContextCompressor {
     /// L1 结构压缩：工具调用日志 → 摘要行
     pub fn compress_action_log(logs: &[ActionRecord]) -> String {
         if logs.is_empty() {
-            return t!("ctx_no_actions").into();
+            return t!("ctx_no_actions").to_string();
         }
 
         let lines: Vec<String> = logs
@@ -24,6 +24,7 @@ impl ContextCompressor {
                     tool = a.tool.clone(),
                     summary = summary
                 )
+                .to_string()
             })
             .collect();
 
@@ -42,7 +43,8 @@ impl ContextCompressor {
             path = path,
             lines = lines,
             bytes = bytes
-        );
+        )
+        .to_string();
         let storage_key = format!("file:{}", path);
 
         let token_cost = (bytes / 4) as u32; // 粗略估算 token 数
@@ -54,7 +56,7 @@ impl ContextCompressor {
     /// L1 结构压缩：错误堆栈 → 错误类型 + 第一行
     pub fn compress_error(error: &str) -> String {
         let first_line = error.lines().next().unwrap_or("unknown error");
-        t!("ctx_error_summary", msg = first_line)
+        t!("ctx_error_summary", msg = first_line).to_string()
     }
 
     /// L2 语义压缩（v1.0 简化版本 — 规则驱动摘要）
@@ -67,10 +69,13 @@ impl ContextCompressor {
         // 规则驱动：保留首尾，中间截断
         let mut parts = vec![];
         parts.push(messages.first().cloned().unwrap_or_default());
-        parts.push(t!(
-            "ctx_conversation_omitted",
-            count = messages.len().saturating_sub(2)
-        ));
+        parts.push(
+            t!(
+                "ctx_conversation_omitted",
+                count = messages.len().saturating_sub(2)
+            )
+            .to_string(),
+        );
         parts.push(messages.last().cloned().unwrap_or_default());
 
         let summary = parts.join("\n");

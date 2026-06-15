@@ -83,7 +83,9 @@ impl LlmProvider for AnthropicProvider {
             .json(&body)
             .send()
             .await
-            .map_err(|e| EflowError::LlmProvider(t!("err_http", msg = e.to_string())))?;
+            .map_err(|e| {
+                EflowError::LlmProvider(t!("err_http", msg = e.to_string()).to_string())
+            })?;
 
         let status = response.status();
         if status == reqwest::StatusCode::UNAUTHORIZED {
@@ -96,7 +98,9 @@ impl LlmProvider for AnthropicProvider {
         let json: Value = response
             .json()
             .await
-            .map_err(|e| EflowError::LlmProvider(t!("err_json_parse", msg = e.to_string())))?;
+            .map_err(|e| {
+                EflowError::LlmProvider(t!("err_json_parse", msg = e.to_string()).to_string())
+            })?;
 
         let content = json["content"]
             .as_array()

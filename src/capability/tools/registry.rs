@@ -59,7 +59,7 @@ impl ToolRegistry {
     /// 执行工具
     pub async fn execute(&self, name: &str, params: serde_json::Value) -> Result<ToolOutput> {
         let tool = self.tools.get(name).ok_or_else(|| {
-            EflowError::Tool(t!("err_tool_not_found", name = name))
+            EflowError::Tool(t!("err_tool_not_found", name = name).to_string())
         })?;
 
         // 风险检查
@@ -67,7 +67,7 @@ impl ToolRegistry {
         if def.risk_level >= RiskLevel::L3 {
             return Err(EflowError::RiskEscalated {
                 task_id: "unknown".into(),
-                reason: t!("err_tool_l3_required", name = name),
+                reason: t!("err_tool_l3_required", name = name).to_string(),
             });
         }
 

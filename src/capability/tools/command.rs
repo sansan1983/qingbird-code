@@ -28,7 +28,9 @@ impl Tool for ExecuteCommandTool {
     async fn execute(&self, params: serde_json::Value) -> Result<ToolOutput> {
         let command = params["command"]
             .as_str()
-            .ok_or_else(|| EflowError::Tool(t!("err_tool_missing_param", name = "command")))?;
+            .ok_or_else(|| {
+                EflowError::Tool(t!("err_tool_missing_param", name = "command").to_string())
+            })?;
 
         let args: Vec<String> = params["args"]
             .as_array()
@@ -43,7 +45,16 @@ impl Tool for ExecuteCommandTool {
             .args(&args)
             .output()
             .await
-            .map_err(|e| EflowError::Tool(t!("err_tool_execute", command = command, msg = e.to_string())))?;
+            .map_err(|e| {
+                EflowError::Tool(
+                    t!(
+                        "err_tool_execute",
+                        command = command,
+                        msg = e.to_string()
+                    )
+                    .to_string(),
+                )
+            })?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();

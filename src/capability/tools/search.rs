@@ -37,7 +37,9 @@ impl Tool for SearchCodeTool {
     async fn execute(&self, params: serde_json::Value) -> Result<ToolOutput> {
         let pattern = params["pattern"]
             .as_str()
-            .ok_or_else(|| EflowError::Tool(t!("err_tool_missing_param", name = "pattern")))?;
+            .ok_or_else(|| {
+                EflowError::Tool(t!("err_tool_missing_param", name = "pattern").to_string())
+            })?;
         let search_path = params["path"].as_str().unwrap_or(".");
         let file_types = params["file_types"].as_str();
 
@@ -52,15 +54,22 @@ impl Tool for SearchCodeTool {
             .unwrap_or_default();
 
         // 编译正则
-        let re = Regex::new(pattern)
-            .map_err(|e| EflowError::Tool(t!("err_tool_invalid_regex", pattern = pattern, msg = e.to_string())))?;
+        let re = Regex::new(pattern).map_err(|e| {
+            EflowError::Tool(
+                t!(
+                    "err_tool_invalid_regex",
+                    pattern = pattern,
+                    msg = e.to_string()
+                )
+                .to_string(),
+            )
+        })?;
 
         let root = Path::new(search_path);
         if !root.exists() {
-            return Err(EflowError::Tool(t!(
-                "err_tool_invalid_path",
-                path = search_path
-            )));
+            return Err(EflowError::Tool(
+                t!("err_tool_invalid_path", path = search_path).to_string(),
+            ));
         }
 
         // 收集匹配结果
@@ -122,9 +131,9 @@ impl Tool for SearchCodeTool {
 
         let count = hits.len();
         let body = if hits.is_empty() {
-            t!("status_no_match", pattern = pattern)
+            t!("status_no_match", pattern = pattern).to_string()
         } else {
-            t!("status_match_count", count = count) + "\n\n" + &hits.join("\n")
+            t!("status_match_count", count = count).to_string() + "\n\n" + &hits.join("\n")
         };
 
         Ok(ToolOutput {

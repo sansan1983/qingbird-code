@@ -48,10 +48,13 @@ impl ProfileRegistry {
         }
 
         for entry in std::fs::read_dir(profiles_dir)
-            .map_err(|e| EflowError::Config(t!("err_read_profiles_dir", msg = e.to_string())))?
+            .map_err(|e| {
+                EflowError::Config(t!("err_read_profiles_dir", msg = e.to_string()).to_string())
+            })?
         {
-            let entry =
-                entry.map_err(|e| EflowError::Config(t!("err_read_entry", msg = e.to_string())))?;
+            let entry = entry.map_err(|e| {
+                EflowError::Config(t!("err_read_entry", msg = e.to_string()).to_string())
+            })?;
             let path = entry.path();
             if path
                 .extension()
@@ -66,11 +69,14 @@ impl ProfileRegistry {
 
     fn load_profile_file(&self, path: &Path) -> Result<Profile> {
         let content = std::fs::read_to_string(path).map_err(|e| {
-            EflowError::Config(t!(
-                "err_read_file",
-                path = path.display().to_string(),
-                msg = e.to_string()
-            ))
+            EflowError::Config(
+                t!(
+                    "err_read_file",
+                    path = path.display().to_string(),
+                    msg = e.to_string()
+                )
+                .to_string(),
+            )
         })?;
 
         // 校验 checksum（v1.0: 简单校验；v2.0: 数字签名）
@@ -78,11 +84,14 @@ impl ProfileRegistry {
         // checksum 记录在日志中，用于防篡改检测
 
         let profile: Profile = serde_yaml::from_str(&content).map_err(|e| {
-            EflowError::Config(t!(
-                "err_parse_file",
-                path = path.display().to_string(),
-                msg = e.to_string()
-            ))
+            EflowError::Config(
+                t!(
+                    "err_parse_file",
+                    path = path.display().to_string(),
+                    msg = e.to_string()
+                )
+                .to_string(),
+            )
         })?;
 
         tracing::info!(
@@ -100,10 +109,13 @@ impl ProfileRegistry {
         }
 
         for entry in std::fs::read_dir(skills_dir)
-            .map_err(|e| EflowError::Config(t!("err_read_profiles_dir", msg = e.to_string())))?
+            .map_err(|e| {
+                EflowError::Config(t!("err_read_profiles_dir", msg = e.to_string()).to_string())
+            })?
         {
-            let entry =
-                entry.map_err(|e| EflowError::Config(t!("err_read_entry", msg = e.to_string())))?;
+            let entry = entry.map_err(|e| {
+                EflowError::Config(t!("err_read_entry", msg = e.to_string()).to_string())
+            })?;
             let path = entry.path();
             if path
                 .extension()
@@ -117,19 +129,25 @@ impl ProfileRegistry {
 
     fn load_skill_file(&mut self, path: &Path) -> Result<()> {
         let content = std::fs::read_to_string(path).map_err(|e| {
-            EflowError::Config(t!(
-                "err_read_file",
-                path = path.display().to_string(),
-                msg = e.to_string()
-            ))
+            EflowError::Config(
+                t!(
+                    "err_read_file",
+                    path = path.display().to_string(),
+                    msg = e.to_string()
+                )
+                .to_string(),
+            )
         })?;
 
         let skill: Skill = serde_yaml::from_str(&content).map_err(|e| {
-            EflowError::Config(t!(
-                "err_parse_file",
-                path = path.display().to_string(),
-                msg = e.to_string()
-            ))
+            EflowError::Config(
+                t!(
+                    "err_parse_file",
+                    path = path.display().to_string(),
+                    msg = e.to_string()
+                )
+                .to_string(),
+            )
         })?;
 
         // 权限校验：Skill 的 risk_level 不能超过 Profile 的权限边界

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use uuid::Uuid;
 
 use crate::common::types::*;
 use rust_i18n::t;
@@ -84,6 +83,7 @@ impl Blackboard {
             total = total,
             retries = self.retry_count
         )
+        .to_string()
     }
 }
 
@@ -91,6 +91,7 @@ impl Blackboard {
 mod tests {
     use super::*;
     use chrono::Utc;
+    use uuid::Uuid;
 
     fn make_task(desc: &str, risk: RiskLevel) -> TaskSpec {
         TaskSpec::new(desc.into(), risk)

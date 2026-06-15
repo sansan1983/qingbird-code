@@ -41,7 +41,9 @@ impl LlmRouter {
         }
 
         if providers.is_empty() {
-            return Err(EflowError::Config(t!("err_no_llm_providers").into()));
+            return Err(EflowError::Config(
+                t!("err_no_llm_providers").to_string(),
+            ));
         }
 
         let mut routing = HashMap::new();
@@ -79,14 +81,18 @@ impl LlmRouter {
         let provider_name = self
             .routing
             .get(&tier)
-            .ok_or_else(|| EflowError::Internal(t!("err_no_provider", tier = format!("{:?}", tier))))?
+            .ok_or_else(|| {
+                EflowError::Internal(t!("err_no_provider", tier = format!("{:?}", tier)).to_string())
+            })?
             .clone();
 
         let provider = self
             .providers
             .get(&provider_name)
             .ok_or_else(|| {
-                EflowError::Internal(t!("err_provider_not_found", name = provider_name.clone()))
+                EflowError::Internal(
+                    t!("err_provider_not_found", name = provider_name.clone()).to_string(),
+                )
             })?
             .clone();
 
@@ -126,10 +132,9 @@ impl LlmRouter {
         rate_limit_count: u32,
     ) -> Result<ChatResponse> {
         if rate_limit_count >= 10 {
-            return Err(EflowError::RateLimited(t!(
-                "err_all_providers_limited",
-                count = rate_limit_count
-            )));
+            return Err(EflowError::RateLimited(
+                t!("err_all_providers_limited", count = rate_limit_count).to_string(),
+            ));
         }
 
         let fallback = self
@@ -142,7 +147,7 @@ impl LlmRouter {
             let provider = self.providers.get(&fallback_name).unwrap().clone();
             provider.chat(request).await
         } else {
-            Err(EflowError::RateLimited(t!("err_no_fallback").into()))
+            Err(EflowError::RateLimited(t!("err_no_fallback").to_string()))
         }
     }
 
