@@ -10,15 +10,15 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | v1.0 已开源推送到 GitHub（public，分支保护已启用） |
-| **上次完成** | 首轮推送：docs + untrack Cargo.lock + 仓库转 public + main 分支保护（PR-only + linear + enforce admins） |
-| **下次动作** | v1.1 立项：所有改动走 `milestone/v1.1` / `feature/*` / `fix/*` 分支 + PR；或等待新指令 |
+| **当前任务** | v1.0 已开源推送；CLAUDE.md 收尾更新待合并（PR #2 流程中） |
+| **上次完成** | v1.0 开源：6 文件开源文档 + untrack Cargo.lock + 仓库 public + main 分支保护（require PR + linear + 不允许 force-push） |
+| **下次动作** | 等待你 Approve PR #2；之后 v1.1 立项（所有改动走 `milestone/v1.1` / `feature/*` / `fix/*` 分支 + PR） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
-| 2026-06-15 | 首轮推送 | 6 文件开源文档（README 双语/LICENSE-MIT/LICENSE-APACHE/CONTRIBUTING/CHANGELOG/.github/PR template）；untrack Cargo.lock；仓库 public；main 分支保护启用 |
+| 2026-06-15 | 首轮推送收尾 | docs + untrack Cargo.lock + 仓库转 public + main 分支保护 + PR #1 (handoff log) 已合入 main |
 | 2026-06-15 | QA 二轮复检 | 11 项 finding 全部 plan 合规不采纳；W5/W6/S2 已由 P0 修复覆盖；B2 (timeout 接线) 记 v1.1 候选 |
 | 2026-06-15 | QA P0 修复 | t!()→.to_string() 56+ 处；config.rs 删 unsafe 块；blackboard.rs uuid 移 mod tests |
 
