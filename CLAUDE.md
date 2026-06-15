@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | M11 已完成，等待开工 M12 |
-| **上次完成** | M11 Orchestrator（任务分解 + Subagent 调度 + 事件发布，8 集成测试；修复 plan 3 处编译/语义 bug） |
-| **下次动作** | 开工 M12 Concierge（零阻塞对话入口 + 意图识别） |
+| **当前任务** | M12 已完成，等待开工 M13 |
+| **上次完成** | M12 Concierge（零阻塞对话入口 + 规则意图识别 6 路径 + 异步任务派发，10 集成测试） |
+| **下次动作** | 开工 M13 CLI 交互（clap derive 加 --lang flag，启动时优先于 config） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-15 | M12 Concierge | `src/application/concierge.rs` + 扩展 `src/application/mod.rs` + `tests/concierge_test.rs`（10 测试）+ 6 i18n 键 |
 | 2026-06-15 | M11 Orchestrator | `src/application/{mod,orchestrator}.rs`（替换 stub）+ `tests/orchestrator_test.rs`（8 测试）+ 1 i18n 键 |
 | 2026-06-15 | M10 Subagent | `src/capability/subagent.rs` + 扩展 `tests/capability_test.rs`（+ 4 集成测试）+ 1 i18n 键 |
-| 2026-06-15 | M9 能力层核心 | `src/capability/{blackboard,decisioner,executor,feedbacker}.rs` + `tests/capability_test.rs`（16 集成测试）+ Blackboard 10 inline 测试 + 7 i18n 键 |
 
 ## △ 收工仪式（每次结束前执行）
 
