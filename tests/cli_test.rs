@@ -1,0 +1,56 @@
+use clap::Parser;
+use eflow::interaction::cli::Cli;
+
+#[test]
+fn cli_default_has_interactive_true_and_no_flags() {
+    let c = Cli::parse_from(["eflow"]);
+    assert!(c.interactive);
+    assert!(c.execute.is_none());
+    assert!(!c.show_config);
+    assert!(!c.list_profiles);
+    assert!(c.lang.is_none());
+}
+
+#[test]
+fn cli_parses_execute_short_flag() {
+    let c = Cli::parse_from(["eflow", "-e", "read README"]);
+    assert_eq!(c.execute.as_deref(), Some("read README"));
+}
+
+#[test]
+fn cli_parses_show_config_long_flag() {
+    let c = Cli::parse_from(["eflow", "--show-config"]);
+    assert!(c.show_config);
+}
+
+#[test]
+fn cli_parses_list_profiles_long_flag() {
+    let c = Cli::parse_from(["eflow", "--list-profiles"]);
+    assert!(c.list_profiles);
+}
+
+#[test]
+fn cli_parses_lang_long_flag() {
+    let c = Cli::parse_from(["eflow", "--lang", "en-US"]);
+    assert_eq!(c.lang.as_deref(), Some("en-US"));
+}
+
+#[test]
+fn cli_no_interactive_flag_disables_default() {
+    let c = Cli::parse_from(["eflow", "--no-interactive"]);
+    assert!(!c.interactive);
+}
+
+#[test]
+fn cli_combined_flags() {
+    let c = Cli::parse_from([
+        "eflow",
+        "--lang",
+        "zh-CN",
+        "--list-profiles",
+        "--no-interactive",
+    ]);
+    assert_eq!(c.lang.as_deref(), Some("zh-CN"));
+    assert!(c.list_profiles);
+    assert!(!c.interactive);
+}
