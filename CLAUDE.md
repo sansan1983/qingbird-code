@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | v1.0 已开源推送；CLAUDE.md 收尾更新待合并（PR #2 流程中） |
-| **上次完成** | v1.0 开源：6 文件开源文档 + untrack Cargo.lock + 仓库 public + main 分支保护（require PR + linear + 不允许 force-push） |
-| **下次动作** | 等待你 Approve PR #2；之后 v1.1 立项（所有改动走 `milestone/v1.1` / `feature/*` / `fix/*` 分支 + PR） |
+| **当前任务** | v1.1 计划已落盘（PR #2 待合并；Phase A M4.5 LLM 硬化 / Phase B M8 L2 缓存 / Phase C M10.5 多 Subagent） |
+| **上次完成** | v1.1 三阶段计划：17 Task / 85+ TDD 步骤，存 `docs/superpowers/plans/2026-06-15-eflow-v1.1-implementation-plan.md` |
+| **下次动作** | 合并 PR #2 → v1.1 立项（按计划 Phase A Task A1 扩 LlmConfig 开工） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-15 | v1.1 计划生成 | `docs/superpowers/plans/2026-06-15-eflow-v1.1-implementation-plan.md`（2985 行，覆盖 M4.5+M8+M10.5） |
 | 2026-06-15 | 首轮推送收尾 | docs + untrack Cargo.lock + 仓库转 public + main 分支保护 + PR #1 (handoff log) 已合入 main |
 | 2026-06-15 | QA 二轮复检 | 11 项 finding 全部 plan 合规不采纳；W5/W6/S2 已由 P0 修复覆盖；B2 (timeout 接线) 记 v1.1 候选 |
-| 2026-06-15 | QA P0 修复 | t!()→.to_string() 56+ 处；config.rs 删 unsafe 块；blackboard.rs uuid 移 mod tests |
 
 ## △ 收工仪式（每次结束前执行）
 
@@ -107,7 +107,8 @@
 | 文件 | 用途 |
 |------|------|
 | `docs/superpowers/specs/2026-06-15-eflow-design.md` | 架构设计文档 v4.0（理解架构读这个） |
-| `docs/superpowers/plans/2026-06-15-eflow-v1.0-implementation-plan.md` | v1.0 实现计划（按 Task + Step 执行） |
+| `docs/superpowers/plans/2026-06-15-eflow-v1.1-implementation-plan.md` | **v1.1 实现计划（按 Task + Step 执行，活跃中）** |
+| `docs/superpowers/plans/2026-06-15-eflow-v1.0-implementation-plan.md` | v1.0 实现计划（已收尾，归档） |
 | `WORKLOG.md` | 完整工作日志归档 |
 
 ### 架构四层
@@ -121,7 +122,7 @@
 
 ### 当前版本
 
-v1.0 内核范围：端到端可运行骨架（单 Subagent、三层记忆、CLI 交互）
+v1.1 计划已生成待执行：M4.5 LLM 硬化（关 QA B2）+ M8 L2 结构化缓存 + M10.5 多 Subagent 并发池
 
 ### 技术栈
 

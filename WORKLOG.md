@@ -6,6 +6,7 @@
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-15 | QA P0 修复 | t!()→.to_string() 56+ 处（config/llm/loader/project/compressor/blackboard/tools/registry）；config.rs 删 unsafe 块；blackboard.rs uuid 移 mod tests |
 | 2026-06-15 | M7.5 i18n 国际化 | `src/infrastructure/locale.rs` + `locales/{zh-CN,en-US}.yml` + 13 处硬编码翻译 + `tests/i18n_test.rs`（10 测试） |
 | 2026-06-15 | M9 能力层核心 | `src/capability/{blackboard,decisioner,executor,feedbacker}.rs` + `tests/capability_test.rs`（16 集成测试）+ Blackboard 10 inline 测试 + 7 i18n 键 |
 | 2026-06-15 | M10 Subagent | `src/capability/subagent.rs` + 扩展 `tests/capability_test.rs`（+ 4 集成测试）+ 1 i18n 键 |
