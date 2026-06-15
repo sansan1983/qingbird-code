@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | v1.0 全部 M0-M14 已完成；QA P0 修复已落地 |
-| **上次完成** | QA P0 修复：t!() Cow→String 转换 (12 文件 ~55 处) + 删除冗余 unsafe 块 + uuid import 收窄到 mod tests |
-| **下次动作** | 等待用户 QA 二次复检；可进入 v1.1 规划 |
+| **当前任务** | v1.0 全部 M0-M14 + QA P0 修复完成；QA 二轮复检通过 |
+| **上次完成** | QA 二轮复检：11 项 finding 全部 plan 合规，0 真 bug；B2 (timeout) 归 v1.1 |
+| **下次动作** | v1.1 规划：M4.5 Config-driven LLM hardening (timeout/retry 接线)；或等待新指令 |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-15 | QA 二轮复检 | 11 项 finding 全部 plan 合规不采纳；W5/W6/S2 已由 P0 修复覆盖；B2 (timeout 接线) 记 v1.1 候选 |
 | 2026-06-15 | QA P0 修复 | t!()→.to_string() 56+ 处（config/llm/loader/project/compressor/blackboard/tools/registry）；config.rs 删 unsafe 块；blackboard.rs uuid 移 mod tests |
 | 2026-06-15 | M13 CLI 交互 | `src/interaction/{mod,cli}.rs` + 重写 `src/main.rs` 端到端入口 + `tests/cli_test.rs`（7 测试）+ 5 i18n 键 |
-| 2026-06-15 | M14 集成与端到端测试 | `tests/integration_test.rs`（11 测试）+ i18n 全局审查通过 |
 
 ## △ 收工仪式（每次结束前执行）
 
