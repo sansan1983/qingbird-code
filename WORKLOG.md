@@ -8,7 +8,6 @@
 |------|------|------|
 | 2026-06-15 | M7 Profile + Skill | `src/infrastructure/profile/{mod,loader,skill}.rs` + `profiles/developer.yaml` + `tests/profile_test.rs` |
 | 2026-06-15 | M6 上下文管理 | `src/infrastructure/context/{mod,reference,compressor}.rs` + `tests/context_test.rs`（ContextRef 从 types.rs 挪来） |
-| 2026-06-15 | M5 记忆系统（三层） | `src/infrastructure/memory/{mod,manager,working,project,user,composite}.rs` + `tests/memory_test.rs` |
 | 2026-06-15 | M4 LLM 集成 (Provider + Router) | `src/infrastructure/llm/{mod,types,anthropic,openai,router}.rs` + futures-util |
 | 2026-06-15 | M3 事件通道 | `src/infrastructure/event.rs` 实装 + `tests/event_test.rs` |
 | 2026-06-15 | M2 配置系统（含 Windows 兼容） | `src/infrastructure/{mod,config}.rs` + 5 stubs + `tests/config_test.rs` + `dirs` crate |
