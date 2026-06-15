@@ -43,15 +43,16 @@ fn test_context_ref_short_id_is_eight_chars() {
 }
 
 #[test]
+#[serial_test::serial]
 fn test_compress_action_log_empty() {
-    assert_eq!(
-        ContextCompressor::compress_action_log(&[]),
-        "无操作"
-    );
+    locale::init(Some("zh-CN"));
+    assert_eq!(ContextCompressor::compress_action_log(&[]), "无操作");
 }
 
 #[test]
+#[serial_test::serial]
 fn test_compress_action_log_renders_status_and_tool() {
+    locale::init(Some("zh-CN"));
     let logs = vec![
         record("read_file", true, "ok"),
         record("search", false, "no match"),
@@ -74,7 +75,9 @@ fn test_compress_action_log_truncates_long_summary() {
 }
 
 #[test]
+#[serial_test::serial]
 fn test_compress_file_content_returns_preview_and_ref() {
+    locale::init(Some("zh-CN"));
     let content = "line1\nline2\nline3\nline4\nline5";
     let (preview, ctx_ref) = ContextCompressor::compress_file_content("foo.rs", content);
     assert_eq!(preview, "line1\nline2\nline3");
@@ -101,7 +104,9 @@ fn test_summarize_conversation_short_returns_as_is() {
 }
 
 #[test]
+#[serial_test::serial]
 fn test_summarize_conversation_long_keeps_ends_and_skips_middle() {
+    locale::init(Some("zh-CN"));
     let msgs: Vec<String> = (0..10).map(|i| format!("msg {}", i)).collect();
     let out = ContextCompressor::summarize_conversation(&msgs, 1000);
     assert!(out.contains("msg 0"));

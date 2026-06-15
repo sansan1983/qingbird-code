@@ -58,9 +58,10 @@ impl ToolRegistry {
 
     /// 执行工具
     pub async fn execute(&self, name: &str, params: serde_json::Value) -> Result<ToolOutput> {
-        let tool = self.tools.get(name).ok_or_else(|| {
-            EflowError::Tool(t!("err_tool_not_found", name = name).to_string())
-        })?;
+        let tool = self
+            .tools
+            .get(name)
+            .ok_or_else(|| EflowError::Tool(t!("err_tool_not_found", name = name).to_string()))?;
 
         // 风险检查
         let def = tool.definition();

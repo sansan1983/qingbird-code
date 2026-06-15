@@ -1,7 +1,7 @@
+use super::blackboard::Blackboard;
 use crate::common::error::Result;
 use crate::common::types::*;
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
-use super::blackboard::Blackboard;
 
 /// Decisioner — 风险评估 + 执行计划生成 + 模型路由
 pub struct Decisioner {

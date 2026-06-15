@@ -28,8 +28,9 @@ use eflow::infrastructure::config::{
 use eflow::infrastructure::context::ContextCompressor;
 use eflow::infrastructure::event::{Event, EventChannel};
 use eflow::infrastructure::llm::LlmRouter;
-use eflow::infrastructure::locale;
-use eflow::infrastructure::memory::{CompositeMemory, MemoryEntry, RecallScope, WorkingMemory};
+use eflow::infrastructure::memory::{
+    CompositeMemory, MemoryEntry, MemoryManager, RecallScope, WorkingMemory,
+};
 use eflow::infrastructure::profile::ProfileRegistry;
 use tokio::sync::{Mutex, RwLock};
 
@@ -150,6 +151,7 @@ async fn e2e_concierge_dispatch_publishes_lifecycle_events() {
 
     // 第二事件 = TaskCompleted 或 TaskFailed
     let mut terminal_seen = false;
+    #[allow(clippy::never_loop)] // 3 次机会 break 模式只用 1 次；v1.x 改 '_ => continue' 用足 3 次
     for _ in 0..3 {
         match tokio::time::timeout(Duration::from_secs(5), rx.recv()).await {
             Ok(Ok(Event::TaskCompleted { .. })) => {
@@ -285,7 +287,11 @@ fn e2e_context_compression_estimate_tokens_is_monotonic() {
 #[test]
 fn e2e_memory_remember_recall_round_trip() {
     let mut memory = WorkingMemory::new(100);
-    let entry = MemoryEntry::new("跨层测试记忆", MemoryCategory::TaskResult, Importance::Normal);
+    let entry = MemoryEntry::new(
+        "跨层测试记忆",
+        MemoryCategory::TaskResult,
+        Importance::Normal,
+    );
     let id = memory.remember(entry).unwrap();
 
     let results = memory.recall("测试", RecallScope::Working, 10).unwrap();
@@ -354,9 +360,7 @@ async fn e2e_event_channel_publishes_all_6_variants() {
         from: RiskLevel::L1,
         to: RiskLevel::L2,
     });
-    channel.publish(Event::UserInputRequired {
-        prompt: "?".into(),
-    });
+    channel.publish(Event::UserInputRequired { prompt: "?".into() });
     channel.publish(Event::SystemShutdown);
 
     let mut received = Vec::new();
@@ -385,10 +389,10 @@ async fn e2e_event_channel_publishes_all_6_variants() {
     let has_input = received
         .iter()
         .any(|e| matches!(e, Event::UserInputRequired { .. }));
-    let has_shutdown = received
-        .iter()
-        .any(|e| matches!(e, Event::SystemShutdown));
+    let has_shutdown = received.iter().any(|e| matches!(e, Event::SystemShutdown));
 
     assert_eq!(received.len(), 6, "应收到全部 6 个事件");
-    assert!(has_started && has_completed && has_failed && has_escalated && has_input && has_shutdown);
+    assert!(
+        has_started && has_completed && has_failed && has_escalated && has_input && has_shutdown
+    );
 }

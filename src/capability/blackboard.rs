@@ -122,30 +122,30 @@ mod tests {
 
     #[test]
     fn with_plan_overrides_risk() {
-        let bb = Blackboard::new(make_task("t", RiskLevel::L0))
-            .with_plan(TaskPlan {
-                task_id: Uuid::new_v4(),
-                steps: vec![],
-                estimated_steps: 1,
-                risk_level: RiskLevel::L3,
-            });
+        let bb = Blackboard::new(make_task("t", RiskLevel::L0)).with_plan(TaskPlan {
+            task_id: Uuid::new_v4(),
+            steps: vec![],
+            estimated_steps: 1,
+            risk_level: RiskLevel::L3,
+        });
         assert_eq!(bb.risk_level, RiskLevel::L3);
     }
 
     #[test]
     fn with_execution_plan_overrides_risk() {
-        let bb = Blackboard::new(make_task("t", RiskLevel::L0)).with_execution_plan(ExecutionPlan {
-            step: PlannedStep {
-                order: 0,
-                action: "a".into(),
-                tool: "read_file".into(),
-                params: serde_json::json!({}),
-                depends_on: None,
-            },
-            model_tier: ModelTier::Strong,
-            risk_level: RiskLevel::L2,
-            sub_steps: vec![],
-        });
+        let bb =
+            Blackboard::new(make_task("t", RiskLevel::L0)).with_execution_plan(ExecutionPlan {
+                step: PlannedStep {
+                    order: 0,
+                    action: "a".into(),
+                    tool: "read_file".into(),
+                    params: serde_json::json!({}),
+                    depends_on: None,
+                },
+                model_tier: ModelTier::Strong,
+                risk_level: RiskLevel::L2,
+                sub_steps: vec![],
+            });
         assert_eq!(bb.risk_level, RiskLevel::L2);
     }
 
@@ -168,7 +168,7 @@ mod tests {
             });
         assert_eq!(bb.action_log.len(), 2);
         assert_eq!(bb.action_log[0].action, "a1");
-        assert!(bb.action_log[1].success == false);
+        assert!(!bb.action_log[1].success);
     }
 
     #[test]
@@ -184,7 +184,9 @@ mod tests {
         let bb = Blackboard::new(make_task("t", RiskLevel::L0))
             .with_feedback(FeedbackRecord {
                 timestamp: Utc::now(),
-                verdict: QualityVerdict::Pass { summary: "ok".into() },
+                verdict: QualityVerdict::Pass {
+                    summary: "ok".into(),
+                },
                 retry_count: 0,
             })
             .with_feedback(FeedbackRecord {
@@ -211,11 +213,14 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn summarize_uses_zh_locale() {
         crate::infrastructure::locale::init(Some("zh-CN"));
         let bb = Blackboard::new(make_task("测试", RiskLevel::L0)).with_feedback(FeedbackRecord {
             timestamp: Utc::now(),
-            verdict: QualityVerdict::Pass { summary: "ok".into() },
+            verdict: QualityVerdict::Pass {
+                summary: "ok".into(),
+            },
             retry_count: 0,
         });
         let s = bb.summarize();
@@ -223,11 +228,14 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn summarize_uses_en_locale() {
         crate::infrastructure::locale::init(Some("en-US"));
         let bb = Blackboard::new(make_task("task", RiskLevel::L0)).with_feedback(FeedbackRecord {
             timestamp: Utc::now(),
-            verdict: QualityVerdict::Pass { summary: "ok".into() },
+            verdict: QualityVerdict::Pass {
+                summary: "ok".into(),
+            },
             retry_count: 0,
         });
         let s = bb.summarize();

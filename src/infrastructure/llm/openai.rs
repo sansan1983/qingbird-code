@@ -77,13 +77,21 @@ impl LlmProvider for OpenAiProvider {
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
             return Err(EflowError::RateLimited("OpenAI".into()));
         }
+        if !status.is_success() {
+            // 403 (invalid key) / 5xx 等：4xx/5xx 一律按 provider 错处理
+            let body = response.text().await.unwrap_or_default();
+            return Err(EflowError::LlmProvider(
+                t!(
+                    "err_http",
+                    msg = format!("status {}: {}", status.as_u16(), body)
+                )
+                .to_string(),
+            ));
+        }
 
-        let json: Value = response
-            .json()
-            .await
-            .map_err(|e| {
-                EflowError::LlmProvider(t!("err_json_parse", msg = e.to_string()).to_string())
-            })?;
+        let json: Value = response.json().await.map_err(|e| {
+            EflowError::LlmProvider(t!("err_json_parse", msg = e.to_string()).to_string())
+        })?;
 
         let choice = &json["choices"][0];
         let msg = &choice["message"];

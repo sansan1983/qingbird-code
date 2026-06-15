@@ -19,20 +19,13 @@ impl ProjectMemory {
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
                 EflowError::Memory(
-                    t!(
-                        "err_memory_op",
-                        op = "create dir",
-                        msg = e.to_string()
-                    )
-                    .to_string(),
+                    t!("err_memory_op", op = "create dir", msg = e.to_string()).to_string(),
                 )
             })?;
         }
 
         let conn = Connection::open(db_path).map_err(|e| {
-            EflowError::Memory(
-                t!("err_memory_op", op = "open db", msg = e.to_string()).to_string(),
-            )
+            EflowError::Memory(t!("err_memory_op", op = "open db", msg = e.to_string()).to_string())
         })?;
 
         let mem = Self {
@@ -45,12 +38,7 @@ impl ProjectMemory {
     pub fn in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory().map_err(|e| {
             EflowError::Memory(
-                t!(
-                    "err_memory_op",
-                    op = "open in-memory",
-                    msg = e.to_string()
-                )
-                .to_string(),
+                t!("err_memory_op", op = "open in-memory", msg = e.to_string()).to_string(),
             )
         })?;
         let mem = Self {
@@ -61,14 +49,9 @@ impl ProjectMemory {
     }
 
     fn init_schema(&self) -> Result<()> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "lock", msg = e.to_string()).to_string(),
-                )
-            })?;
+        let conn = self.conn.lock().map_err(|e| {
+            EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string()).to_string())
+        })?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS memories (
                 id TEXT PRIMARY KEY,
@@ -105,12 +88,7 @@ impl ProjectMemory {
         )
         .map_err(|e| {
             EflowError::Memory(
-                t!(
-                    "err_memory_op",
-                    op = "init schema",
-                    msg = e.to_string()
-                )
-                .to_string(),
+                t!("err_memory_op", op = "init schema", msg = e.to_string()).to_string(),
             )
         })?;
         Ok(())
@@ -165,14 +143,9 @@ impl MemoryManager for ProjectMemory {
     }
 
     fn recall(&self, query: &str, _scope: RecallScope, limit: u8) -> Result<Vec<MemoryEntry>> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "lock", msg = e.to_string()).to_string(),
-                )
-            })?;
+        let conn = self.conn.lock().map_err(|e| {
+            EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string()).to_string())
+        })?;
         let mut stmt = conn
             .prepare(
                 "SELECT m.id, m.content, m.raw_content, m.category, m.importance,
@@ -210,14 +183,9 @@ impl MemoryManager for ProjectMemory {
             .unwrap_or_default()
             .as_millis() as i64;
 
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "lock", msg = e.to_string()).to_string(),
-                )
-            })?;
+        let conn = self.conn.lock().map_err(|e| {
+            EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string()).to_string())
+        })?;
         let mut stmt = conn
             .prepare(
                 "SELECT id, content, raw_content, category, importance,
@@ -297,14 +265,9 @@ impl MemoryManager for ProjectMemory {
     }
 
     fn session_summary(&self) -> Result<String> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "lock", msg = e.to_string()).to_string(),
-                )
-            })?;
+        let conn = self.conn.lock().map_err(|e| {
+            EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string()).to_string())
+        })?;
         let mut stmt = conn
             .prepare("SELECT content FROM memories ORDER BY last_accessed_at DESC LIMIT 20")
             .map_err(|e| {

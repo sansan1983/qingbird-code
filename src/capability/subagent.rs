@@ -1,12 +1,12 @@
 use uuid::Uuid;
 
-use crate::common::error::Result;
-use crate::common::types::*;
-use rust_i18n::t;
 use super::blackboard::Blackboard;
 use super::decisioner::Decisioner;
 use super::executor::Executor;
 use super::feedbacker::Feedbacker;
+use crate::common::error::Result;
+use crate::common::types::*;
+use rust_i18n::t;
 
 /// Subagent — 实际执行任务的工人（v1.0 单 Subagent）
 pub struct Subagent {
@@ -55,13 +55,13 @@ impl Subagent {
                     // 步骤完成
                     return Ok(bb);
                 }
-                QualityVerdict::Rework { reason: _, suggestion } => {
+                QualityVerdict::Rework {
+                    reason: _,
+                    suggestion,
+                } => {
                     if bb.retry_count >= max_retries {
                         // 超过最大重试，强制升级
-                        tracing::warn!(
-                            "Step exceeded max retries ({}), escalating",
-                            max_retries
-                        );
+                        tracing::warn!("Step exceeded max retries ({}), escalating", max_retries);
                         bb.risk_level = RiskLevel::L3;
                         return Ok(bb);
                     }

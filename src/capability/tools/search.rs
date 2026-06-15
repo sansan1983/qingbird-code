@@ -35,11 +35,9 @@ impl Tool for SearchCodeTool {
     }
 
     async fn execute(&self, params: serde_json::Value) -> Result<ToolOutput> {
-        let pattern = params["pattern"]
-            .as_str()
-            .ok_or_else(|| {
-                EflowError::Tool(t!("err_tool_missing_param", name = "pattern").to_string())
-            })?;
+        let pattern = params["pattern"].as_str().ok_or_else(|| {
+            EflowError::Tool(t!("err_tool_missing_param", name = "pattern").to_string())
+        })?;
         let search_path = params["path"].as_str().unwrap_or(".");
         let file_types = params["file_types"].as_str();
 

@@ -11,7 +11,6 @@ use eflow::infrastructure::config::{
 };
 use eflow::infrastructure::event::{Event, EventChannel};
 use eflow::infrastructure::llm::LlmRouter;
-use eflow::infrastructure::locale;
 use tokio::sync::Mutex;
 
 // 默认中文 locale
@@ -157,12 +156,9 @@ async fn decompose_long_description_routes_to_llm_and_fails() {
     // 描述长度 > 100 字符 → 走 LLM 分解（dummy key 不可用 → 必然 Err）
     let long_desc: String = "a".repeat(200);
     let task = TaskSpec::new(long_desc, RiskLevel::L0);
-    let result = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        o.decompose(&task),
-    )
-    .await
-    .expect("decompose should not hang");
+    let result = tokio::time::timeout(std::time::Duration::from_secs(5), o.decompose(&task))
+        .await
+        .expect("decompose should not hang");
     assert!(result.is_err());
 }
 
@@ -171,12 +167,9 @@ async fn decompose_l2_risk_routes_to_llm_and_fails() {
     let (o, _events) = make_orchestrator();
     // L2+ 风险无论长度都走 LLM 路径
     let task = TaskSpec::new("deploy service".into(), RiskLevel::L2);
-    let result = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        o.decompose(&task),
-    )
-    .await
-    .expect("decompose should not hang");
+    let result = tokio::time::timeout(std::time::Duration::from_secs(5), o.decompose(&task))
+        .await
+        .expect("decompose should not hang");
     assert!(result.is_err());
 }
 
@@ -184,12 +177,9 @@ async fn decompose_l2_risk_routes_to_llm_and_fails() {
 async fn decompose_l3_risk_routes_to_llm_and_fails() {
     let (o, _events) = make_orchestrator();
     let task = TaskSpec::new("delete production db".into(), RiskLevel::L3);
-    let result = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        o.decompose(&task),
-    )
-    .await
-    .expect("decompose should not hang");
+    let result = tokio::time::timeout(std::time::Duration::from_secs(5), o.decompose(&task))
+        .await
+        .expect("decompose should not hang");
     assert!(result.is_err());
 }
 
@@ -209,7 +199,10 @@ async fn execute_publishes_task_started_event_first() {
     // 第一个事件必须是 TaskStarted
     let event = rx.recv().await.unwrap();
     match event {
-        Event::TaskStarted { task_id: id, description } => {
+        Event::TaskStarted {
+            task_id: id,
+            description,
+        } => {
             assert_eq!(id, task_id);
             assert_eq!(description, "readme");
         }

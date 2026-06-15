@@ -26,11 +26,9 @@ impl Tool for ExecuteCommandTool {
     }
 
     async fn execute(&self, params: serde_json::Value) -> Result<ToolOutput> {
-        let command = params["command"]
-            .as_str()
-            .ok_or_else(|| {
-                EflowError::Tool(t!("err_tool_missing_param", name = "command").to_string())
-            })?;
+        let command = params["command"].as_str().ok_or_else(|| {
+            EflowError::Tool(t!("err_tool_missing_param", name = "command").to_string())
+        })?;
 
         let args: Vec<String> = params["args"]
             .as_array()
@@ -47,12 +45,7 @@ impl Tool for ExecuteCommandTool {
             .await
             .map_err(|e| {
                 EflowError::Tool(
-                    t!(
-                        "err_tool_execute",
-                        command = command,
-                        msg = e.to_string()
-                    )
-                    .to_string(),
+                    t!("err_tool_execute", command = command, msg = e.to_string()).to_string(),
                 )
             })?;
 
@@ -61,7 +54,11 @@ impl Tool for ExecuteCommandTool {
 
         Ok(ToolOutput {
             success: output.status.success(),
-            content: if stdout.is_empty() { stderr.clone() } else { stdout },
+            content: if stdout.is_empty() {
+                stderr.clone()
+            } else {
+                stdout
+            },
             metadata: Some(serde_json::json!({
                 "exit_code": output.status.code(),
                 "stderr": stderr,

@@ -13,8 +13,8 @@ use eflow::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
 use eflow::common::error::Result;
 use eflow::common::types::*;
 use eflow::infrastructure::config::{
-    CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig, ProviderEntry,
-    ProvidersConfig, RoutingConfig, SecurityConfig, CacheConfig,
+    CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
+    ProviderEntry, ProvidersConfig, RoutingConfig, SecurityConfig,
 };
 use eflow::infrastructure::llm::LlmRouter;
 use eflow::infrastructure::locale;
@@ -135,6 +135,7 @@ async fn blackboard_with_execution_plan_stores_plan() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn blackboard_summarize_chinese_contains_keywords() {
     locale::init(Some("zh-CN"));
     let bb = Blackboard::new(make_task("测试任务", RiskLevel::L0));
@@ -143,6 +144,7 @@ async fn blackboard_summarize_chinese_contains_keywords() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn blackboard_summarize_english_uses_task_label() {
     locale::init(Some("en-US"));
     let bb = Blackboard::new(make_task("test task", RiskLevel::L0));
@@ -253,17 +255,23 @@ async fn executor_records_failure_as_failed_action() {
     let bb2 = e.execute(bb).await.unwrap();
 
     assert_eq!(bb2.action_log.len(), 1);
-    assert!(!bb2.action_log[0].success, "missing tool should record failure");
+    assert!(
+        !bb2.action_log[0].success,
+        "missing tool should record failure"
+    );
     // 输出含 i18n 翻译的错误
     let summary = &bb2.action_log[0].summary;
     assert!(
-        summary.contains("ghost_tool") || summary.contains("执行失败") || summary.contains("failed"),
+        summary.contains("ghost_tool")
+            || summary.contains("执行失败")
+            || summary.contains("failed"),
         "got: {}",
         summary
     );
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn executor_failure_summary_uses_zh_locale() {
     locale::init(Some("zh-CN"));
     let router = make_test_router();
@@ -322,7 +330,9 @@ async fn executor_empty_sub_steps_records_nothing() {
 // ========== Feedbacker 集成测试（规则路径，不调 LLM）==========
 
 #[tokio::test]
+#[serial_test::serial]
 async fn feedbacker_empty_action_log_returns_pass() {
+    locale::init(Some("zh-CN"));
     let router = make_test_router();
     let f = Feedbacker::new(router);
 
@@ -331,7 +341,11 @@ async fn feedbacker_empty_action_log_returns_pass() {
 
     match verdict {
         QualityVerdict::Pass { summary } => {
-            assert!(summary.contains("操作") || summary.contains("actions"), "got: {}", summary);
+            assert!(
+                summary.contains("操作") || summary.contains("actions"),
+                "got: {}",
+                summary
+            );
         }
         _ => panic!("expected Pass for empty action log"),
     }
@@ -339,7 +353,9 @@ async fn feedbacker_empty_action_log_returns_pass() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn feedbacker_all_success_l0_fast_pass() {
+    locale::init(Some("zh-CN"));
     let router = make_test_router();
     let f = Feedbacker::new(router);
 
@@ -355,13 +371,18 @@ async fn feedbacker_all_success_l0_fast_pass() {
     match verdict {
         QualityVerdict::Pass { summary } => {
             // 规则 2 触发：摘要含"操作"和"成功"（或英文）
-            assert!(summary.contains("操作") || summary.contains("success"), "got: {}", summary);
+            assert!(
+                summary.contains("操作") || summary.contains("success"),
+                "got: {}",
+                summary
+            );
         }
         _ => panic!("expected Pass for all-success low-risk"),
     }
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn feedbacker_all_success_en_locale() {
     locale::init(Some("en-US"));
     let router = make_test_router();
@@ -377,7 +398,11 @@ async fn feedbacker_all_success_en_locale() {
     let (_, verdict) = f.evaluate(bb).await.unwrap();
     match verdict {
         QualityVerdict::Pass { summary } => {
-            assert!(summary.contains("Completed") || summary.contains("succeeded"), "got: {}", summary);
+            assert!(
+                summary.contains("Completed") || summary.contains("succeeded"),
+                "got: {}",
+                summary
+            );
         }
         _ => panic!("expected Pass"),
     }
@@ -385,6 +410,7 @@ async fn feedbacker_all_success_en_locale() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn feedbacker_with_failure_at_l2_needs_llm_evaluation_path() {
     // L2 风险 + 有失败操作 → 不满足 fast pass 条件 → 走 LLM 路径
     // 这个测试仅验证 evaluate() 返回 Err 或 Pass（不会成功返回 Rework/Escalate 因为 LLM mock 不可用）
@@ -452,7 +478,10 @@ async fn pipeline_summary_after_pipeline_run() {
     let bb = Blackboard::new(make_task("end to end", RiskLevel::L0))
         .with_step(make_step("echo", "stub_echo"));
     let bb = d.decide(&bb).await.unwrap();
-    let bb = Executor::new(router.clone(), tools).execute(bb).await.unwrap();
+    let bb = Executor::new(router.clone(), tools)
+        .execute(bb)
+        .await
+        .unwrap();
     let (bb, _) = Feedbacker::new(router).evaluate(bb).await.unwrap();
 
     // 摘要含 1/1 passed
@@ -541,8 +570,8 @@ async fn subagent_execute_step_feedback_appended_to_log() {
     let f = Feedbacker::new(router);
 
     let s = Subagent::new("worker".into(), Role::Generalist, vec![]);
-    let bb = Blackboard::new(make_task("t", RiskLevel::L0))
-        .with_step(make_step("echo", "stub_echo"));
+    let bb =
+        Blackboard::new(make_task("t", RiskLevel::L0)).with_step(make_step("echo", "stub_echo"));
 
     let bb = s.execute_step(bb, &d, &e, &f).await.unwrap();
 

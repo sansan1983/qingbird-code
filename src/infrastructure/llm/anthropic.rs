@@ -94,13 +94,22 @@ impl LlmProvider for AnthropicProvider {
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
             return Err(EflowError::RateLimited("Anthropic".into()));
         }
+        if !status.is_success() {
+            // 403 (invalid key) / 5xx 等：4xx/5xx 一律按 provider 错处理，
+            // 避免把空 content 误当作成功响应（fix v1.0.2：dummy key 在受限网络下会拿到 403）
+            let body = response.text().await.unwrap_or_default();
+            return Err(EflowError::LlmProvider(
+                t!(
+                    "err_http",
+                    msg = format!("status {}: {}", status.as_u16(), body)
+                )
+                .to_string(),
+            ));
+        }
 
-        let json: Value = response
-            .json()
-            .await
-            .map_err(|e| {
-                EflowError::LlmProvider(t!("err_json_parse", msg = e.to_string()).to_string())
-            })?;
+        let json: Value = response.json().await.map_err(|e| {
+            EflowError::LlmProvider(t!("err_json_parse", msg = e.to_string()).to_string())
+        })?;
 
         let content = json["content"]
             .as_array()

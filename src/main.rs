@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use clap::Parser;
-
 // 在 bin crate 中也调用 i18n!() 以生成 _rust_i18n_t! 宏（让 main.rs 里的 t!() 可用）
 rust_i18n::i18n!("locales", fallback = "en-US");
 
 use eflow::application::concierge::Concierge;
 use eflow::application::orchestrator::Orchestrator;
 use eflow::capability::tools::{
-    command::ExecuteCommandTool, file::{ReadFileTool, WriteFileTool}, search::SearchCodeTool,
     ToolRegistry,
+    command::ExecuteCommandTool,
+    file::{ReadFileTool, WriteFileTool},
+    search::SearchCodeTool,
 };
 use eflow::common::types::ModelTier;
 use eflow::infrastructure::config;
@@ -148,12 +148,7 @@ async fn main() {
                 }
                 Ok(Event::TaskFailed { task_id, error }) => {
                     let id_prefix: String = task_id.to_string().chars().take(8).collect();
-                    println!(
-                        "\n{} [{}]: {}",
-                        t!("cli_task_failed"),
-                        id_prefix,
-                        error
-                    );
+                    println!("\n{} [{}]: {}", t!("cli_task_failed"), id_prefix, error);
                 }
                 Ok(Event::RiskEscalated { task_id, from, to }) => {
                     let id_prefix: String = task_id.to_string().chars().take(8).collect();

@@ -41,9 +41,7 @@ impl LlmRouter {
         }
 
         if providers.is_empty() {
-            return Err(EflowError::Config(
-                t!("err_no_llm_providers").to_string(),
-            ));
+            return Err(EflowError::Config(t!("err_no_llm_providers").to_string()));
         }
 
         let mut routing = HashMap::new();
@@ -82,7 +80,9 @@ impl LlmRouter {
             .routing
             .get(&tier)
             .ok_or_else(|| {
-                EflowError::Internal(t!("err_no_provider", tier = format!("{:?}", tier)).to_string())
+                EflowError::Internal(
+                    t!("err_no_provider", tier = format!("{:?}", tier)).to_string(),
+                )
             })?
             .clone();
 

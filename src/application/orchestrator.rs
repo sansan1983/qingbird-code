@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use crate::common::error::Result;
-use crate::common::types::*;
-use crate::infrastructure::event::{Event, EventChannel};
-use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 use crate::capability::blackboard::Blackboard;
 use crate::capability::decisioner::Decisioner;
 use crate::capability::executor::Executor;
 use crate::capability::feedbacker::Feedbacker;
 use crate::capability::subagent::Subagent;
 use crate::capability::tools::ToolRegistry;
+use crate::common::error::Result;
+use crate::common::types::*;
+use crate::infrastructure::event::{Event, EventChannel};
+use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 use rust_i18n::t;
 
 /// Orchestrator — 任务分解 + Subagent 调度 + 结果聚合
@@ -17,7 +17,8 @@ pub struct Orchestrator {
     llm: Arc<tokio::sync::Mutex<LlmRouter>>,
     tools: Arc<ToolRegistry>,
     events: EventChannel,
-    active_agent: Option<Subagent>,
+    /// 当前活跃的 Subagent（test-visible，v1.1 C4 改为 SubagentPool 时整体删除）
+    pub active_agent: Option<Subagent>,
 }
 
 impl Orchestrator {
@@ -34,8 +35,8 @@ impl Orchestrator {
         }
     }
 
-    /// 确保有一个可用的 Subagent
-    fn ensure_agent(&mut self) -> &Subagent {
+    /// 确保有一个可用的 Subagent（test-visible，v1.1 C4 改为 SubagentPool 时整体删除）
+    pub fn ensure_agent(&mut self) -> &Subagent {
         if self.active_agent.is_none() {
             self.active_agent = Some(Subagent::new(
                 "default".into(),

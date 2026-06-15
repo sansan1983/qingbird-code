@@ -3,17 +3,20 @@ rust_i18n::i18n!("locales", fallback = "en-US");
 use eflow::infrastructure::locale;
 
 #[test]
+#[serial_test::serial]
 fn test_default_locale_is_zh_cn() {
     assert_eq!(locale::DEFAULT_LOCALE, "zh-CN");
 }
 
 #[test]
+#[serial_test::serial]
 fn test_supported_locales_contains_zh_and_en() {
     assert!(locale::SUPPORTED_LOCALES.contains(&"zh-CN"));
     assert!(locale::SUPPORTED_LOCALES.contains(&"en-US"));
 }
 
 #[test]
+#[serial_test::serial]
 fn test_init_with_none_uses_default() {
     let l = locale::init(None);
     assert_eq!(l, "zh-CN");
@@ -21,6 +24,7 @@ fn test_init_with_none_uses_default() {
 }
 
 #[test]
+#[serial_test::serial]
 fn test_init_with_valid_locale_uses_it() {
     let l = locale::init(Some("en-US"));
     assert_eq!(l, "en-US");
@@ -32,6 +36,7 @@ fn test_init_with_valid_locale_uses_it() {
 }
 
 #[test]
+#[serial_test::serial]
 fn test_init_with_unsupported_locale_falls_back_to_default() {
     let l = locale::init(Some("fr-FR"));
     assert_eq!(l, "zh-CN");
@@ -39,6 +44,7 @@ fn test_init_with_unsupported_locale_falls_back_to_default() {
 }
 
 #[test]
+#[serial_test::serial]
 fn test_zh_translation_resolves() {
     locale::init(Some("zh-CN"));
     let s = rust_i18n::t!("err_profile_not_found", name = "developer");
@@ -48,6 +54,7 @@ fn test_zh_translation_resolves() {
 }
 
 #[test]
+#[serial_test::serial]
 fn test_en_translation_resolves() {
     locale::init(Some("en-US"));
     let s = rust_i18n::t!("err_profile_not_found", name = "developer");
@@ -56,6 +63,7 @@ fn test_en_translation_resolves() {
 }
 
 #[test]
+#[serial_test::serial]
 fn test_translations_exist_for_all_keys() {
     locale::init(Some("zh-CN"));
     assert!(!rust_i18n::t!("_system_prompt").is_empty());
@@ -71,6 +79,7 @@ fn test_translations_exist_for_all_keys() {
 }
 
 #[test]
+#[serial_test::serial]
 fn test_context_compressor_uses_current_locale() {
     use eflow::infrastructure::context::ContextCompressor;
 
@@ -99,10 +108,9 @@ fn test_context_compressor_uses_current_locale() {
 }
 
 #[test]
+#[serial_test::serial]
 fn test_config_error_translates() {
-    use eflow::common::error::EflowError;
     use eflow::infrastructure::config::load_config;
-    use std::io::Write;
 
     locale::init(Some("zh-CN"));
     let dir = tempfile::tempdir().unwrap();

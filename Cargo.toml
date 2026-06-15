@@ -38,6 +38,8 @@ walkdir = "2"
 [dev-dependencies]
 tempfile = "3"
 tokio-test = "0.4"
+# 串行化 locale 相关测试（rust-i18n 用 process-global 状态，cargo test 多线程并发会污染）
+serial_test = "3"
 
 [features]
 default = []

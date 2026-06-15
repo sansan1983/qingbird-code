@@ -26,34 +26,22 @@ impl Tool for ReadFileTool {
     }
 
     async fn execute(&self, params: serde_json::Value) -> Result<ToolOutput> {
-        let path = params["path"]
-            .as_str()
-            .ok_or_else(|| {
-                EflowError::Tool(t!("err_tool_missing_param", name = "path").to_string())
-            })?;
+        let path = params["path"].as_str().ok_or_else(|| {
+            EflowError::Tool(t!("err_tool_missing_param", name = "path").to_string())
+        })?;
 
         let content = tokio::fs::read_to_string(Path::new(path))
             .await
             .map_err(|e| {
                 EflowError::Tool(
-                    t!(
-                        "err_tool_read_file",
-                        path = path,
-                        msg = e.to_string()
-                    )
-                    .to_string(),
+                    t!("err_tool_read_file", path = path, msg = e.to_string()).to_string(),
                 )
             })?;
 
         let line_count = content.lines().count();
         Ok(ToolOutput {
             success: true,
-            content: t!(
-                "status_read_file_header",
-                path = path,
-                lines = line_count
-            )
-            .to_string()
+            content: t!("status_read_file_header", path = path, lines = line_count).to_string()
                 + "\n\n"
                 + &content,
             metadata: Some(serde_json::json!({"lines": line_count})),
@@ -82,27 +70,20 @@ impl Tool for WriteFileTool {
     }
 
     async fn execute(&self, params: serde_json::Value) -> Result<ToolOutput> {
-        let path = params["path"]
-            .as_str()
-            .ok_or_else(|| {
-                EflowError::Tool(t!("err_tool_missing_param", name = "path").to_string())
-            })?;
-        let content = params["content"]
-            .as_str()
-            .ok_or_else(|| {
-                EflowError::Tool(t!("err_tool_missing_param", name = "content").to_string())
-            })?;
-
-        tokio::fs::write(Path::new(path), content).await.map_err(|e| {
-            EflowError::Tool(
-                t!(
-                    "err_tool_write_file",
-                    path = path,
-                    msg = e.to_string()
-                )
-                .to_string(),
-            )
+        let path = params["path"].as_str().ok_or_else(|| {
+            EflowError::Tool(t!("err_tool_missing_param", name = "path").to_string())
         })?;
+        let content = params["content"].as_str().ok_or_else(|| {
+            EflowError::Tool(t!("err_tool_missing_param", name = "content").to_string())
+        })?;
+
+        tokio::fs::write(Path::new(path), content)
+            .await
+            .map_err(|e| {
+                EflowError::Tool(
+                    t!("err_tool_write_file", path = path, msg = e.to_string()).to_string(),
+                )
+            })?;
 
         let bytes = content.len();
         Ok(ToolOutput {

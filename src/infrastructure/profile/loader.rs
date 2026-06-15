@@ -47,11 +47,9 @@ impl ProfileRegistry {
             return Ok(());
         }
 
-        for entry in std::fs::read_dir(profiles_dir)
-            .map_err(|e| {
-                EflowError::Config(t!("err_read_profiles_dir", msg = e.to_string()).to_string())
-            })?
-        {
+        for entry in std::fs::read_dir(profiles_dir).map_err(|e| {
+            EflowError::Config(t!("err_read_profiles_dir", msg = e.to_string()).to_string())
+        })? {
             let entry = entry.map_err(|e| {
                 EflowError::Config(t!("err_read_entry", msg = e.to_string()).to_string())
             })?;
@@ -108,11 +106,9 @@ impl ProfileRegistry {
             return Ok(());
         }
 
-        for entry in std::fs::read_dir(skills_dir)
-            .map_err(|e| {
-                EflowError::Config(t!("err_read_profiles_dir", msg = e.to_string()).to_string())
-            })?
-        {
+        for entry in std::fs::read_dir(skills_dir).map_err(|e| {
+            EflowError::Config(t!("err_read_profiles_dir", msg = e.to_string()).to_string())
+        })? {
             let entry = entry.map_err(|e| {
                 EflowError::Config(t!("err_read_entry", msg = e.to_string()).to_string())
             })?;

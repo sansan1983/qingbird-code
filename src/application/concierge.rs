@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use uuid::Uuid;
 
+use crate::application::orchestrator::Orchestrator;
 use crate::common::types::Intent;
+use crate::common::types::*;
 use crate::infrastructure::event::{Event, EventChannel};
 use crate::infrastructure::memory::CompositeMemory;
 use crate::infrastructure::profile::ProfileRegistry;
-use crate::application::orchestrator::Orchestrator;
-use crate::common::types::*;
 use rust_i18n::t;
 
 /// Concierge — 零阻塞对话入口
@@ -44,7 +44,9 @@ impl Concierge {
         let intent = self.classify_intent(&input);
 
         match intent {
-            Intent::Chat { content } => t!("concierge_chat_received", content = content).to_string(),
+            Intent::Chat { content } => {
+                t!("concierge_chat_received", content = content).to_string()
+            }
             Intent::TaskDispatch { spec } => {
                 let task_id = spec.id;
                 // 异步派发任务，不等待结果
@@ -70,9 +72,7 @@ impl Concierge {
             Intent::TaskInterrupt { task_id } => {
                 t!("concierge_task_interrupt", id = task_id).to_string()
             }
-            Intent::TaskCancel { task_id } => {
-                t!("concierge_task_cancel", id = task_id).to_string()
-            }
+            Intent::TaskCancel { task_id } => t!("concierge_task_cancel", id = task_id).to_string(),
             Intent::SkillQuery { keyword } => self.list_skills(&keyword),
             Intent::ProfileSwitch { industry } => {
                 t!("concierge_profile_switch", industry = industry).to_string()
@@ -87,17 +87,25 @@ impl Concierge {
         if input_lower.contains("切换") && input_lower.contains("profile") {
             let parts: Vec<&str> = input.split_whitespace().collect();
             let name = parts.last().unwrap_or(&"developer");
-            return Intent::ProfileSwitch { industry: name.to_string() };
+            return Intent::ProfileSwitch {
+                industry: name.to_string(),
+            };
         }
         if input_lower.contains("取消") && input_lower.contains("任务") {
             // v1.0 简化：未跟踪 task id 列表，用 nil 标记"无目标"
-            return Intent::TaskCancel { task_id: Uuid::nil() };
+            return Intent::TaskCancel {
+                task_id: Uuid::nil(),
+            };
         }
         if input_lower.contains("中断") {
-            return Intent::TaskInterrupt { task_id: Uuid::nil() };
+            return Intent::TaskInterrupt {
+                task_id: Uuid::nil(),
+            };
         }
         if input_lower.contains("skill") || input_lower.contains("技能") {
-            return Intent::SkillQuery { keyword: input.to_string() };
+            return Intent::SkillQuery {
+                keyword: input.to_string(),
+            };
         }
 
         // 默认：任务派发

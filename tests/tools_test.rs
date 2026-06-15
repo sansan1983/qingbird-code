@@ -1,8 +1,6 @@
 rust_i18n::i18n!("locales", fallback = "en-US");
 
-use eflow::capability::tools::{
-    Tool, ToolDefinition, ToolOutput, ToolRegistry,
-};
+use eflow::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
 use eflow::common::error::EflowError;
 use eflow::common::types::RiskLevel;
 use eflow::infrastructure::locale;
@@ -90,7 +88,10 @@ impl Tool for L3StubTool {
 async fn test_l3_tool_is_rejected() {
     let mut reg = ToolRegistry::new();
     reg.register(Arc::new(L3StubTool));
-    let err = reg.execute("l3_stub", serde_json::json!({})).await.unwrap_err();
+    let err = reg
+        .execute("l3_stub", serde_json::json!({}))
+        .await
+        .unwrap_err();
     matches!(err, EflowError::RiskEscalated { .. });
 }
 
@@ -102,7 +103,10 @@ async fn test_read_file_success() {
     let path = write_file(dir.path(), "hello.txt", "line1\nline2\nline3");
 
     let tool = eflow::capability::tools::file::ReadFileTool;
-    let out = tool.execute(serde_json::json!({"path": path.to_str().unwrap()})).await.unwrap();
+    let out = tool
+        .execute(serde_json::json!({"path": path.to_str().unwrap()}))
+        .await
+        .unwrap();
     assert!(out.success);
     assert!(out.content.contains("line1"));
     assert!(out.content.contains("line3"));
@@ -169,7 +173,11 @@ async fn test_execute_command_echo_hello() {
     // 用 `true` 作为跨平台 smoke test（Windows/Unix 都有 `true`，退出码 0）
     let tool = eflow::capability::tools::command::ExecuteCommandTool;
     let cmd = if cfg!(windows) { "cmd" } else { "true" };
-    let args: Vec<&str> = if cfg!(windows) { vec!["/c", "echo", "hello"] } else { vec![] };
+    let args: Vec<&str> = if cfg!(windows) {
+        vec!["/c", "echo", "hello"]
+    } else {
+        vec![]
+    };
 
     let out = tool
         .execute(serde_json::json!({
@@ -216,7 +224,11 @@ async fn test_execute_command_missing_command_param() {
 #[tokio::test]
 async fn test_search_code_finds_pattern() {
     let dir = tempfile::tempdir().unwrap();
-    write_file(dir.path(), "a.rs", "fn foo() {}\nfn bar() {}\nfn baz() {}\n");
+    write_file(
+        dir.path(),
+        "a.rs",
+        "fn foo() {}\nfn bar() {}\nfn baz() {}\n",
+    );
     write_file(dir.path(), "b.toml", "name = \"x\"\n");
 
     let tool = eflow::capability::tools::search::SearchCodeTool;
@@ -236,7 +248,9 @@ async fn test_search_code_finds_pattern() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_search_code_no_match() {
+    locale::init(Some("zh-CN"));
     let dir = tempfile::tempdir().unwrap();
     write_file(dir.path(), "a.rs", "fn foo() {}\n");
 
@@ -352,12 +366,26 @@ async fn test_search_code_missing_pattern() {
 async fn test_tool_error_translates() {
     locale::init(Some("en-US"));
     let reg = ToolRegistry::new();
-    let err = reg.execute("ghost", serde_json::json!({})).await.unwrap_err();
+    let err = reg
+        .execute("ghost", serde_json::json!({}))
+        .await
+        .unwrap_err();
     let msg = format!("{}", err);
-    assert!(msg.contains("ghost") || msg.contains("not found"), "got: {}", msg);
+    assert!(
+        msg.contains("ghost") || msg.contains("not found"),
+        "got: {}",
+        msg
+    );
 
     locale::init(Some("zh-CN"));
-    let err = reg.execute("ghost", serde_json::json!({})).await.unwrap_err();
+    let err = reg
+        .execute("ghost", serde_json::json!({}))
+        .await
+        .unwrap_err();
     let msg = format!("{}", err);
-    assert!(msg.contains("ghost") || msg.contains("未找到"), "got: {}", msg);
+    assert!(
+        msg.contains("ghost") || msg.contains("未找到"),
+        "got: {}",
+        msg
+    );
 }

@@ -1,10 +1,10 @@
-use std::sync::Arc;
 use chrono::Utc;
+use std::sync::Arc;
 
+use super::blackboard::Blackboard;
 use crate::common::error::Result;
 use crate::common::types::*;
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
-use super::blackboard::Blackboard;
 use rust_i18n::t;
 
 /// Feedbacker — 质量评估 + 反馈回路
@@ -64,7 +64,9 @@ impl Feedbacker {
         }
 
         // 复杂情况：调 LLM 评估
-        let verdict = self.llm_evaluate(&blackboard, &last_action, retry_count, risk).await?;
+        let verdict = self
+            .llm_evaluate(&blackboard, &last_action, retry_count, risk)
+            .await?;
         let record = FeedbackRecord {
             timestamp: Utc::now(),
             verdict: verdict.clone(),
@@ -95,12 +97,7 @@ impl Feedbacker {
             .join("\n");
 
         // 用 char 切片避免多字节 UTF-8 边界问题
-        let desc: String = blackboard
-            .task
-            .description
-            .chars()
-            .take(200)
-            .collect();
+        let desc: String = blackboard.task.description.chars().take(200).collect();
 
         let messages = vec![
             Message::system(
@@ -117,7 +114,11 @@ impl Feedbacker {
                 retry_count,
                 operation_summary,
                 last_action.tool,
-                if last_action.success { "成功" } else { "失败" },
+                if last_action.success {
+                    "成功"
+                } else {
+                    "失败"
+                },
             )),
         ];
 

@@ -14,7 +14,6 @@ use eflow::infrastructure::config::{
 };
 use eflow::infrastructure::event::{Event, EventChannel};
 use eflow::infrastructure::llm::LlmRouter;
-use eflow::infrastructure::locale;
 use eflow::infrastructure::memory::CompositeMemory;
 use eflow::infrastructure::profile::ProfileRegistry;
 use tokio::sync::{Mutex, RwLock};
@@ -198,17 +197,27 @@ fn classify_default_is_task_dispatch() {
 // ========== handle_input 行为 ==========
 
 #[tokio::test]
-async fn handle_chat_returns_received_message() {
+async fn handle_input_default_routes_to_dispatch() {
+    // v1.0 simplify: classify_intent 删了 Chat 路径，所有输入默认走 task dispatch
     let (c, _events) = make_concierge();
     let resp = c.handle_input("你好".into()).await;
-    assert!(resp.contains("你好"), "chat 响应应含原内容: {}", resp);
+    // 派发响应含 task id 或 "派发"/"dispatched" 字样
+    assert!(
+        resp.contains("派发") || resp.contains("dispatched"),
+        "默认应派发为 task，响应: {}",
+        resp
+    );
 }
 
 #[tokio::test]
 async fn handle_skill_query_returns_placeholder() {
     let (c, _events) = make_concierge();
     let resp = c.handle_input("list skill".into()).await;
-    assert!(resp.contains("v1.0"), "skill query 应返回占位提示: {}", resp);
+    assert!(
+        resp.contains("v1.0"),
+        "skill query 应返回占位提示: {}",
+        resp
+    );
 }
 
 #[tokio::test]
@@ -227,8 +236,11 @@ async fn handle_task_dispatch_does_not_block_on_execution() {
     let elapsed = start.elapsed();
 
     assert!(elapsed < std::time::Duration::from_millis(200));
-    assert!(resp.contains("readme") || resp.contains("派发") || resp.contains("dispatched"),
-        "派发响应应含任务 id 或派发字样: {}", resp);
+    assert!(
+        resp.contains("readme") || resp.contains("派发") || resp.contains("dispatched"),
+        "派发响应应含任务 id 或派发字样: {}",
+        resp
+    );
 }
 
 #[tokio::test]
@@ -240,13 +252,22 @@ async fn handle_task_dispatch_publishes_task_completed_or_failed_event() {
     let _ = c.handle_input("readme".into()).await;
 
     // 后台 task 会调 LLM（dummy key 失败）→ 期望 TaskFailed；5s 超时防挂死
+    // 第一事件必然是 TaskStarted，跳过
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+        .await
+        .expect("应在 5s 内收到首个事件")
+        .expect("channel 不应关闭");
+
     let event = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
         .await
         .expect("应在 5s 内收到 task 完成事件")
         .expect("channel 不应关闭");
 
     assert!(
-        matches!(event, Event::TaskCompleted { .. } | Event::TaskFailed { .. }),
+        matches!(
+            event,
+            Event::TaskCompleted { .. } | Event::TaskFailed { .. }
+        ),
         "派发后应收到 TaskCompleted 或 TaskFailed，实际: {:?}",
         event
     );
