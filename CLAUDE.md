@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | M8 已完成，等待开工 M9 |
-| **上次完成** | M8 工具系统（Tool trait + Registry + read/write/exec/search，search 改 Rust 原生） |
-| **下次动作** | 开工 M9 能力层核心（Blackboard + Decisioner + Executor + Feedbacker 三角色管线） |
+| **当前任务** | M9 已完成，等待开工 M10 |
+| **上次完成** | M9 能力层核心（Blackboard + Decisioner + Executor + Feedbacker 三角色管线，16 集成测试 + Blackboard 10 inline 测试） |
+| **下次动作** | 开工 M10 Subagent |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-15 | M9 能力层核心 | `src/capability/{blackboard,decisioner,executor,feedbacker}.rs` + `tests/capability_test.rs`（16 集成测试）+ Blackboard 10 inline 测试 + 7 i18n 键 |
 | 2026-06-15 | M8 工具系统 | `src/capability/tools/{mod,registry,file,command,search}.rs` + `tests/tools_test.rs`（17 测试） |
 | 2026-06-15 | M7.5 i18n 国际化 | `src/infrastructure/locale.rs` + `locales/{zh-CN,en-US}.yml` + `tests/i18n_test.rs`（10 测试） |
-| 2026-06-15 | M7 Profile + Skill | `src/infrastructure/profile/{mod,loader,skill}.rs` + `profiles/developer.yaml` + `tests/profile_test.rs` |
 
 ## △ 收工仪式（每次结束前执行）
 
