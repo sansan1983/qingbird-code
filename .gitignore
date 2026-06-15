@@ -8,3 +8,6 @@ data/
 .vscode/
 *.swp
 .DS_Store
+
+# Local dependency lock — per project convention, contributors regenerate on clone
+Cargo.lock
