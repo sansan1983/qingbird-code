@@ -1140,7 +1140,147 @@ pub enum RiskLevel {
 
 ---
 
-## 20. 铁律（不可违反）
+## 20. 国际化（i18n）
+
+### 20.1 范围
+
+eflow v1.0 支持中英双语，**默认简体中文**，可切换英文显示。
+
+| 语言 | 标识 | 状态 |
+|------|------|------|
+| 简体中文 | `zh-CN` | 默认 |
+| English | `en-US` | 可选 |
+
+### 20.2 设计目标
+
+- **默认中文** — 开箱即用面向国内用户
+- **可切换英文** — 满足国际化协作和开源贡献者习惯
+- **切换不需重编译** — 通过运行时配置生效
+- **翻译范围全覆盖** — 系统硬编码字符串、错误消息、状态输出、Profile/Skill 模板中的固定提示语均双语
+- **用户原话不翻译** — 与铁律 5「用户原话不可压缩」对应：用户输入原文与系统直接回复原文保持原样
+
+### 20.3 实现机制
+
+使用 `rust-i18n` crate 提供的编译期宏 `t!()`：
+
+- 资源文件位于 `locales/` 目录，按语言代码命名（`zh-CN.yml`、`en-US.yml`）
+- 启动时按优先级确定 locale（见 20.5）
+- 运行时通过 `rust_i18n::i18n::set_locale()` 切换
+- **fallback 链**：`zh-CN` 缺失时回退到 `en-US`，避免单点翻译遗漏导致界面出现混合语言
+
+### 20.4 翻译资源组织
+
+```
+eflow/
+├── locales/
+│   ├── zh-CN.yml        # 简体中文（默认）
+│   └── en-US.yml        # English
+```
+
+YAML 文件结构（按 key 组织）：
+
+```yaml
+# zh-CN.yml
+_system_prompt: |
+  你是 eflow，一个高效的多层 Agent 协作框架的入口。
+err_profile_not_found: "未找到 profile: %{name}"
+err_provider_not_found: "未找到 provider: %{name}"
+err_http: "HTTP 错误: %{msg}"
+err_json_parse: "JSON 解析错误: %{msg}"
+err_config_load: "加载配置失败: %{msg}"
+err_config_parse: "解析配置失败: %{msg}"
+err_read_profiles_dir: "读取 profiles 目录失败: %{msg}"
+err_read_entry: "读取目录条目失败: %{msg}"
+err_read_file: "读取文件 %{path} 失败: %{msg}"
+err_parse_file: "解析文件 %{path} 失败: %{msg}"
+err_no_provider: "未找到 tier %{tier} 对应的 provider"
+err_rate_limited: "%{provider} 限流，已重试 %{count} 次，放弃"
+status_profile_loaded: "已加载 profile '%{name}' (checksum: %{checksum})"
+ctx_file_summary: "文件 %{path} (%{lines}行, %{bytes}字节)"
+ctx_error_summary: "错误: %{msg}"
+```
+
+```yaml
+# en-US.yml
+_system_prompt: |
+  You are eflow, the entry point of an efficient multi-layer Agent collaboration framework.
+err_profile_not_found: "Profile not found: %{name}"
+err_provider_not_found: "Provider not found: %{name}"
+err_http: "HTTP error: %{msg}"
+err_json_parse: "JSON parse error: %{msg}"
+err_config_load: "Failed to load config: %{msg}"
+err_config_parse: "Failed to parse config: %{msg}"
+err_read_profiles_dir: "Failed to read profiles dir: %{msg}"
+err_read_entry: "Failed to read directory entry: %{msg}"
+err_read_file: "Failed to read file %{path}: %{msg}"
+err_parse_file: "Failed to parse file %{path}: %{msg}"
+err_no_provider: "No provider for tier %{tier}"
+err_rate_limited: "%{provider} rate-limited after %{count} retries, giving up"
+status_profile_loaded: "Loaded profile '%{name}' (checksum: %{checksum})"
+ctx_file_summary: "file %{path} (%{lines} lines, %{bytes} bytes)"
+ctx_error_summary: "error: %{msg}"
+```
+
+**资源键命名约定**：
+- `err_*`：错误消息（在 `EflowError` 的 `Display` 实现里使用）
+- `status_*`：状态/进度消息（tracing 日志、CLI 横幅）
+- `ctx_*`：上下文压缩器输出（用于 LLM 上下文的格式化字符串）
+- 下划线开头（如 `_system_prompt`）保留为元键，不直接翻译
+
+### 20.5 切换优先级
+
+启动时 locale 按以下优先级确定（高优先级覆盖低优先级）：
+
+| 优先级 | 来源 | 行为 |
+|--------|------|------|
+| 1（最高） | CLI 启动参数 `--lang=zh-CN` | 启动时立即生效（**M13 实施**） |
+| 2 | `eflow.yaml` 中 `core.language` | 启动时读取（**M2 已有字段**，M7.5 接入 i18n） |
+| 3（最低） | 默认值 `zh-CN` | 内置常量 |
+
+**API 形式**：
+
+```rust
+// src/infrastructure/locale.rs
+pub fn init_from_config(config_locale: Option<&str>) -> Locale {
+    let locale = config_locale
+        .filter(|s| is_supported(s))
+        .unwrap_or(DEFAULT_LOCALE);
+    rust_i18n::i18n::set_locale(locale);
+    Locale::from_str(locale)
+}
+
+pub const SUPPORTED_LOCALES: &[&str] = &["zh-CN", "en-US"];
+pub const DEFAULT_LOCALE: &str = "zh-CN";
+```
+
+### 20.6 v1.0 范围之外
+
+- 运行时切换语言（不重启）— v1.0 启动时确定后保持不变
+- 自动检测系统语言 — 需在 CLI 层读取 OS locale，v1.0 不做
+- 其他语言（日语、韩语等）— v2.0 按需扩展
+- Locale 相关的日期/数字/货币格式 — chrono 自身能力足够，v1.0 不引入完整本地化栈
+- Profile/Skill 描述（`description` 字段）的运行时翻译 — YAML 是用户自己写的中文/英文，不翻
+
+### 20.7 ADR-0010：双语方案
+
+**状态**：已接受
+
+**背景**：eflow 面向国内用户，开发者与开源贡献者中也有英文使用者。两类用户都需要看清系统消息、错误提示、Profile 描述等所有用户可见字符串。
+
+**决策**：
+- v1.0 支持 `zh-CN`（默认）和 `en-US` 两种
+- 用 `rust-i18n` crate（成熟方案、零运行时开销、YAML 资源易维护）
+- 翻译范围覆盖系统硬编码字符串 + 错误消息 + Profile/Skill 模板中的固定提示语
+- 切换优先级：CLI 参数 > 配置文件 > 默认值
+
+**代价**：
+- 增加 1 个第三方依赖
+- 双语资源文件需随功能更新同步维护
+- 启动时需读取 locale（额外 ~1ms 开销，可忽略）
+
+---
+
+## 21. 铁律（不可违反）
 
 1. **测试先行** — 没有测试的代码不得合并
 2. **最小实现** — 不要过度工程化，先做能用的，再做完美的
