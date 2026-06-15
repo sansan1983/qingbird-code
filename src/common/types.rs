@@ -241,7 +241,7 @@ pub enum MemoryCategory {
     ManualNote,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Importance {
     Low,
     Normal,
