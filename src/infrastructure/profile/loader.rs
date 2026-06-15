@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 use super::skill::Skill;
 use crate::common::error::{EflowError, Result};
 use crate::common::types::{ModelTier, PermissionSet};
+use rust_i18n::t;
 
 /// Profile = 角色身份，Skill 的容器
 #[derive(Debug, Clone, Deserialize)]
@@ -47,9 +48,10 @@ impl ProfileRegistry {
         }
 
         for entry in std::fs::read_dir(profiles_dir)
-            .map_err(|e| EflowError::Config(format!("read profiles dir: {}", e)))?
+            .map_err(|e| EflowError::Config(t!("err_read_profiles_dir", msg = e.to_string())))?
         {
-            let entry = entry.map_err(|e| EflowError::Config(format!("read entry: {}", e)))?;
+            let entry =
+                entry.map_err(|e| EflowError::Config(t!("err_read_entry", msg = e.to_string())))?;
             let path = entry.path();
             if path
                 .extension()
@@ -63,15 +65,25 @@ impl ProfileRegistry {
     }
 
     fn load_profile_file(&self, path: &Path) -> Result<Profile> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| EflowError::Config(format!("read {}: {}", path.display(), e)))?;
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            EflowError::Config(t!(
+                "err_read_file",
+                path = path.display().to_string(),
+                msg = e.to_string()
+            ))
+        })?;
 
         // 校验 checksum（v1.0: 简单校验；v2.0: 数字签名）
         let checksum = format!("{:x}", Sha256::digest(content.as_bytes()));
         // checksum 记录在日志中，用于防篡改检测
 
-        let profile: Profile = serde_yaml::from_str(&content)
-            .map_err(|e| EflowError::Config(format!("parse {}: {}", path.display(), e)))?;
+        let profile: Profile = serde_yaml::from_str(&content).map_err(|e| {
+            EflowError::Config(t!(
+                "err_parse_file",
+                path = path.display().to_string(),
+                msg = e.to_string()
+            ))
+        })?;
 
         tracing::info!(
             "Loaded profile '{}' (checksum: {})",
@@ -88,9 +100,10 @@ impl ProfileRegistry {
         }
 
         for entry in std::fs::read_dir(skills_dir)
-            .map_err(|e| EflowError::Config(format!("read skills dir: {}", e)))?
+            .map_err(|e| EflowError::Config(t!("err_read_profiles_dir", msg = e.to_string())))?
         {
-            let entry = entry.map_err(|e| EflowError::Config(format!("read entry: {}", e)))?;
+            let entry =
+                entry.map_err(|e| EflowError::Config(t!("err_read_entry", msg = e.to_string())))?;
             let path = entry.path();
             if path
                 .extension()
@@ -103,11 +116,21 @@ impl ProfileRegistry {
     }
 
     fn load_skill_file(&mut self, path: &Path) -> Result<()> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| EflowError::Config(format!("read {}: {}", path.display(), e)))?;
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            EflowError::Config(t!(
+                "err_read_file",
+                path = path.display().to_string(),
+                msg = e.to_string()
+            ))
+        })?;
 
-        let skill: Skill = serde_yaml::from_str(&content)
-            .map_err(|e| EflowError::Config(format!("parse {}: {}", path.display(), e)))?;
+        let skill: Skill = serde_yaml::from_str(&content).map_err(|e| {
+            EflowError::Config(t!(
+                "err_parse_file",
+                path = path.display().to_string(),
+                msg = e.to_string()
+            ))
+        })?;
 
         // 权限校验：Skill 的 risk_level 不能超过 Profile 的权限边界
         // (v1.0: 基础校验，v2.0: 沙箱隔离)

@@ -5,6 +5,7 @@ use tokio::sync::mpsc;
 
 use super::types::{ChatChunk, ChatRequest, ChatResponse, LlmProvider, MessageRole, TokenUsage};
 use crate::common::error::{EflowError, Result};
+use rust_i18n::t;
 
 pub struct AnthropicProvider {
     api_key: String,
@@ -82,7 +83,7 @@ impl LlmProvider for AnthropicProvider {
             .json(&body)
             .send()
             .await
-            .map_err(|e| EflowError::LlmProvider(format!("HTTP error: {}", e)))?;
+            .map_err(|e| EflowError::LlmProvider(t!("err_http", msg = e.to_string())))?;
 
         let status = response.status();
         if status == reqwest::StatusCode::UNAUTHORIZED {
@@ -95,7 +96,7 @@ impl LlmProvider for AnthropicProvider {
         let json: Value = response
             .json()
             .await
-            .map_err(|e| EflowError::LlmProvider(format!("JSON parse error: {}", e)))?;
+            .map_err(|e| EflowError::LlmProvider(t!("err_json_parse", msg = e.to_string())))?;
 
         let content = json["content"]
             .as_array()

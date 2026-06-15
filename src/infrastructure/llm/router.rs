@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::common::error::{EflowError, Result};
 use crate::common::types::ModelTier;
 use crate::infrastructure::config::EflowConfig;
+use rust_i18n::t;
 
 use super::anthropic::AnthropicProvider;
 use super::openai::OpenAiProvider;
@@ -40,9 +41,7 @@ impl LlmRouter {
         }
 
         if providers.is_empty() {
-            return Err(EflowError::Config(
-                "No LLM providers configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.".into(),
-            ));
+            return Err(EflowError::Config(t!("err_no_llm_providers").into()));
         }
 
         let mut routing = HashMap::new();
@@ -80,13 +79,15 @@ impl LlmRouter {
         let provider_name = self
             .routing
             .get(&tier)
-            .ok_or_else(|| EflowError::Internal(format!("No provider for tier {:?}", tier)))?
+            .ok_or_else(|| EflowError::Internal(t!("err_no_provider", tier = format!("{:?}", tier))))?
             .clone();
 
         let provider = self
             .providers
             .get(&provider_name)
-            .ok_or_else(|| EflowError::Internal(format!("Provider '{}' not found", provider_name)))?
+            .ok_or_else(|| {
+                EflowError::Internal(t!("err_provider_not_found", name = provider_name.clone()))
+            })?
             .clone();
 
         // 保留一份原请求给降级路径用
@@ -125,9 +126,9 @@ impl LlmRouter {
         rate_limit_count: u32,
     ) -> Result<ChatResponse> {
         if rate_limit_count >= 10 {
-            return Err(EflowError::RateLimited(format!(
-                "All providers rate limited (attempts: {})",
-                rate_limit_count
+            return Err(EflowError::RateLimited(t!(
+                "err_all_providers_limited",
+                count = rate_limit_count
             )));
         }
 
@@ -141,9 +142,7 @@ impl LlmRouter {
             let provider = self.providers.get(&fallback_name).unwrap().clone();
             provider.chat(request).await
         } else {
-            Err(EflowError::RateLimited(
-                "No fallback provider available".into(),
-            ))
+            Err(EflowError::RateLimited(t!("err_no_fallback").into()))
         }
     }
 

@@ -1,5 +1,6 @@
 use super::reference::ContextRef;
 use crate::common::types::ActionRecord;
+use rust_i18n::t;
 
 /// 上下文压缩器
 pub struct ContextCompressor;
@@ -8,7 +9,7 @@ impl ContextCompressor {
     /// L1 结构压缩：工具调用日志 → 摘要行
     pub fn compress_action_log(logs: &[ActionRecord]) -> String {
         if logs.is_empty() {
-            return "No actions taken.".into();
+            return t!("ctx_no_actions").into();
         }
 
         let lines: Vec<String> = logs
@@ -16,12 +17,12 @@ impl ContextCompressor {
             .map(|a| {
                 let status = if a.success { "✓" } else { "✗" };
                 let summary: String = a.summary.chars().take(100).collect();
-                format!(
-                    "{} {} {} — {}",
-                    status,
-                    a.timestamp.format("%H:%M:%S"),
-                    a.tool,
-                    summary
+                t!(
+                    "ctx_action_log_line",
+                    status = status,
+                    time = a.timestamp.format("%H:%M:%S").to_string(),
+                    tool = a.tool.clone(),
+                    summary = summary
                 )
             })
             .collect();
@@ -36,7 +37,12 @@ impl ContextCompressor {
         let first_lines: Vec<&str> = content.lines().take(3).collect();
         let preview = first_lines.join("\n");
 
-        let summary = format!("文件 {} ({}行, {}字节)", path, lines, bytes);
+        let summary = t!(
+            "ctx_file_summary",
+            path = path,
+            lines = lines,
+            bytes = bytes
+        );
         let storage_key = format!("file:{}", path);
 
         let token_cost = (bytes / 4) as u32; // 粗略估算 token 数
@@ -48,7 +54,7 @@ impl ContextCompressor {
     /// L1 结构压缩：错误堆栈 → 错误类型 + 第一行
     pub fn compress_error(error: &str) -> String {
         let first_line = error.lines().next().unwrap_or("unknown error");
-        format!("错误: {}", first_line)
+        t!("ctx_error_summary", msg = first_line)
     }
 
     /// L2 语义压缩（v1.0 简化版本 — 规则驱动摘要）
@@ -61,9 +67,9 @@ impl ContextCompressor {
         // 规则驱动：保留首尾，中间截断
         let mut parts = vec![];
         parts.push(messages.first().cloned().unwrap_or_default());
-        parts.push(format!(
-            "... ({} 轮对话省略) ...",
-            messages.len().saturating_sub(2)
+        parts.push(t!(
+            "ctx_conversation_omitted",
+            count = messages.len().saturating_sub(2)
         ));
         parts.push(messages.last().cloned().unwrap_or_default());
 

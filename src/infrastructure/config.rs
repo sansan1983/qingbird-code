@@ -2,6 +2,8 @@ use crate::common::types::RiskLevel;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
+use rust_i18n::t;
+
 /// 完整配置结构
 #[derive(Debug, Clone, Deserialize)]
 pub struct EflowConfig {
@@ -72,17 +74,17 @@ pub struct ProfileListConfig {
 /// 加载配置文件
 pub fn load_config(path: &Path) -> crate::common::error::Result<EflowConfig> {
     let content = std::fs::read_to_string(path).map_err(|e| {
-        crate::common::error::EflowError::Config(format!(
-            "Failed to read config file {}: {}",
-            path.display(),
-            e
+        crate::common::error::EflowError::Config(t!(
+            "err_config_read",
+            path = path.display().to_string(),
+            msg = e.to_string()
         ))
     })?;
 
     let expanded = expand_env_vars(&content);
 
     let config: EflowConfig = serde_yaml::from_str(&expanded).map_err(|e| {
-        crate::common::error::EflowError::Config(format!("Failed to parse config: {}", e))
+        crate::common::error::EflowError::Config(t!("err_config_parse", msg = e.to_string()))
     })?;
 
     Ok(config)

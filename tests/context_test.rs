@@ -1,6 +1,11 @@
 use chrono::Utc;
 use eflow::common::types::ActionRecord;
 use eflow::infrastructure::context::{ContextCompressor, ContextRef};
+use eflow::infrastructure::locale;
+
+// 切换到中文，使 compressor 输出的中文字符串可被断言
+// （每个集成测试 binary 是独立进程，全局 locale 互不干扰）
+locale::init(Some("zh-CN"));
 
 fn record(tool: &str, success: bool, summary: &str) -> ActionRecord {
     ActionRecord {
@@ -39,7 +44,7 @@ fn test_context_ref_short_id_is_eight_chars() {
 fn test_compress_action_log_empty() {
     assert_eq!(
         ContextCompressor::compress_action_log(&[]),
-        "No actions taken."
+        "无操作"
     );
 }
 

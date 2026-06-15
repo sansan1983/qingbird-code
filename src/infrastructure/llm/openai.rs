@@ -7,6 +7,7 @@ use super::types::{
     ChatChunk, ChatRequest, ChatResponse, LlmProvider, MessageRole, TokenUsage, ToolCall,
 };
 use crate::common::error::{EflowError, Result};
+use rust_i18n::t;
 
 pub struct OpenAiProvider {
     api_key: String,
@@ -65,7 +66,7 @@ impl LlmProvider for OpenAiProvider {
             .json(&body)
             .send()
             .await
-            .map_err(|e| EflowError::LlmProvider(format!("HTTP error: {}", e)))?;
+            .map_err(|e| EflowError::LlmProvider(t!("err_http", msg = e.to_string())))?;
 
         let status = response.status();
         if status == reqwest::StatusCode::UNAUTHORIZED {
@@ -78,7 +79,7 @@ impl LlmProvider for OpenAiProvider {
         let json: Value = response
             .json()
             .await
-            .map_err(|e| EflowError::LlmProvider(format!("JSON parse error: {}", e)))?;
+            .map_err(|e| EflowError::LlmProvider(t!("err_json_parse", msg = e.to_string())))?;
 
         let choice = &json["choices"][0];
         let msg = &choice["message"];

@@ -8,6 +8,7 @@ use uuid::Uuid;
 use super::manager::{MemoryEntry, MemoryManager, RecallScope};
 use crate::common::error::{EflowError, Result};
 use crate::common::types::{Importance, MemoryCategory};
+use rust_i18n::t;
 
 pub struct ProjectMemory {
     conn: Mutex<Connection>,
@@ -16,12 +17,18 @@ pub struct ProjectMemory {
 impl ProjectMemory {
     pub fn new(db_path: &Path) -> Result<Self> {
         if let Some(parent) = db_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| EflowError::Memory(format!("create dir: {}", e)))?;
+            std::fs::create_dir_all(parent).map_err(|e| {
+                EflowError::Memory(t!(
+                    "err_memory_op",
+                    op = "create dir",
+                    msg = e.to_string()
+                ))
+            })?;
         }
 
-        let conn =
-            Connection::open(db_path).map_err(|e| EflowError::Memory(format!("open db: {}", e)))?;
+        let conn = Connection::open(db_path).map_err(|e| {
+            EflowError::Memory(t!("err_memory_op", op = "open db", msg = e.to_string()))
+        })?;
 
         let mem = Self {
             conn: Mutex::new(conn),
@@ -31,8 +38,13 @@ impl ProjectMemory {
     }
 
     pub fn in_memory() -> Result<Self> {
-        let conn = Connection::open_in_memory()
-            .map_err(|e| EflowError::Memory(format!("open in-memory: {}", e)))?;
+        let conn = Connection::open_in_memory().map_err(|e| {
+            EflowError::Memory(t!(
+                "err_memory_op",
+                op = "open in-memory",
+                msg = e.to_string()
+            ))
+        })?;
         let mem = Self {
             conn: Mutex::new(conn),
         };
@@ -44,7 +56,7 @@ impl ProjectMemory {
         let conn = self
             .conn
             .lock()
-            .map_err(|e| EflowError::Memory(format!("lock: {}", e)))?;
+            .map_err(|e| EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string())))?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS memories (
                 id TEXT PRIMARY KEY,
@@ -79,7 +91,13 @@ impl ProjectMemory {
                 VALUES (new.rowid, new.content, new.tags);
             END;",
         )
-        .map_err(|e| EflowError::Memory(format!("init schema: {}", e)))?;
+        .map_err(|e| {
+            EflowError::Memory(t!(
+                "err_memory_op",
+                op = "init schema",
+                msg = e.to_string()
+            ))
+        })?;
         Ok(())
     }
 }
@@ -101,7 +119,7 @@ impl MemoryManager for ProjectMemory {
 
         self.conn
             .lock()
-            .map_err(|e| EflowError::Memory(format!("lock: {}", e)))?
+            .map_err(|e| EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string())))?
             .execute(
                 "INSERT OR REPLACE INTO memories (id, content, raw_content, category, importance,
                  created_at, last_accessed_at, ttl_secs, tags)
@@ -118,7 +136,9 @@ impl MemoryManager for ProjectMemory {
                     tags_json,
                 ],
             )
-            .map_err(|e| EflowError::Memory(format!("insert: {}", e)))?;
+            .map_err(|e| {
+                EflowError::Memory(t!("err_memory_op", op = "insert", msg = e.to_string()))
+            })?;
 
         Ok(entry.id)
     }
@@ -127,7 +147,7 @@ impl MemoryManager for ProjectMemory {
         let conn = self
             .conn
             .lock()
-            .map_err(|e| EflowError::Memory(format!("lock: {}", e)))?;
+            .map_err(|e| EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string())))?;
         let mut stmt = conn
             .prepare(
                 "SELECT m.id, m.content, m.raw_content, m.category, m.importance,
@@ -138,11 +158,15 @@ impl MemoryManager for ProjectMemory {
              ORDER BY m.last_accessed_at DESC
              LIMIT ?2",
             )
-            .map_err(|e| EflowError::Memory(format!("prepare: {}", e)))?;
+            .map_err(|e| {
+                EflowError::Memory(t!("err_memory_op", op = "prepare", msg = e.to_string()))
+            })?;
 
         let rows = stmt
             .query_map(params![query, limit as i64], row_to_entry)
-            .map_err(|e| EflowError::Memory(format!("query: {}", e)))?;
+            .map_err(|e| {
+                EflowError::Memory(t!("err_memory_op", op = "query", msg = e.to_string()))
+            })?;
 
         let mut entries = vec![];
         for entry in rows.flatten() {
@@ -160,7 +184,7 @@ impl MemoryManager for ProjectMemory {
         let conn = self
             .conn
             .lock()
-            .map_err(|e| EflowError::Memory(format!("lock: {}", e)))?;
+            .map_err(|e| EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string())))?;
         let mut stmt = conn
             .prepare(
                 "SELECT id, content, raw_content, category, importance,
@@ -168,11 +192,15 @@ impl MemoryManager for ProjectMemory {
              FROM memories WHERE created_at >= ?1
              ORDER BY created_at DESC",
             )
-            .map_err(|e| EflowError::Memory(format!("prepare: {}", e)))?;
+            .map_err(|e| {
+                EflowError::Memory(t!("err_memory_op", op = "prepare", msg = e.to_string()))
+            })?;
 
         let rows = stmt
             .query_map(params![since_ms], row_to_entry)
-            .map_err(|e| EflowError::Memory(format!("query: {}", e)))?;
+            .map_err(|e| {
+                EflowError::Memory(t!("err_memory_op", op = "query", msg = e.to_string()))
+            })?;
 
         let mut entries = vec![];
         for entry in rows.flatten() {
@@ -184,12 +212,14 @@ impl MemoryManager for ProjectMemory {
     fn forget(&mut self, id: Uuid) -> Result<()> {
         self.conn
             .lock()
-            .map_err(|e| EflowError::Memory(format!("lock: {}", e)))?
+            .map_err(|e| EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string())))?
             .execute(
                 "DELETE FROM memories WHERE id = ?1",
                 params![id.to_string()],
             )
-            .map_err(|e| EflowError::Memory(format!("delete: {}", e)))?;
+            .map_err(|e| {
+                EflowError::Memory(t!("err_memory_op", op = "delete", msg = e.to_string()))
+            })?;
         Ok(())
     }
 
@@ -202,7 +232,7 @@ impl MemoryManager for ProjectMemory {
         let count = self
             .conn
             .lock()
-            .map_err(|e| EflowError::Memory(format!("lock: {}", e)))?
+            .map_err(|e| EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string())))?
             .execute(
                 "DELETE FROM memories WHERE
                 importance = 'Low'
@@ -210,7 +240,9 @@ impl MemoryManager for ProjectMemory {
                 AND (created_at + ttl_secs) < ?1",
                 params![now_ms],
             )
-            .map_err(|e| EflowError::Memory(format!("cleanup: {}", e)))?;
+            .map_err(|e| {
+                EflowError::Memory(t!("err_memory_op", op = "cleanup", msg = e.to_string()))
+            })?;
 
         Ok(count as u32)
     }
@@ -219,14 +251,18 @@ impl MemoryManager for ProjectMemory {
         let conn = self
             .conn
             .lock()
-            .map_err(|e| EflowError::Memory(format!("lock: {}", e)))?;
+            .map_err(|e| EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string())))?;
         let mut stmt = conn
             .prepare("SELECT content FROM memories ORDER BY last_accessed_at DESC LIMIT 20")
-            .map_err(|e| EflowError::Memory(format!("prepare: {}", e)))?;
+            .map_err(|e| {
+                EflowError::Memory(t!("err_memory_op", op = "prepare", msg = e.to_string()))
+            })?;
 
         let rows = stmt
             .query_map([], |row| row.get::<_, String>(0))
-            .map_err(|e| EflowError::Memory(format!("query: {}", e)))?;
+            .map_err(|e| {
+                EflowError::Memory(t!("err_memory_op", op = "query", msg = e.to_string()))
+            })?;
 
         let entries: Vec<String> = rows
             .filter_map(|r| r.ok())
