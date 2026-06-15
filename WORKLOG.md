@@ -6,6 +6,7 @@
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-15 | M7.5 i18n 国际化 | `src/infrastructure/locale.rs` + `locales/{zh-CN,en-US}.yml` + 13 处硬编码翻译 + `tests/i18n_test.rs`（10 测试） |
 | 2026-06-15 | M7 Profile + Skill | `src/infrastructure/profile/{mod,loader,skill}.rs` + `profiles/developer.yaml` + `tests/profile_test.rs` |
 | 2026-06-15 | M6 上下文管理 | `src/infrastructure/context/{mod,reference,compressor}.rs` + `tests/context_test.rs`（ContextRef 从 types.rs 挪来） |
 | 2026-06-15 | M4 LLM 集成 (Provider + Router) | `src/infrastructure/llm/{mod,types,anthropic,openai,router}.rs` + futures-util |
