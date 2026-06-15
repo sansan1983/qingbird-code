@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | M9 已完成，等待开工 M10 |
-| **上次完成** | M9 能力层核心（Blackboard + Decisioner + Executor + Feedbacker 三角色管线，16 集成测试 + Blackboard 10 inline 测试） |
-| **下次动作** | 开工 M10 Subagent |
+| **当前任务** | M10 已完成，等待开工 M11 |
+| **上次完成** | M10 Subagent（单 Subagent 类型 + execute_step 反馈环 ≤3 次重试，3 inline + 4 集成测试） |
+| **下次动作** | 开工 M11 Orchestrator（任务分解 + Subagent 调度） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-15 | M10 Subagent | `src/capability/subagent.rs` + 扩展 `tests/capability_test.rs`（+ 4 集成测试）+ 1 i18n 键 |
 | 2026-06-15 | M9 能力层核心 | `src/capability/{blackboard,decisioner,executor,feedbacker}.rs` + `tests/capability_test.rs`（16 集成测试）+ Blackboard 10 inline 测试 + 7 i18n 键 |
 | 2026-06-15 | M8 工具系统 | `src/capability/tools/{mod,registry,file,command,search}.rs` + `tests/tools_test.rs`（17 测试） |
-| 2026-06-15 | M7.5 i18n 国际化 | `src/infrastructure/locale.rs` + `locales/{zh-CN,en-US}.yml` + `tests/i18n_test.rs`（10 测试） |
 
 ## △ 收工仪式（每次结束前执行）
 
