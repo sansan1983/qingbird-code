@@ -6,6 +6,7 @@ use eflow::capability::blackboard::Blackboard;
 use eflow::capability::decisioner::Decisioner;
 use eflow::capability::executor::Executor;
 use eflow::capability::feedbacker::Feedbacker;
+use eflow::capability::subagent::Subagent;
 use eflow::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
 use eflow::common::error::Result;
 use eflow::common::types::*;
@@ -455,6 +456,101 @@ async fn pipeline_summary_after_pipeline_run() {
     // 摘要含 1/1 passed
     let summary = bb.summarize();
     assert!(summary.contains("1/1"), "got: {}", summary);
+}
+
+// ========== Subagent 集成测试 ==========
+
+#[test]
+fn subagent_new_assigns_id_and_fields() {
+    let s = Subagent::new(
+        "alpha".into(),
+        Role::CodeAssistant,
+        vec![Capability::ReadFile, Capability::SearchCode],
+    );
+    assert_eq!(s.name, "alpha");
+    assert!(matches!(s.role, Role::CodeAssistant));
+    assert_eq!(s.capabilities.len(), 2);
+    assert!(!s.id.is_nil());
+}
+
+#[test]
+fn subagent_ids_are_unique() {
+    let a = Subagent::new("a".into(), Role::Generalist, vec![]);
+    let b = Subagent::new("b".into(), Role::Generalist, vec![]);
+    assert_ne!(a.id, b.id);
+}
+
+#[test]
+fn subagent_default_permission_is_restrictive() {
+    let s = Subagent::new("x".into(), Role::Generalist, vec![]);
+    assert!(s.permission.allowed_paths.is_empty());
+    assert!(s.permission.allowed_commands.is_empty());
+    assert!(!s.permission.network_enabled);
+}
+
+#[tokio::test]
+async fn subagent_execute_step_l0_pipeline_passes() {
+    // L0 任务：完整 D→E→F 管线，决策不调 LLM，执行用工具，反馈快速 Pass
+    let router = make_test_router();
+    let tools = make_tool_registry();
+    let d = Decisioner::new(router.clone());
+    let e = Executor::new(router.clone(), tools);
+    let f = Feedbacker::new(router);
+
+    let s = Subagent::new("worker".into(), Role::Generalist, vec![]);
+    let bb = Blackboard::new(make_task("readme", RiskLevel::L0))
+        .with_step(make_step("echo", "stub_echo"));
+
+    let bb = s.execute_step(bb, &d, &e, &f).await.unwrap();
+
+    // 1 个 action + 1 个 feedback 记录（fast-pass）
+    assert_eq!(bb.action_log.len(), 1);
+    assert!(bb.action_log[0].success);
+    assert_eq!(bb.feedback_log.len(), 1);
+    assert!(matches!(
+        bb.feedback_log[0].verdict,
+        QualityVerdict::Pass { .. }
+    ));
+}
+
+#[tokio::test]
+async fn subagent_execute_step_l1_pipeline_passes() {
+    let router = make_test_router();
+    let tools = make_tool_registry();
+    let d = Decisioner::new(router.clone());
+    let e = Executor::new(router.clone(), tools);
+    let f = Feedbacker::new(router);
+
+    let s = Subagent::new("writer".into(), Role::CodeAssistant, vec![]);
+    let bb = Blackboard::new(make_task("write log", RiskLevel::L1))
+        .with_step(make_step("echo", "stub_echo"));
+
+    let bb = s.execute_step(bb, &d, &e, &f).await.unwrap();
+    assert_eq!(bb.action_log.len(), 1);
+    assert!(bb.action_log[0].success);
+}
+
+#[tokio::test]
+async fn subagent_execute_step_feedback_appended_to_log() {
+    let router = make_test_router();
+    let tools = make_tool_registry();
+    let d = Decisioner::new(router.clone());
+    let e = Executor::new(router.clone(), tools);
+    let f = Feedbacker::new(router);
+
+    let s = Subagent::new("worker".into(), Role::Generalist, vec![]);
+    let bb = Blackboard::new(make_task("t", RiskLevel::L0))
+        .with_step(make_step("echo", "stub_echo"));
+
+    let bb = s.execute_step(bb, &d, &e, &f).await.unwrap();
+
+    // Pass 路径：feedback_log 只有 1 条
+    assert_eq!(bb.feedback_log.len(), 1);
+    assert_eq!(bb.feedback_log[0].retry_count, 0);
+    assert!(matches!(
+        bb.feedback_log[0].verdict,
+        QualityVerdict::Pass { .. }
+    ));
 }
 
 // 避免 unused warning for Uuid 导入（用作 hint）
