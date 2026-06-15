@@ -204,16 +204,6 @@ impl Default for PermissionSet {
     }
 }
 
-// ========== 上下文引用 ==========
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ContextRef {
-    pub ref_id: Uuid,
-    pub summary: String,
-    pub storage_key: String,
-    pub token_cost_if_included: u32,
-}
-
 // ========== 意图类型（缓存 Key 用）==========
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

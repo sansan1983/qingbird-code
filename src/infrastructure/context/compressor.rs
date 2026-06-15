@@ -1,0 +1,88 @@
+use super::reference::ContextRef;
+use crate::common::types::ActionRecord;
+
+/// 上下文压缩器
+pub struct ContextCompressor;
+
+impl ContextCompressor {
+    /// L1 结构压缩：工具调用日志 → 摘要行
+    pub fn compress_action_log(logs: &[ActionRecord]) -> String {
+        if logs.is_empty() {
+            return "No actions taken.".into();
+        }
+
+        let lines: Vec<String> = logs
+            .iter()
+            .map(|a| {
+                let status = if a.success { "✓" } else { "✗" };
+                let summary: String = a.summary.chars().take(100).collect();
+                format!(
+                    "{} {} {} — {}",
+                    status,
+                    a.timestamp.format("%H:%M:%S"),
+                    a.tool,
+                    summary
+                )
+            })
+            .collect();
+
+        lines.join("\n")
+    }
+
+    /// L1 结构压缩：文件内容 → 路径 + 统计信息
+    pub fn compress_file_content(path: &str, content: &str) -> (String, ContextRef) {
+        let lines = content.lines().count();
+        let bytes = content.len();
+        let first_lines: Vec<&str> = content.lines().take(3).collect();
+        let preview = first_lines.join("\n");
+
+        let summary = format!("文件 {} ({}行, {}字节)", path, lines, bytes);
+        let storage_key = format!("file:{}", path);
+
+        let token_cost = (bytes / 4) as u32; // 粗略估算 token 数
+        let ctx_ref = ContextRef::new(summary.clone(), storage_key, token_cost);
+
+        (preview, ctx_ref)
+    }
+
+    /// L1 结构压缩：错误堆栈 → 错误类型 + 第一行
+    pub fn compress_error(error: &str) -> String {
+        let first_line = error.lines().next().unwrap_or("unknown error");
+        format!("错误: {}", first_line)
+    }
+
+    /// L2 语义压缩（v1.0 简化版本 — 规则驱动摘要）
+    /// v1.1 引入 LLM 驱动的语义压缩
+    pub fn summarize_conversation(messages: &[String], max_summary_len: usize) -> String {
+        if messages.len() <= 2 {
+            return messages.join("\n");
+        }
+
+        // 规则驱动：保留首尾，中间截断
+        let mut parts = vec![];
+        parts.push(messages.first().cloned().unwrap_or_default());
+        parts.push(format!(
+            "... ({} 轮对话省略) ...",
+            messages.len().saturating_sub(2)
+        ));
+        parts.push(messages.last().cloned().unwrap_or_default());
+
+        let summary = parts.join("\n");
+        if summary.len() > max_summary_len {
+            format!("{}...", &summary[..max_summary_len])
+        } else {
+            summary
+        }
+    }
+
+    /// 估算 token 用量
+    pub fn estimate_tokens(text: &str) -> u32 {
+        // 粗略估算：4 字符 ≈ 1 token
+        (text.chars().count() as u32).div_ceil(4)
+    }
+
+    /// 检查是否需要压缩
+    pub fn needs_compression(current_tokens: u32, max_tokens: u32) -> bool {
+        current_tokens > (max_tokens as f64 * 0.8) as u32
+    }
+}
