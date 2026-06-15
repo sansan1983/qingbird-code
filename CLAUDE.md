@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | M5 已完成，等待开工 M6 |
-| **上次完成** | M5 记忆系统（Working LRU + Project SQLite FTS5 + User 别名 + Composite 智能路由，19 测试通过） |
-| **下次动作** | 开工 M6 上下文管理（ContextCompressor + ContextRef） |
+| **当前任务** | M6 已完成，等待开工 M7 |
+| **上次完成** | M6 上下文管理（ContextCompressor L1+L2 压缩 + ContextRef 引用指针，12 测试通过） |
+| **下次动作** | 开工 M7 Profile + Skill 系统 |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-15 | M6 上下文管理 | `src/infrastructure/context/{mod,reference,compressor}.rs` + `tests/context_test.rs`，ContextRef 从 types.rs 挪过来 |
 | 2026-06-15 | M5 记忆系统（三层） | `src/infrastructure/memory/{mod,manager,working,project,user,composite}.rs` + `tests/memory_test.rs` |
 | 2026-06-15 | M4 LLM 集成 (Provider + Router) | `src/infrastructure/llm/{mod,types,anthropic,openai,router}.rs` + futures-util |
-| 2026-06-15 | M3 事件通道 | `src/infrastructure/event.rs` 实装 + `tests/event_test.rs` |
 
 ## △ 收工仪式（每次结束前执行）
 
