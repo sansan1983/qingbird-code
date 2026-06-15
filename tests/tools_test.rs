@@ -6,6 +6,7 @@ use eflow::common::types::RiskLevel;
 use eflow::infrastructure::locale;
 use std::fs;
 use std::sync::Arc;
+use uuid::Uuid;
 
 // 切换到中文让中文输出断言能通过
 // locale setup moved into individual tests
@@ -53,7 +54,7 @@ fn test_registry_definitions_returns_all() {
 async fn test_registry_execute_unknown_tool_returns_error() {
     let reg = ToolRegistry::new();
     let err = reg
-        .execute("nonexistent", serde_json::json!({}))
+        .execute("nonexistent", serde_json::json!({}), Uuid::new_v4())
         .await
         .unwrap_err();
     let msg = format!("{}", err);
@@ -89,10 +90,35 @@ async fn test_l3_tool_is_rejected() {
     let mut reg = ToolRegistry::new();
     reg.register(Arc::new(L3StubTool));
     let err = reg
-        .execute("l3_stub", serde_json::json!({}))
+        .execute("l3_stub", serde_json::json!({}), Uuid::new_v4())
         .await
         .unwrap_err();
     matches!(err, EflowError::RiskEscalated { .. });
+}
+
+#[tokio::test]
+async fn test_l3_tool_rejection_carries_real_task_id() {
+    // v1.0.3 修真 bug B2：旧实现把 task_id 写死成 "unknown"，
+    // 上层收 RiskEscalated 时无法定位到具体任务
+    let mut reg = ToolRegistry::new();
+    reg.register(Arc::new(L3StubTool));
+    let task_id = Uuid::new_v4();
+    let err = reg
+        .execute("l3_stub", serde_json::json!({}), task_id)
+        .await
+        .unwrap_err();
+    match err {
+        EflowError::RiskEscalated {
+            task_id: reported, ..
+        } => {
+            assert_eq!(
+                reported,
+                task_id.to_string(),
+                "registry 应当把 caller 传入的 task_id 透传，而不是 'unknown' 占位"
+            );
+        }
+        other => panic!("expected RiskEscalated, got {:?}", other),
+    }
 }
 
 // ========== ReadFileTool ==========
@@ -367,7 +393,7 @@ async fn test_tool_error_translates() {
     locale::init(Some("en-US"));
     let reg = ToolRegistry::new();
     let err = reg
-        .execute("ghost", serde_json::json!({}))
+        .execute("ghost", serde_json::json!({}), Uuid::new_v4())
         .await
         .unwrap_err();
     let msg = format!("{}", err);
@@ -379,7 +405,7 @@ async fn test_tool_error_translates() {
 
     locale::init(Some("zh-CN"));
     let err = reg
-        .execute("ghost", serde_json::json!({}))
+        .execute("ghost", serde_json::json!({}), Uuid::new_v4())
         .await
         .unwrap_err();
     let msg = format!("{}", err);

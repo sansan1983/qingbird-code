@@ -97,6 +97,7 @@ pub fn load_config(path: &Path) -> crate::common::error::Result<EflowConfig> {
 
 /// 寻找配置文件：当前目录 → 用户配置目录 → 系统配置目录
 /// 跨平台：Windows 用 %APPDATA%，Unix 用 ~/.config
+#[must_use]
 pub fn find_config() -> Option<PathBuf> {
     let user_dir = dirs::config_dir().map(|p| p.join("eflow").join("eflow.yaml"));
 
@@ -123,7 +124,7 @@ fn expand_env_vars(input: &str) -> String {
     let re = regex_lite::Regex::new(r"\$\{(\w+)\}").unwrap();
     re.replace_all(input, |caps: &regex_lite::Captures| {
         let var_name = &caps[1];
-        std::env::var(var_name).unwrap_or_else(|_| format!("${{{}}}", var_name))
+        std::env::var(var_name).unwrap_or_else(|_| format!("${{{var_name}}}"))
     })
     .to_string()
 }

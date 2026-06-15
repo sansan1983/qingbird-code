@@ -4,8 +4,11 @@ use serde_json::Value;
 use tokio::sync::mpsc;
 
 use super::types::{ChatChunk, ChatRequest, ChatResponse, LlmProvider, MessageRole, TokenUsage};
+use super::{check_status, pick_model};
 use crate::common::error::{EflowError, Result};
 use rust_i18n::t;
+
+const API_URL: &str = "https://api.anthropic.com/v1/messages";
 
 pub struct AnthropicProvider {
     api_key: String,
@@ -14,12 +17,23 @@ pub struct AnthropicProvider {
 }
 
 impl AnthropicProvider {
+    #[must_use]
     pub fn new(api_key: String, default_model: String) -> Self {
         Self {
             api_key,
             default_model,
             client: Client::new(),
         }
+    }
+
+    /// 构造 POST 请求（共用 chat + chat_stream，fix v1.0.3 R5 抽离）
+    fn build_post(&self, body: &Value) -> reqwest::RequestBuilder {
+        self.client
+            .post(API_URL)
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("content-type", "application/json")
+            .json(body)
     }
 
     fn build_body(&self, request: &ChatRequest) -> Value {
@@ -63,49 +77,16 @@ impl AnthropicProvider {
 #[async_trait]
 impl LlmProvider for AnthropicProvider {
     async fn chat(&self, request: ChatRequest) -> Result<ChatResponse> {
-        let model = if request.model.is_empty() {
-            self.default_model.clone()
-        } else {
-            request.model.clone()
-        };
-
+        let model = pick_model(&self.default_model, &request.model);
         let body = self.build_body(&ChatRequest {
             model: model.clone(),
             ..request
         });
 
-        let response = self
-            .client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| {
-                EflowError::LlmProvider(t!("err_http", msg = e.to_string()).to_string())
-            })?;
-
-        let status = response.status();
-        if status == reqwest::StatusCode::UNAUTHORIZED {
-            return Err(EflowError::LlmAuthFailed("Anthropic".into()));
-        }
-        if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            return Err(EflowError::RateLimited("Anthropic".into()));
-        }
-        if !status.is_success() {
-            // 403 (invalid key) / 5xx 等：4xx/5xx 一律按 provider 错处理，
-            // 避免把空 content 误当作成功响应（fix v1.0.2：dummy key 在受限网络下会拿到 403）
-            let body = response.text().await.unwrap_or_default();
-            return Err(EflowError::LlmProvider(
-                t!(
-                    "err_http",
-                    msg = format!("status {}: {}", status.as_u16(), body)
-                )
-                .to_string(),
-            ));
-        }
+        let response = self.build_post(&body).send().await.map_err(|e| {
+            EflowError::LlmProvider(t!("err_http", msg = e.to_string()).to_string())
+        })?;
+        let response = check_status(response, "Anthropic").await?;
 
         let json: Value = response.json().await.map_err(|e| {
             EflowError::LlmProvider(t!("err_json_parse", msg = e.to_string()).to_string())
@@ -140,13 +121,9 @@ impl LlmProvider for AnthropicProvider {
     async fn chat_stream(&self, request: ChatRequest) -> Result<mpsc::Receiver<Result<ChatChunk>>> {
         let api_key = self.api_key.clone();
         let default_model = self.default_model.clone();
+        let client = self.client.clone();
 
-        let model = if request.model.is_empty() {
-            default_model
-        } else {
-            request.model
-        };
-
+        let model = pick_model(&default_model, &request.model);
         let mut body = self.build_body(&ChatRequest {
             model: model.clone(),
             ..request
@@ -156,9 +133,8 @@ impl LlmProvider for AnthropicProvider {
         let (tx, rx) = mpsc::channel(64);
 
         tokio::spawn(async move {
-            let client = Client::new();
             let response = match client
-                .post("https://api.anthropic.com/v1/messages")
+                .post(API_URL)
                 .header("x-api-key", &api_key)
                 .header("anthropic-version", "2023-06-01")
                 .header("content-type", "application/json")
@@ -168,9 +144,7 @@ impl LlmProvider for AnthropicProvider {
             {
                 Ok(r) => r,
                 Err(e) => {
-                    let _ = tx
-                        .send(Err(EflowError::LlmProvider(format!("{}", e))))
-                        .await;
+                    let _ = tx.send(Err(EflowError::LlmProvider(format!("{e}")))).await;
                     return;
                 }
             };
@@ -187,8 +161,9 @@ impl LlmProvider for AnthropicProvider {
                                     continue;
                                 }
                                 if let Ok(json) = serde_json::from_str::<Value>(data) {
-                                    let content_delta =
-                                        json["delta"]["text"].as_str().map(|s| s.to_string());
+                                    let content_delta = json["delta"]["text"]
+                                        .as_str()
+                                        .map(std::string::ToString::to_string);
                                     let _ = tx
                                         .send(Ok(ChatChunk {
                                             content_delta,
@@ -211,7 +186,7 @@ impl LlmProvider for AnthropicProvider {
         true
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "anthropic"
     }
 }

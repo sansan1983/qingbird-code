@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use std::time::SystemTime;
 
 use rusqlite::{Connection, Row, params};
@@ -17,17 +17,9 @@ pub struct ProjectMemory {
 impl ProjectMemory {
     pub fn new(db_path: &Path) -> Result<Self> {
         if let Some(parent) = db_path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "create dir", msg = e.to_string()).to_string(),
-                )
-            })?;
+            std::fs::create_dir_all(parent).map_err(|e| mem_err("create dir", e))?;
         }
-
-        let conn = Connection::open(db_path).map_err(|e| {
-            EflowError::Memory(t!("err_memory_op", op = "open db", msg = e.to_string()).to_string())
-        })?;
-
+        let conn = Connection::open(db_path).map_err(|e| mem_err("open db", e))?;
         let mem = Self {
             conn: Mutex::new(conn),
         };
@@ -36,11 +28,7 @@ impl ProjectMemory {
     }
 
     pub fn in_memory() -> Result<Self> {
-        let conn = Connection::open_in_memory().map_err(|e| {
-            EflowError::Memory(
-                t!("err_memory_op", op = "open in-memory", msg = e.to_string()).to_string(),
-            )
-        })?;
+        let conn = Connection::open_in_memory().map_err(|e| mem_err("open in-memory", e))?;
         let mem = Self {
             conn: Mutex::new(conn),
         };
@@ -48,51 +36,53 @@ impl ProjectMemory {
         Ok(mem)
     }
 
+    fn lock_or_err(&self) -> Result<MutexGuard<'_, Connection>> {
+        self.conn.lock().map_err(|e| mem_err("lock", e))
+    }
+
     fn init_schema(&self) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string()).to_string())
-        })?;
-        conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS memories (
-                id TEXT PRIMARY KEY,
-                content TEXT NOT NULL,
-                raw_content TEXT,
-                category TEXT NOT NULL,
-                importance TEXT NOT NULL DEFAULT 'Normal',
-                created_at INTEGER NOT NULL,
-                last_accessed_at INTEGER NOT NULL,
-                ttl_secs INTEGER,
-                tags TEXT NOT NULL DEFAULT '[]'
-            );
-            CREATE INDEX IF NOT EXISTS idx_memories_created
-                ON memories(created_at);
-            CREATE INDEX IF NOT EXISTS idx_memories_category
-                ON memories(category);
-            CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
-                content, tags, content='memories', content_rowid='rowid'
-            );
-            CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
-                INSERT INTO memories_fts(rowid, content, tags)
-                VALUES (new.rowid, new.content, new.tags);
-            END;
-            CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
-                INSERT INTO memories_fts(memories_fts, rowid, content, tags)
-                VALUES ('delete', old.rowid, old.content, old.tags);
-            END;
-            CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
-                INSERT INTO memories_fts(memories_fts, rowid, content, tags)
-                VALUES ('delete', old.rowid, old.content, old.tags);
-                INSERT INTO memories_fts(rowid, content, tags)
-                VALUES (new.rowid, new.content, new.tags);
-            END;",
-        )
-        .map_err(|e| {
-            EflowError::Memory(
-                t!("err_memory_op", op = "init schema", msg = e.to_string()).to_string(),
+        self.lock_or_err()?
+            .execute_batch(
+                "CREATE TABLE IF NOT EXISTS memories (
+                    id TEXT PRIMARY KEY,
+                    content TEXT NOT NULL,
+                    raw_content TEXT,
+                    category TEXT NOT NULL,
+                    importance TEXT NOT NULL DEFAULT 'Normal',
+                    created_at INTEGER NOT NULL,
+                    last_accessed_at INTEGER NOT NULL,
+                    ttl_secs INTEGER,
+                    tags TEXT NOT NULL DEFAULT '[]'
+                );
+                CREATE INDEX IF NOT EXISTS idx_memories_created
+                    ON memories(created_at);
+                CREATE INDEX IF NOT EXISTS idx_memories_category
+                    ON memories(category);
+                CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+                    content, tags, content='memories', content_rowid='rowid'
+                );
+                CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
+                    INSERT INTO memories_fts(rowid, content, tags)
+                    VALUES (new.rowid, new.content, new.tags);
+                END;
+                CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+                    INSERT INTO memories_fts(memories_fts, rowid, content, tags)
+                    VALUES ('delete', old.rowid, old.content, old.tags);
+                END;
+                CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+                    INSERT INTO memories_fts(memories_fts, rowid, content, tags)
+                    VALUES ('delete', old.rowid, old.content, old.tags);
+                    INSERT INTO memories_fts(rowid, content, tags)
+                    VALUES (new.rowid, new.content, new.tags);
+                END;",
             )
-        })?;
+            .map_err(|e| mem_err("init schema", e))?;
         Ok(())
     }
+}
+
+fn mem_err(op: &str, e: impl std::fmt::Display) -> EflowError {
+    EflowError::Memory(t!("err_memory_op", op = op, msg = e.to_string()).to_string())
 }
 
 impl MemoryManager for ProjectMemory {
@@ -110,13 +100,7 @@ impl MemoryManager for ProjectMemory {
             .unwrap_or_default()
             .as_millis() as i64;
 
-        self.conn
-            .lock()
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "lock", msg = e.to_string()).to_string(),
-                )
-            })?
+        self.lock_or_err()?
             .execute(
                 "INSERT OR REPLACE INTO memories (id, content, raw_content, category, importance,
                  created_at, last_accessed_at, ttl_secs, tags)
@@ -133,19 +117,12 @@ impl MemoryManager for ProjectMemory {
                     tags_json,
                 ],
             )
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "insert", msg = e.to_string()).to_string(),
-                )
-            })?;
-
+            .map_err(|e| mem_err("insert", e))?;
         Ok(entry.id)
     }
 
     fn recall(&self, query: &str, _scope: RecallScope, limit: u8) -> Result<Vec<MemoryEntry>> {
-        let conn = self.conn.lock().map_err(|e| {
-            EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string()).to_string())
-        })?;
+        let conn = self.lock_or_err()?;
         let mut stmt = conn
             .prepare(
                 "SELECT m.id, m.content, m.raw_content, m.category, m.importance,
@@ -156,25 +133,11 @@ impl MemoryManager for ProjectMemory {
              ORDER BY m.last_accessed_at DESC
              LIMIT ?2",
             )
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "prepare", msg = e.to_string()).to_string(),
-                )
-            })?;
-
+            .map_err(|e| mem_err("prepare", e))?;
         let rows = stmt
-            .query_map(params![query, limit as i64], row_to_entry)
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "query", msg = e.to_string()).to_string(),
-                )
-            })?;
-
-        let mut entries = vec![];
-        for entry in rows.flatten() {
-            entries.push(entry);
-        }
-        Ok(entries)
+            .query_map(params![query, i64::from(limit)], row_to_entry)
+            .map_err(|e| mem_err("query", e))?;
+        Ok(rows.flatten().collect())
     }
 
     fn recall_since(&self, since: SystemTime, _scope: RecallScope) -> Result<Vec<MemoryEntry>> {
@@ -182,10 +145,7 @@ impl MemoryManager for ProjectMemory {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as i64;
-
-        let conn = self.conn.lock().map_err(|e| {
-            EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string()).to_string())
-        })?;
+        let conn = self.lock_or_err()?;
         let mut stmt = conn
             .prepare(
                 "SELECT id, content, raw_content, category, importance,
@@ -193,44 +153,20 @@ impl MemoryManager for ProjectMemory {
              FROM memories WHERE created_at >= ?1
              ORDER BY created_at DESC",
             )
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "prepare", msg = e.to_string()).to_string(),
-                )
-            })?;
-
+            .map_err(|e| mem_err("prepare", e))?;
         let rows = stmt
             .query_map(params![since_ms], row_to_entry)
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "query", msg = e.to_string()).to_string(),
-                )
-            })?;
-
-        let mut entries = vec![];
-        for entry in rows.flatten() {
-            entries.push(entry);
-        }
-        Ok(entries)
+            .map_err(|e| mem_err("query", e))?;
+        Ok(rows.flatten().collect())
     }
 
     fn forget(&mut self, id: Uuid) -> Result<()> {
-        self.conn
-            .lock()
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "lock", msg = e.to_string()).to_string(),
-                )
-            })?
+        self.lock_or_err()?
             .execute(
                 "DELETE FROM memories WHERE id = ?1",
                 params![id.to_string()],
             )
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "delete", msg = e.to_string()).to_string(),
-                )
-            })?;
+            .map_err(|e| mem_err("delete", e))?;
         Ok(())
     }
 
@@ -239,15 +175,8 @@ impl MemoryManager for ProjectMemory {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as i64;
-
         let count = self
-            .conn
-            .lock()
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "lock", msg = e.to_string()).to_string(),
-                )
-            })?
+            .lock_or_err()?
             .execute(
                 "DELETE FROM memories WHERE
                 importance = 'Low'
@@ -255,44 +184,26 @@ impl MemoryManager for ProjectMemory {
                 AND (created_at + ttl_secs) < ?1",
                 params![now_ms],
             )
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "cleanup", msg = e.to_string()).to_string(),
-                )
-            })?;
-
+            .map_err(|e| mem_err("cleanup", e))?;
         Ok(count as u32)
     }
 
     fn session_summary(&self) -> Result<String> {
-        let conn = self.conn.lock().map_err(|e| {
-            EflowError::Memory(t!("err_memory_op", op = "lock", msg = e.to_string()).to_string())
-        })?;
+        let conn = self.lock_or_err()?;
         let mut stmt = conn
             .prepare("SELECT content FROM memories ORDER BY last_accessed_at DESC LIMIT 20")
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "prepare", msg = e.to_string()).to_string(),
-                )
-            })?;
-
+            .map_err(|e| mem_err("prepare", e))?;
         let rows = stmt
             .query_map([], |row| row.get::<_, String>(0))
-            .map_err(|e| {
-                EflowError::Memory(
-                    t!("err_memory_op", op = "query", msg = e.to_string()).to_string(),
-                )
-            })?;
-
-        let entries: Vec<String> = rows
-            .filter_map(|r| r.ok())
+            .map_err(|e| mem_err("query", e))?;
+        Ok(rows
+            .filter_map(std::result::Result::ok)
             .map(|c| {
                 let preview: String = c.chars().take(200).collect();
-                format!("- {}", preview)
+                format!("- {preview}")
             })
-            .collect();
-
-        Ok(entries.join("\n"))
+            .collect::<Vec<_>>()
+            .join("\n"))
     }
 }
 
@@ -306,7 +217,6 @@ fn row_to_entry(row: &Row) -> rusqlite::Result<MemoryEntry> {
     let accessed_ms: i64 = row.get(6)?;
     let ttl_ms: Option<i64> = row.get(7)?;
     let tags_json: String = row.get(8)?;
-
     let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
 
     Ok(MemoryEntry {

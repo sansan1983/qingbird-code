@@ -2,6 +2,9 @@ use crate::common::types::RiskLevel;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+/// 事件通道缓冲区大小（fix v1.0.3 M3 抽离）
+const EVENT_BUFFER_SIZE: usize = 256;
+
 /// 系统事件
 #[derive(Debug, Clone)]
 pub enum Event {
@@ -28,15 +31,16 @@ pub enum Event {
     SystemShutdown,
 }
 
-/// 事件通道 — 基于 tokio::broadcast
+/// 事件通道 — 基于 `tokio::broadcast`
 pub struct EventChannel {
     tx: broadcast::Sender<Event>,
 }
 
 impl EventChannel {
-    /// 创建新通道，缓冲区 256
+    /// 创建新通道
+    #[must_use]
     pub fn new() -> Self {
-        let (tx, _) = broadcast::channel(256);
+        let (tx, _) = broadcast::channel(EVENT_BUFFER_SIZE);
         Self { tx }
     }
 
@@ -46,6 +50,7 @@ impl EventChannel {
     }
 
     /// 订阅事件流
+    #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.tx.subscribe()
     }

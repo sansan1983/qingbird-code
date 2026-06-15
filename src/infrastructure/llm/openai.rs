@@ -6,8 +6,11 @@ use tokio::sync::mpsc;
 use super::types::{
     ChatChunk, ChatRequest, ChatResponse, LlmProvider, MessageRole, TokenUsage, ToolCall,
 };
+use super::{check_status, pick_model};
 use crate::common::error::{EflowError, Result};
 use rust_i18n::t;
+
+const API_URL: &str = "https://api.openai.com/v1/chat/completions";
 
 pub struct OpenAiProvider {
     api_key: String,
@@ -16,6 +19,7 @@ pub struct OpenAiProvider {
 }
 
 impl OpenAiProvider {
+    #[must_use]
     pub fn new(api_key: String, default_model: String) -> Self {
         Self {
             api_key,
@@ -23,16 +27,21 @@ impl OpenAiProvider {
             client: Client::new(),
         }
     }
+
+    /// 构造 POST 请求（fix v1.0.3 R5 抽离）
+    fn build_post(&self, body: &Value) -> reqwest::RequestBuilder {
+        self.client
+            .post(API_URL)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(body)
+    }
 }
 
 #[async_trait]
 impl LlmProvider for OpenAiProvider {
     async fn chat(&self, request: ChatRequest) -> Result<ChatResponse> {
-        let model = if request.model.is_empty() {
-            self.default_model.clone()
-        } else {
-            request.model.clone()
-        };
+        let model = pick_model(&self.default_model, &request.model);
 
         let messages: Vec<Value> = request
             .messages
@@ -58,36 +67,10 @@ impl LlmProvider for OpenAiProvider {
             body["tools"] = serde_json::json!(tools);
         }
 
-        let response = self
-            .client
-            .post("https://api.openai.com/v1/chat/completions")
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| {
-                EflowError::LlmProvider(t!("err_http", msg = e.to_string()).to_string())
-            })?;
-
-        let status = response.status();
-        if status == reqwest::StatusCode::UNAUTHORIZED {
-            return Err(EflowError::LlmAuthFailed("OpenAI".into()));
-        }
-        if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            return Err(EflowError::RateLimited("OpenAI".into()));
-        }
-        if !status.is_success() {
-            // 403 (invalid key) / 5xx 等：4xx/5xx 一律按 provider 错处理
-            let body = response.text().await.unwrap_or_default();
-            return Err(EflowError::LlmProvider(
-                t!(
-                    "err_http",
-                    msg = format!("status {}: {}", status.as_u16(), body)
-                )
-                .to_string(),
-            ));
-        }
+        let response = self.build_post(&body).send().await.map_err(|e| {
+            EflowError::LlmProvider(t!("err_http", msg = e.to_string()).to_string())
+        })?;
+        let response = check_status(response, "OpenAI").await?;
 
         let json: Value = response.json().await.map_err(|e| {
             EflowError::LlmProvider(t!("err_json_parse", msg = e.to_string()).to_string())
@@ -134,7 +117,7 @@ impl LlmProvider for OpenAiProvider {
         true
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "openai"
     }
 }

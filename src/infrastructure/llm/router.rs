@@ -10,7 +10,7 @@ use super::anthropic::AnthropicProvider;
 use super::openai::OpenAiProvider;
 use super::types::{ChatRequest, ChatResponse, LlmProvider};
 
-/// LLM Router — 统一入口，按 ModelTier 路由到具体 Provider
+/// LLM Router — 统一入口，按 `ModelTier` 路由到具体 Provider
 pub struct LlmRouter {
     providers: HashMap<String, Arc<dyn LlmProvider>>,
     routing: HashMap<ModelTier, String>,
@@ -74,7 +74,7 @@ impl LlmRouter {
         })
     }
 
-    /// 按 ModelTier 路由调用
+    /// 按 `ModelTier` 路由调用
     pub async fn chat(&mut self, tier: ModelTier, request: ChatRequest) -> Result<ChatResponse> {
         let provider_name = self
             .routing
@@ -152,7 +152,8 @@ impl LlmRouter {
     }
 
     /// 获取 provider 名称
+    #[must_use]
     pub fn provider_for(&self, tier: ModelTier) -> Option<&str> {
-        self.routing.get(&tier).map(|s| s.as_str())
+        self.routing.get(&tier).map(std::string::String::as_str)
     }
 }

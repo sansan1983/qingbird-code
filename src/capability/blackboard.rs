@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::common::types::*;
+use crate::common::types::{
+    ActionRecord, ExecutionPlan, FeedbackRecord, QualityVerdict, RiskLevel, TaskPlan, TaskSpec,
+    TaskStep,
+};
 use rust_i18n::t;
 
 /// 管道内流转的共享上下文（值类型，不可变更新）
@@ -18,6 +21,7 @@ pub struct Blackboard {
 }
 
 impl Blackboard {
+    #[must_use]
     pub fn new(task: TaskSpec) -> Self {
         let risk = task.risk_level;
         Self {
@@ -34,39 +38,46 @@ impl Blackboard {
     }
 
     /// 不可变更新 — 返回新版本
+    #[must_use]
     pub fn with_plan(mut self, plan: TaskPlan) -> Self {
         self.risk_level = plan.risk_level;
         self.plan = Some(plan);
         self
     }
 
+    #[must_use]
     pub fn with_step(mut self, step: TaskStep) -> Self {
         self.current_step = Some(step);
         self
     }
 
+    #[must_use]
     pub fn with_execution_plan(mut self, plan: ExecutionPlan) -> Self {
         self.risk_level = plan.risk_level;
         self.execution_plan = Some(plan);
         self
     }
 
+    #[must_use]
     pub fn with_action(mut self, record: ActionRecord) -> Self {
         self.action_log.push(record);
         self
     }
 
+    #[must_use]
     pub fn with_feedback(mut self, record: FeedbackRecord) -> Self {
         self.feedback_log.push(record);
         self
     }
 
+    #[must_use]
     pub fn increment_retry(mut self) -> Self {
         self.retry_count += 1;
         self
     }
 
     /// 生成摘要（用于记忆持久化）
+    #[must_use]
     pub fn summarize(&self) -> String {
         let total = self.feedback_log.len();
         let passed = self
@@ -90,6 +101,7 @@ impl Blackboard {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::types::{ModelTier, PlannedStep};
     use chrono::Utc;
     use uuid::Uuid;
 

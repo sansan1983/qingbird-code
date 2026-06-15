@@ -13,6 +13,7 @@ pub struct WorkingMemory {
 }
 
 impl WorkingMemory {
+    #[must_use]
     pub fn new(max_entries: usize) -> Self {
         Self {
             entries: IndexMap::new(),
@@ -20,10 +21,12 @@ impl WorkingMemory {
         }
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -118,7 +121,7 @@ impl MemoryManager for WorkingMemory {
             .take(20)
             .map(|e| {
                 let preview: String = e.content.chars().take(200).collect();
-                format!("- {}", preview)
+                format!("- {preview}")
             })
             .collect();
         Ok(entries.join("\n"))

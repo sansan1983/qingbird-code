@@ -31,14 +31,13 @@ impl CompositeMemory {
     }
 
     pub fn remember_smart(&mut self, entry: MemoryEntry) -> Result<uuid::Uuid> {
-        match entry.importance {
-            Importance::Low => self.working.remember(entry),
-            _ => {
-                let entry_clone = entry.clone();
-                let id = self.working.remember(entry)?;
-                self.project.remember(entry_clone)?;
-                Ok(id)
-            }
+        if entry.importance == Importance::Low {
+            self.working.remember(entry)
+        } else {
+            let entry_clone = entry.clone();
+            let id = self.working.remember(entry)?;
+            self.project.remember(entry_clone)?;
+            Ok(id)
         }
     }
 

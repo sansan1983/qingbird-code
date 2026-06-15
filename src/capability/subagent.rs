@@ -5,7 +5,7 @@ use super::decisioner::Decisioner;
 use super::executor::Executor;
 use super::feedbacker::Feedbacker;
 use crate::common::error::Result;
-use crate::common::types::*;
+use crate::common::types::{Capability, PermissionSet, QualityVerdict, RiskLevel, Role};
 use rust_i18n::t;
 
 /// Subagent — 实际执行任务的工人（v1.0 单 Subagent）
@@ -18,6 +18,7 @@ pub struct Subagent {
 }
 
 impl Subagent {
+    #[must_use]
     pub fn new(name: String, role: Role, capabilities: Vec<Capability>) -> Self {
         Self {
             id: Uuid::new_v4(),

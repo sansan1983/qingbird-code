@@ -4,7 +4,7 @@ use std::sync::Arc;
 use super::blackboard::Blackboard;
 use crate::capability::tools::ToolRegistry;
 use crate::common::error::Result;
-use crate::common::types::*;
+use crate::common::types::{ActionRecord, ActionResult, ModelTier, TaskStep, ToolCallSummary};
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 use rust_i18n::t;
 
@@ -22,6 +22,7 @@ impl Executor {
     /// 执行步骤
     pub async fn execute(&self, blackboard: Blackboard) -> Result<Blackboard> {
         let mut bb = blackboard;
+        let task_id = bb.task.id;
 
         // 取出 execution_plan 以释放对 bb 的借用；
         // 模型选择按 tier 单独 clone（ExecutionPlan 含 model_tier: Copy）
@@ -42,7 +43,7 @@ impl Executor {
                 self.execute_llm_step(model_tier, sub_step).await?
             } else {
                 // 工具执行步骤
-                self.execute_tool_step(sub_step).await?
+                self.execute_tool_step(sub_step, task_id).await?
             };
 
             let record = ActionRecord {
@@ -95,9 +96,16 @@ impl Executor {
     }
 
     /// 工具执行
-    async fn execute_tool_step(&self, step: &TaskStep) -> Result<ActionResult> {
+    async fn execute_tool_step(
+        &self,
+        step: &TaskStep,
+        task_id: uuid::Uuid,
+    ) -> Result<ActionResult> {
         let start = std::time::Instant::now();
-        let output = self.tools.execute(&step.tool, step.params.clone()).await;
+        let output = self
+            .tools
+            .execute(&step.tool, step.params.clone(), task_id)
+            .await;
         let duration_ms = start.elapsed().as_millis() as u64;
 
         match output {

@@ -36,6 +36,7 @@ pub struct ToolRegistry {
 }
 
 impl ToolRegistry {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             tools: HashMap::new(),
@@ -47,17 +48,27 @@ impl ToolRegistry {
         self.tools.insert(def.name, tool);
     }
 
+    #[must_use]
     pub fn get(&self, name: &str) -> Option<&Arc<dyn Tool>> {
         self.tools.get(name)
     }
 
     /// 获取所有工具定义（用于发送给 LLM）
+    #[must_use]
     pub fn definitions(&self) -> Vec<ToolDefinition> {
         self.tools.values().map(|t| t.definition()).collect()
     }
 
     /// 执行工具
-    pub async fn execute(&self, name: &str, params: serde_json::Value) -> Result<ToolOutput> {
+    ///
+    /// `task_id` 用于在 `RiskEscalated` 错误中携带真实任务 ID（fix v1.0.3 B2），
+    /// 使上层能定位到具体任务
+    pub async fn execute(
+        &self,
+        name: &str,
+        params: serde_json::Value,
+        task_id: uuid::Uuid,
+    ) -> Result<ToolOutput> {
         let tool = self
             .tools
             .get(name)
@@ -67,7 +78,7 @@ impl ToolRegistry {
         let def = tool.definition();
         if def.risk_level >= RiskLevel::L3 {
             return Err(EflowError::RiskEscalated {
-                task_id: "unknown".into(),
+                task_id: task_id.to_string(),
                 reason: t!("err_tool_l3_required", name = name).to_string(),
             });
         }

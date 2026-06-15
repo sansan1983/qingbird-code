@@ -126,6 +126,23 @@ fn test_summarize_conversation_truncates_at_max_len() {
 }
 
 #[test]
+fn test_summarize_conversation_does_not_panic_on_multibyte() {
+    // 中文每个 char 占 3 byte，max_summary_len=5 处于 char 边界（1.67 个），
+    // 旧实现 `&summary[..5]` 会 panic（v1.0.3 修真 bug B1）。
+    let msgs: Vec<String> = (0..20)
+        .map(|i| format!("中文字符串{}{}", "中".repeat(50), i))
+        .collect();
+    let out = ContextCompressor::summarize_conversation(&msgs, 5);
+    assert!(
+        out.ends_with("..."),
+        "expected '...' suffix, got: {:?}",
+        out
+    );
+    // 5 个 char ≈ 15 bytes (UTF-8) + "..."(3 bytes) = ≤ 18 bytes
+    assert!(out.len() <= 18 + 3, "out too long: {} bytes", out.len());
+}
+
+#[test]
 fn test_estimate_tokens_ceiling_division() {
     // 4 chars ≈ 1 token
     assert_eq!(ContextCompressor::estimate_tokens(""), 0);

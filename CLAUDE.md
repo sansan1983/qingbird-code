@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | v1.1 计划已落盘（PR #2 待合并；Phase A M4.5 LLM 硬化 / Phase B M8 L2 缓存 / Phase C M10.5 多 Subagent） |
-| **上次完成** | v1.1 三阶段计划：17 Task / 85+ TDD 步骤，存 `docs/superpowers/plans/2026-06-15-eflow-v1.1-implementation-plan.md` |
-| **下次动作** | 合并 PR #2 → v1.1 立项（按计划 Phase A Task A1 扩 LlmConfig 开工） |
+| **当前任务** | **等 PR #7 合入 + 重开 v1.1**（v1.1 计划已就绪待执行）|
+| **上次完成** | v1.0.3 hotfix 完成 + 工程质检全过 — 154/154 pass / 0 clippy 警告 / fmt 干净 / PR #7 已开 |
+| **下次动作** | 等 PR #7 (v1.0.3 → main) 合并 → 切回 v1.1 分支 → 开始 Phase A Task A1 (扩 LlmConfig) |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-16 | v1.0.3 hotfix + 工程质检 | v1.0.3 分支 (6 commits): 修真 2 bug (UTF-8 panic + task_id 'unknown') + 修 cli dead field + 8 处代码去重 (R1-R8) + 4 处 magic→const (M1+M2+M3+M5) + clippy pedantic 166 个警告 auto-fix。154/154 tests pass, 0 clippy 警告。PR #7 已开 |
+| 2026-06-16 | v1.1 启动 + 暂停 | v1.1 分支已建（无 commit），基线测试发现 cli_test 2 fail → 确认为 v1.0 遗留 bug → 暂停 v1.1 转 v1.0.3 热补 |
 | 2026-06-15 | v1.1 计划生成 | `docs/superpowers/plans/2026-06-15-eflow-v1.1-implementation-plan.md`（2985 行，覆盖 M4.5+M8+M10.5） |
-| 2026-06-15 | 首轮推送收尾 | docs + untrack Cargo.lock + 仓库转 public + main 分支保护 + PR #1 (handoff log) 已合入 main |
-| 2026-06-15 | QA 二轮复检 | 11 项 finding 全部 plan 合规不采纳；W5/W6/S2 已由 P0 修复覆盖；B2 (timeout 接线) 记 v1.1 候选 |
 
 ## △ 收工仪式（每次结束前执行）
 

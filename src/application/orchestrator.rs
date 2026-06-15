@@ -7,7 +7,9 @@ use crate::capability::feedbacker::Feedbacker;
 use crate::capability::subagent::Subagent;
 use crate::capability::tools::ToolRegistry;
 use crate::common::error::Result;
-use crate::common::types::*;
+use crate::common::types::{
+    Capability, ModelTier, PlannedStep, RiskLevel, Role, TaskPlan, TaskSpec, TaskStep,
+};
 use crate::infrastructure::event::{Event, EventChannel};
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 use rust_i18n::t;
@@ -17,7 +19,7 @@ pub struct Orchestrator {
     llm: Arc<tokio::sync::Mutex<LlmRouter>>,
     tools: Arc<ToolRegistry>,
     events: EventChannel,
-    /// 当前活跃的 Subagent（test-visible，v1.1 C4 改为 SubagentPool 时整体删除）
+    /// 当前活跃的 Subagent（test-visible，v1.1 C4 改为 `SubagentPool` 时整体删除）
     pub active_agent: Option<Subagent>,
 }
 
@@ -35,7 +37,7 @@ impl Orchestrator {
         }
     }
 
-    /// 确保有一个可用的 Subagent（test-visible，v1.1 C4 改为 SubagentPool 时整体删除）
+    /// 确保有一个可用的 Subagent（test-visible，v1.1 C4 改为 `SubagentPool` 时整体删除）
     pub fn ensure_agent(&mut self) -> &Subagent {
         if self.active_agent.is_none() {
             self.active_agent = Some(Subagent::new(
@@ -81,9 +83,8 @@ impl Orchestrator {
         let messages = vec![
             Message::system(format!(
                 "你是一个任务规划专家。将用户任务分解为可执行的步骤序列。\n\
-                 可用工具:\n{}\n\
-                 输出格式：每行一个步骤，格式为 '工具名: 操作描述'",
-                tools_desc
+                 可用工具:\n{tools_desc}\n\
+                 输出格式：每行一个步骤，格式为 '工具名: 操作描述'"
             )),
             Message::user(format!("请分解以下任务:\n{}", task.description)),
         ];
@@ -153,7 +154,7 @@ impl Orchestrator {
         let agent = self.ensure_agent();
         let mut bb = bb;
 
-        for planned_step in planned_steps.iter() {
+        for planned_step in &planned_steps {
             let step = TaskStep {
                 action: planned_step.action.clone(),
                 tool: planned_step.tool.clone(),

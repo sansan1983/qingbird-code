@@ -78,22 +78,29 @@ impl ChatRequest {
             model: model.into(),
             messages,
             tools: None,
-            temperature: 0.7,
-            max_tokens: 4096,
+            temperature: DEFAULT_TEMPERATURE,
+            max_tokens: DEFAULT_MAX_TOKENS,
             cache_control: None,
         }
     }
 
+    #[must_use]
     pub fn with_tools(mut self, tools: Vec<ToolDefinition>) -> Self {
         self.tools = Some(tools);
         self
     }
 
+    #[must_use]
     pub fn with_cache(mut self, breakpoint_index: usize) -> Self {
         self.cache_control = Some(CacheControlPoint { breakpoint_index });
         self
     }
 }
+
+/// 默认采样温度（fix v1.0.3 M1 抽离）
+pub const DEFAULT_TEMPERATURE: f32 = 0.7;
+/// 默认最大输出 token 数（fix v1.0.3 M1 抽离）
+pub const DEFAULT_MAX_TOKENS: u32 = 4096;
 
 /// 聊天响应
 #[derive(Debug, Clone)]
@@ -145,7 +152,8 @@ pub trait LlmProvider: Send + Sync {
     fn name(&self) -> &str;
 }
 
-/// 把 ModelTier 映射成可读字符串（用于日志/事件）
+/// 把 `ModelTier` 映射成可读字符串（用于日志/事件）
+#[must_use]
 pub fn tier_label(tier: ModelTier) -> &'static str {
     match tier {
         ModelTier::Strong => "strong",

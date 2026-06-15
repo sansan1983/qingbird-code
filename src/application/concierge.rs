@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::application::orchestrator::Orchestrator;
 use crate::common::types::Intent;
-use crate::common::types::*;
+use crate::common::types::{RiskLevel, TaskSpec};
 use crate::infrastructure::event::{Event, EventChannel};
 use crate::infrastructure::memory::CompositeMemory;
 use crate::infrastructure::profile::ProfileRegistry;
@@ -39,7 +39,7 @@ impl Concierge {
         }
     }
 
-    /// 处理用户输入 — 永不阻塞：派发任务用 tokio::spawn 异步执行
+    /// 处理用户输入 — 永不阻塞：派发任务用 `tokio::spawn` 异步执行
     pub async fn handle_input(&self, input: String) -> String {
         let intent = self.classify_intent(&input);
 
@@ -81,6 +81,7 @@ impl Concierge {
     }
 
     /// 规则驱动的意图分类（v1.0：不调 LLM）
+    #[must_use]
     pub fn classify_intent(&self, input: &str) -> Intent {
         let input_lower = input.to_lowercase();
 

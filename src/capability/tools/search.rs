@@ -77,7 +77,7 @@ impl Tool for SearchCodeTool {
         for entry in WalkDir::new(root)
             .follow_links(false)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
         {
             if !entry.file_type().is_file() {
                 continue;
@@ -151,7 +151,7 @@ impl Tool for SearchCodeTool {
 fn glob_matches(pattern: &str, name: &str) -> bool {
     if let Some(stripped) = pattern.strip_prefix("*.") {
         // *.rs → 以 .rs 结尾
-        name.ends_with(&format!(".{}", stripped))
+        name.ends_with(&format!(".{stripped}"))
     } else {
         // 完全匹配
         pattern == name

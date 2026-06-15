@@ -57,7 +57,7 @@ async fn main() {
     let llm = match LlmRouter::from_config(&cfg) {
         Ok(l) => Arc::new(tokio::sync::Mutex::new(l)),
         Err(e) => {
-            eprintln!("Failed to init LLM: {}", e);
+            eprintln!("Failed to init LLM: {e}");
             return;
         }
     };
@@ -78,7 +78,7 @@ async fn main() {
     ) {
         Ok(m) => Arc::new(tokio::sync::Mutex::new(m)),
         Err(e) => {
-            eprintln!("Failed to init memory: {}", e);
+            eprintln!("Failed to init memory: {e}");
             return;
         }
     };
@@ -123,7 +123,7 @@ async fn main() {
     // 单次执行模式
     if let Some(task) = cli.execute {
         let response = concierge.handle_input(task).await;
-        println!("{}", response);
+        println!("{response}");
         return;
     }
 
@@ -136,30 +136,11 @@ async fn main() {
         let mut rx = event_rx.subscribe();
         loop {
             match rx.recv().await {
-                Ok(Event::TaskCompleted { task_id, summary }) => {
-                    let id_prefix: String = task_id.to_string().chars().take(8).collect();
-                    let summary_prefix: String = summary.chars().take(200).collect();
-                    println!(
-                        "\n{} [{}]: {}",
-                        t!("cli_task_completed"),
-                        id_prefix,
-                        summary_prefix
-                    );
-                }
-                Ok(Event::TaskFailed { task_id, error }) => {
-                    let id_prefix: String = task_id.to_string().chars().take(8).collect();
-                    println!("\n{} [{}]: {}", t!("cli_task_failed"), id_prefix, error);
-                }
-                Ok(Event::RiskEscalated { task_id, from, to }) => {
-                    let id_prefix: String = task_id.to_string().chars().take(8).collect();
-                    println!(
-                        "\n{} [{}]: {:?} → {:?}",
-                        t!("cli_risk_escalated"),
-                        id_prefix,
-                        from,
-                        to
-                    );
-                }
+                Ok(
+                    event @ (Event::TaskCompleted { .. }
+                    | Event::TaskFailed { .. }
+                    | Event::RiskEscalated { .. }),
+                ) => print_event(&event),
                 Ok(Event::SystemShutdown) => break,
                 _ => {}
             }
@@ -181,14 +162,45 @@ async fn main() {
                 }
 
                 let response = concierge.handle_input(input).await;
-                println!("> {}", response);
+                println!("> {response}");
             }
             Err(e) => {
-                eprintln!("Input error: {}", e);
+                eprintln!("Input error: {e}");
                 break;
             }
         }
     }
 
     events.publish(Event::SystemShutdown);
+}
+
+/// 打印 CLI 事件（统一前缀处理，v1.0.3 R3 抽离）
+fn print_event(event: &Event) {
+    let line = match event {
+        Event::TaskCompleted { task_id, summary } => format!(
+            "{} [{}]: {}",
+            t!("cli_task_completed"),
+            short_id(task_id),
+            summary.chars().take(200).collect::<String>()
+        ),
+        Event::TaskFailed { task_id, error } => format!(
+            "{} [{}]: {}",
+            t!("cli_task_failed"),
+            short_id(task_id),
+            error
+        ),
+        Event::RiskEscalated { task_id, from, to } => format!(
+            "{} [{}]: {:?}→{:?}",
+            t!("cli_risk_escalated"),
+            short_id(task_id),
+            from,
+            to
+        ),
+        _ => return,
+    };
+    println!("\n{line}");
+}
+
+fn short_id(task_id: &uuid::Uuid) -> String {
+    task_id.to_string().chars().take(8).collect()
 }

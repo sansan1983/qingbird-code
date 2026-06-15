@@ -6,10 +6,6 @@ use clap::Parser;
 #[command(version = "0.1.0")]
 #[command(about = "Multi-layer Agent Collaboration Framework", long_about = None)]
 pub struct Cli {
-    /// 启动交互模式
-    #[arg(short, long, default_value_t = true)]
-    pub interactive: bool,
-
     /// 直接执行单次任务（非交互模式）
     #[arg(short, long)]
     pub execute: Option<String>,
@@ -28,6 +24,7 @@ pub struct Cli {
 }
 
 impl Cli {
+    #[must_use]
     pub fn parse_args() -> Self {
         Cli::parse()
     }

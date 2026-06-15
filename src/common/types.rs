@@ -38,6 +38,7 @@ pub struct TaskSpec {
 }
 
 impl TaskSpec {
+    #[must_use]
     pub fn new(description: String, risk_level: RiskLevel) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -156,6 +157,18 @@ pub struct FeedbackRecord {
     pub retry_count: u8,
 }
 
+impl FeedbackRecord {
+    /// 构造一个时间戳为 now 的反馈记录（fix v1.0.3 R8 抽离）
+    #[must_use]
+    pub fn now(retry_count: u8, verdict: QualityVerdict) -> Self {
+        Self {
+            timestamp: Utc::now(),
+            verdict,
+            retry_count,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum QualityVerdict {
     Pass { summary: String },
@@ -198,11 +211,14 @@ impl Default for PermissionSet {
         Self {
             allowed_paths: vec![],
             allowed_commands: vec![],
-            max_file_size_bytes: 10 * 1024 * 1024, // 10MB
+            max_file_size_bytes: DEFAULT_MAX_FILE_SIZE,
             network_enabled: false,
         }
     }
 }
+
+/// 默认文件大小上限 10MB（fix v1.0.3 M2 抽离）
+pub const DEFAULT_MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
 
 // ========== 意图类型（缓存 Key 用）==========
 

@@ -1,9 +1,8 @@
-use chrono::Utc;
 use std::sync::Arc;
 
 use super::blackboard::Blackboard;
 use crate::common::error::Result;
-use crate::common::types::*;
+use crate::common::types::{ActionRecord, FeedbackRecord, ModelTier, QualityVerdict, RiskLevel};
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 use rust_i18n::t;
 
@@ -21,18 +20,15 @@ impl Feedbacker {
     pub async fn evaluate(&self, blackboard: Blackboard) -> Result<(Blackboard, QualityVerdict)> {
         // 规则 1: 无操作记录 → Pass（不调 LLM）
         if blackboard.action_log.is_empty() {
-            let record = FeedbackRecord {
-                timestamp: Utc::now(),
-                verdict: QualityVerdict::Pass {
-                    summary: t!("status_feedback_no_actions_detail").to_string(),
-                },
-                retry_count: blackboard.retry_count,
-            };
+            let detail = t!("status_feedback_no_actions_detail").to_string();
+            let summary = t!("status_feedback_no_actions").to_string();
+            let record = FeedbackRecord::now(
+                blackboard.retry_count,
+                QualityVerdict::Pass { summary: detail },
+            );
             return Ok((
                 blackboard.with_feedback(record),
-                QualityVerdict::Pass {
-                    summary: t!("status_feedback_no_actions").to_string(),
-                },
+                QualityVerdict::Pass { summary },
             ));
         }
 
@@ -50,13 +46,12 @@ impl Feedbacker {
         // 规则 2: 全部成功 + 风险 ≤ L1 → 快速 Pass（不调 LLM）
         if all_succeeded && risk <= RiskLevel::L1 {
             let summary = t!("status_feedback_all_passed", count = count).to_string();
-            let record = FeedbackRecord {
-                timestamp: Utc::now(),
-                verdict: QualityVerdict::Pass {
+            let record = FeedbackRecord::now(
+                retry_count,
+                QualityVerdict::Pass {
                     summary: summary.clone(),
                 },
-                retry_count,
-            };
+            );
             return Ok((
                 blackboard.with_feedback(record),
                 QualityVerdict::Pass { summary },
@@ -67,11 +62,7 @@ impl Feedbacker {
         let verdict = self
             .llm_evaluate(&blackboard, &last_action, retry_count, risk)
             .await?;
-        let record = FeedbackRecord {
-            timestamp: Utc::now(),
-            verdict: verdict.clone(),
-            retry_count,
-        };
+        let record = FeedbackRecord::now(retry_count, verdict.clone());
         Ok((blackboard.with_feedback(record), verdict))
     }
 
@@ -91,7 +82,7 @@ impl Feedbacker {
             .map(|a| {
                 let status = if a.success { "✓" } else { "✗" };
                 let summary: String = a.summary.chars().take(80).collect();
-                format!("{} {}: {}", status, a.tool, summary)
+                format!("{status} {}: {summary}", a.tool)
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -108,11 +99,7 @@ impl Feedbacker {
                  - ESCALATE: <原因>  (如果需要升级)",
             ),
             Message::user(format!(
-                "任务: {}\n风险等级: {:?}\n重试次数: {}\n\n执行记录:\n{}\n\n最后一步工具: {}\n最后一步状态: {}\n\n请评估。",
-                desc,
-                risk,
-                retry_count,
-                operation_summary,
+                "任务: {desc}\n风险等级: {risk:?}\n重试次数: {retry_count}\n\n执行记录:\n{operation_summary}\n\n最后一步工具: {}\n最后一步状态: {}\n\n请评估。",
                 last_action.tool,
                 if last_action.success {
                     "成功"
