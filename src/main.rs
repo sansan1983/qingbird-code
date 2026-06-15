@@ -2,6 +2,9 @@ use std::sync::Arc;
 
 use clap::Parser;
 
+// 在 bin crate 中也调用 i18n!() 以生成 _rust_i18n_t! 宏（让 main.rs 里的 t!() 可用）
+rust_i18n::i18n!("locales", fallback = "en-US");
+
 use eflow::application::concierge::Concierge;
 use eflow::application::orchestrator::Orchestrator;
 use eflow::capability::tools::{

@@ -1,3 +1,5 @@
+rust_i18n::i18n!("locales", fallback = "en-US");
+
 use clap::Parser;
 use eflow::interaction::cli::Cli;
 

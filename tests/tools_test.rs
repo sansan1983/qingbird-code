@@ -1,3 +1,5 @@
+rust_i18n::i18n!("locales", fallback = "en-US");
+
 use eflow::capability::tools::{
     Tool, ToolDefinition, ToolOutput, ToolRegistry,
 };
@@ -8,7 +10,7 @@ use std::fs;
 use std::sync::Arc;
 
 // 切换到中文让中文输出断言能通过
-locale::init(Some("zh-CN"));
+// locale setup moved into individual tests
 
 fn write_file(dir: &std::path::Path, name: &str, content: &str) -> std::path::PathBuf {
     let path = dir.join(name);

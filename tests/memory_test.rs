@@ -1,3 +1,5 @@
+rust_i18n::i18n!("locales", fallback = "en-US");
+
 use std::time::{Duration, SystemTime};
 
 use eflow::common::types::{Importance, MemoryCategory};

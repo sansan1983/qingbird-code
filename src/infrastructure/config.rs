@@ -134,7 +134,10 @@ mod tests {
 
     #[test]
     fn expand_env_vars_substitutes_known_var() {
-        std::env::set_var("EFLOW_TEST_VAR", "hello");
+        // SAFETY: 单线程测试中设置环境变量不会与其他测试产生数据竞争
+        unsafe {
+            std::env::set_var("EFLOW_TEST_VAR", "hello");
+        }
         let out = expand_env_vars("key=${EFLOW_TEST_VAR}");
         assert_eq!(out, "key=hello");
     }

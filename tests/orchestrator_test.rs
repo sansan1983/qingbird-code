@@ -15,7 +15,7 @@ use eflow::infrastructure::locale;
 use tokio::sync::Mutex;
 
 // 默认中文 locale
-locale::init(Some("zh-CN"));
+// locale setup moved into individual tests
 
 // ========== 测试辅助 ==========
 

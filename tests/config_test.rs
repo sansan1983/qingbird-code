@@ -1,3 +1,5 @@
+rust_i18n::i18n!("locales", fallback = "en-US");
+
 use eflow::infrastructure::config::load_config;
 use std::io::Write;
 

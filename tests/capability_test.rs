@@ -1,3 +1,5 @@
+rust_i18n::i18n!("locales", fallback = "en-US");
+
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -20,7 +22,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 // 全模块固定中文 locale（中文断言）
-locale::init(Some("zh-CN"));
+// locale setup moved into individual tests
 
 // ========== 测试辅助 ==========
 

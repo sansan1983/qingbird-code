@@ -1,3 +1,5 @@
+rust_i18n::i18n!("locales", fallback = "en-US");
+
 use eflow::infrastructure::locale;
 
 #[test]
@@ -15,25 +17,25 @@ fn test_supported_locales_contains_zh_and_en() {
 fn test_init_with_none_uses_default() {
     let l = locale::init(None);
     assert_eq!(l, "zh-CN");
-    assert_eq!(rust_i18n::i18n::locale(), "zh-CN");
+    assert_eq!(&*rust_i18n::locale(), "zh-CN");
 }
 
 #[test]
 fn test_init_with_valid_locale_uses_it() {
     let l = locale::init(Some("en-US"));
     assert_eq!(l, "en-US");
-    assert_eq!(rust_i18n::i18n::locale(), "en-US");
+    assert_eq!(&*rust_i18n::locale(), "en-US");
 
     let l = locale::init(Some("zh-CN"));
     assert_eq!(l, "zh-CN");
-    assert_eq!(rust_i18n::i18n::locale(), "zh-CN");
+    assert_eq!(&*rust_i18n::locale(), "zh-CN");
 }
 
 #[test]
 fn test_init_with_unsupported_locale_falls_back_to_default() {
     let l = locale::init(Some("fr-FR"));
     assert_eq!(l, "zh-CN");
-    assert_eq!(rust_i18n::i18n::locale(), "zh-CN");
+    assert_eq!(&*rust_i18n::locale(), "zh-CN");
 }
 
 #[test]

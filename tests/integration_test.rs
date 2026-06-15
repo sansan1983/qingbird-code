@@ -8,6 +8,8 @@
 //!
 //! 运行：cargo test --test integration_test
 
+rust_i18n::i18n!("locales", fallback = "en-US");
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -31,7 +33,7 @@ use eflow::infrastructure::memory::{CompositeMemory, MemoryEntry, RecallScope, W
 use eflow::infrastructure::profile::ProfileRegistry;
 use tokio::sync::{Mutex, RwLock};
 
-locale::init(Some("zh-CN"));
+// locale setup moved into individual tests
 
 // ========== Test fixtures ==========
 

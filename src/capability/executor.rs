@@ -21,25 +21,29 @@ impl Executor {
 
     /// 执行步骤
     pub async fn execute(&self, blackboard: Blackboard) -> Result<Blackboard> {
-        let plan = blackboard
+        let mut bb = blackboard;
+
+        // 取出 execution_plan 以释放对 bb 的借用；
+        // 模型选择按 tier 单独 clone（ExecutionPlan 含 model_tier: Copy）
+        let model_tier = bb
             .execution_plan
             .as_ref()
+            .expect("Executor called without execution_plan")
+            .model_tier;
+        let plan = bb
+            .execution_plan
+            .take()
             .expect("Executor called without execution_plan");
-
-        let mut bb = blackboard;
-        let start = std::time::Instant::now();
 
         for sub_step in &plan.sub_steps {
             // 检查是否需要 LLM 推理
             let result = if sub_step.tool.is_empty() || sub_step.tool == "llm_reasoning" {
                 // 纯 LLM 推理步骤
-                self.execute_llm_step(plan, sub_step).await?
+                self.execute_llm_step(model_tier, sub_step).await?
             } else {
                 // 工具执行步骤
                 self.execute_tool_step(sub_step).await?
             };
-
-            let duration_ms = start.elapsed().as_millis() as u64;
 
             let record = ActionRecord {
                 timestamp: Utc::now(),
@@ -57,13 +61,16 @@ impl Executor {
             }
         }
 
+        // 把 plan 放回 Blackboard（Feedbacker 可能需要读取 execution_plan）
+        bb.execution_plan = Some(plan);
+
         Ok(bb)
     }
 
     /// 纯 LLM 推理
     async fn execute_llm_step(
         &self,
-        plan: &ExecutionPlan,
+        model_tier: ModelTier,
         step: &TaskStep,
     ) -> Result<ActionResult> {
         let mut llm = self.llm.lock().await;
@@ -77,7 +84,7 @@ impl Executor {
         // （LLM 的工具自选不在 v1.0 范围）
         let request = ChatRequest::new("", messages).with_cache(0);
 
-        let response = llm.chat(plan.model_tier, request).await?;
+        let response = llm.chat(model_tier, request).await?;
 
         Ok(ActionResult {
             success: true,
@@ -94,20 +101,24 @@ impl Executor {
         let duration_ms = start.elapsed().as_millis() as u64;
 
         match output {
-            Ok(tool_output) => Ok(ActionResult {
-                success: tool_output.success,
-                output: tool_output.content,
-                tool_calls: vec![ToolCallSummary {
-                    tool_name: step.tool.clone(),
+            Ok(tool_output) => {
+                // 复制 content 以避免「move 后再借用」
+                let content = tool_output.content.clone();
+                Ok(ActionResult {
                     success: tool_output.success,
+                    output: content.clone(),
+                    tool_calls: vec![ToolCallSummary {
+                        tool_name: step.tool.clone(),
+                        success: tool_output.success,
+                        duration_ms,
+                        summary: content.chars().take(100).collect(),
+                    }],
                     duration_ms,
-                    summary: tool_output.content.chars().take(100).collect(),
-                }],
-                duration_ms,
-            }),
+                })
+            }
             Err(e) => Ok(ActionResult {
                 success: false,
-                output: t!("status_action_tool_failed", msg = e.to_string()),
+                output: t!("status_action_tool_failed", msg = e.to_string()).to_string(),
                 tool_calls: vec![],
                 duration_ms,
             }),

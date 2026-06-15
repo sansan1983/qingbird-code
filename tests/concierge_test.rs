@@ -1,3 +1,5 @@
+rust_i18n::i18n!("locales", fallback = "en-US");
+
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -18,7 +20,7 @@ use eflow::infrastructure::profile::ProfileRegistry;
 use tokio::sync::{Mutex, RwLock};
 
 // 默认中文 locale
-locale::init(Some("zh-CN"));
+// locale setup moved into individual tests
 
 // ========== 测试辅助 ==========
 
