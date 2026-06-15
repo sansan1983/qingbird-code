@@ -33,6 +33,7 @@ regex-lite = "0.1.9"
 dirs = "6.0.0"
 futures-util = "0.3.32"
 rust_i18n = "3"
+walkdir = "2"
 
 [dev-dependencies]
 tempfile = "3"
