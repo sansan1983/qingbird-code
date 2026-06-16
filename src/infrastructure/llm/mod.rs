@@ -4,7 +4,7 @@ pub mod openai;
 pub mod router;
 pub mod types;
 
-pub use cache::{CacheKey, CacheValue, ContextProfile, key_hash};
+pub use cache::{CacheKey, CacheValue, ContextProfile, cache_key_for_step, key_hash};
 pub use router::LlmRouter;
 pub use types::*;
 

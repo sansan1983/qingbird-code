@@ -3,7 +3,7 @@ use crate::common::error::Result;
 use crate::common::types::{
     ExecutionPlan, IntentType, ModelTier, PlannedStep, RiskLevel, TaskStep,
 };
-use crate::infrastructure::llm::cache::{CacheKey, ContextProfile};
+use crate::infrastructure::llm::cache::cache_key_for_step;
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 
 /// Decisioner — 风险评估 + 执行计划生成 + 模型路由
@@ -75,22 +75,9 @@ impl Decisioner {
 
         let request = ChatRequest::new("", messages).with_cache(0);
 
-        // v1.1 跨阶段 Task D4: 走 L2 cache（chat_cached 替代 chat）
-        // retry_count 必含：break rework loop（同一 step 多次 decide 需不同 plan）
-        let key = CacheKey {
-            intent_type: IntentType::Chat,
-            task_signature: format!(
-                "decision:{}:{}:{}:retry={}",
-                step.action, step.tool, step.params, retry_count
-            ),
-            context_profile: ContextProfile {
-                conversation_depth_bucket: 0,
-                file_count_bucket: 0,
-                risk_level: risk,
-                profile_name: "default".into(),
-            },
-            model: String::new(),
-        };
+        // v1.2 D1: 用 helper 替换内联 CacheKey 构造。retry_count 仍传 Some——
+        // v1.1 注释明示这是为了 break rework loop（同一 step 多次 decide 需不同 plan）。
+        let key = cache_key_for_step(step, IntentType::Chat, risk, "default", Some(retry_count));
 
         let response = llm.chat_cached(ModelTier::Strong, request, &key).await?;
 

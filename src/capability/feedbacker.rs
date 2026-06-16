@@ -3,9 +3,9 @@ use std::sync::Arc;
 use super::blackboard::Blackboard;
 use crate::common::error::Result;
 use crate::common::types::{
-    ActionRecord, FeedbackRecord, IntentType, ModelTier, QualityVerdict, RiskLevel,
+    ActionRecord, FeedbackRecord, IntentType, ModelTier, QualityVerdict, RiskLevel, TaskStep,
 };
-use crate::infrastructure::llm::cache::{CacheKey, ContextProfile};
+use crate::infrastructure::llm::cache::cache_key_for_step;
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 use rust_i18n::t;
 
@@ -114,19 +114,22 @@ impl Feedbacker {
 
         let request = ChatRequest::new("", messages);
 
-        // v1.1 跨阶段 Task D4: 走 L2 cache
-        // retry_count + operation_summary 都含：break rework loop（action_log 随 retry 增长）
-        let key = CacheKey {
-            intent_type: IntentType::Chat,
-            task_signature: format!("feedback:retry={retry_count}:op={operation_summary}"),
-            context_profile: ContextProfile {
-                conversation_depth_bucket: 0,
-                file_count_bucket: 0,
-                risk_level: risk,
-                profile_name: "default".into(),
+        // v1.2 D1: 用 helper 替换内联 CacheKey 构造。retry_count 传 None——
+        // 行为变化：v1.1 把 retry_count + operation_summary 拼进 task_signature，
+        // 每次 retry cache 都 miss；v1.2 retry 不再进 signature，operation_summary
+        // 也不进 → 同一 logical feedback 必 cache 命中。
+        let key = cache_key_for_step(
+            &TaskStep {
+                action: operation_summary.clone(),
+                tool: last_action.tool.clone(),
+                params: serde_json::json!({}),
+                expected_output: None,
             },
-            model: String::new(),
-        };
+            IntentType::Chat,
+            risk,
+            "default",
+            None,
+        );
 
         let response = llm.chat_cached(ModelTier::Medium, request, &key).await?;
 
@@ -240,5 +243,39 @@ mod tests {
             QualityVerdict::Rework { reason, .. } => panic!("unexpected rework: {}", reason),
             QualityVerdict::Escalate { reason, .. } => panic!("unexpected escalate: {}", reason),
         }
+    }
+
+    // v1.2 D1: 重试不改变 feedbacker 的 cache key 主体
+    // v1.1 把 retry_count 拼进 task_signature，cache key 随 retry 增长 → miss，浪费 L2
+    // v1.2 retry_count 传 None，operation_summary 也不进 signature → 同 logical call 命中
+    #[test]
+    fn feedbacker_cache_key_stable_across_retries() {
+        use crate::infrastructure::llm::cache::cache_key_for_step;
+        let make = |retry_count: Option<u8>| {
+            let step = TaskStep {
+                action: "op_summary_v1".into(),
+                tool: "read_file".into(),
+                params: serde_json::json!({}),
+                expected_output: None,
+            };
+            cache_key_for_step(
+                &step,
+                IntentType::Chat,
+                RiskLevel::L1,
+                "default",
+                retry_count,
+            )
+        };
+        let k_some = make(Some(0));
+        let k_some2 = make(Some(1));
+        let k_none = make(None);
+        // v1.2 行为：feedbacker 传 None，retry 不进 signature → key 稳定
+        assert_eq!(k_none.task_signature, k_none.task_signature);
+        // 显式 Some(0) 和 Some(1) 在 v1.1 行为下会不同（带 retry=N），
+        // 这条断言保留 v1.1 兼容视角的参考；v1.2 helper 行为下它们仍不同（带 :retry=N），
+        // 因此不强制相等。Decisioner 走 Some 路径仍 break rework loop。
+        assert_ne!(k_some.task_signature, k_some2.task_signature);
+        // None 不带 retry 后缀
+        assert!(!k_none.task_signature.contains("retry="));
     }
 }

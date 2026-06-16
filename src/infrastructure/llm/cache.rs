@@ -171,6 +171,66 @@ fn unix_now() -> i64 {
         .map_or(0, |d| d.as_secs() as i64)
 }
 
+/// v1.2 D1: 把 capability 三处内联 CacheKey 构造抽到一处。
+///
+/// 设计选择（v1.1 plan §B1 + 跨阶段 D4 回顾）：
+/// - `task_signature` **只含** step.action + step.tool，不含 params
+///   （params 含时间戳/路径/任何字节 → cache miss；user 体验是「为什么我第二次没命中」）
+/// - `intent_type` 由调用方按角色（Decisioner/Executor/Feedbacker）传入
+/// - `model` 留空：Router 在 chat_cached 入口再注入
+/// - `retry_count: Option<u8>`——v1.2 选 1 决策：
+///   - Decisioner 传 `Some(retry_count)`：保持 v1.1 行为，break rework loop
+///     （v1.1 注释：「retry_count 必含：break rework loop」）
+///   - Executor / Feedbacker 传 `None`：retry 不再进 signature
+///     - Executor：v1.1 注释说 step.action 在 rework 时被 subagent 追加建议，key 自动变
+///     - Feedbacker：v1.1 把 retry_count 拼进 task_signature → 每次 retry 都 miss，
+///       浪费 L2；v1.2 改成 retry 后 cache key 稳定（行为变化，commit body 明文记录）
+#[must_use]
+pub fn cache_key_for_step(
+    step: &crate::common::types::TaskStep,
+    intent_type: crate::common::types::IntentType,
+    risk_level: crate::common::types::RiskLevel,
+    profile_name: &str,
+    retry_count: Option<u8>,
+) -> CacheKey {
+    let base = format!(
+        "{}:{}:{}",
+        intent_label(intent_type),
+        step.tool,
+        step.action
+    );
+    let task_signature = match retry_count {
+        Some(r) => format!("{base}:retry={r}"),
+        None => base,
+    };
+    CacheKey {
+        intent_type,
+        task_signature,
+        context_profile: ContextProfile {
+            conversation_depth_bucket: 0,
+            file_count_bucket: 0,
+            risk_level,
+            profile_name: profile_name.to_string(),
+        },
+        model: String::new(),
+    }
+}
+
+fn intent_label(it: crate::common::types::IntentType) -> &'static str {
+    use crate::common::types::IntentType;
+    match it {
+        IntentType::CodeReview => "code_review",
+        IntentType::BugFix => "bug_fix",
+        IntentType::DataQuery => "data_query",
+        IntentType::FileRead => "file_read",
+        IntentType::FileWrite => "file_write",
+        IntentType::CommandExecute => "command_execute",
+        IntentType::WebFetch => "web_fetch",
+        IntentType::Chat => "chat",
+        IntentType::Unknown => "unknown",
+    }
+}
+
 /// L2 缓存管理器（双层：内存 → 磁盘）
 pub struct L2CacheManager {
     memory: MemoryLruBackend,
@@ -281,6 +341,35 @@ mod tests {
         let mut k2 = make_key();
         k2.model = "claude-opus-4-8".into();
         assert_ne!(key_hash(&k1), key_hash(&k2));
+    }
+
+    // v1.2 D1: cache_key_for_step helper signature 是 (step, intent, risk, profile, retry_count)
+    // 选 1 决策：retry_count: Option<u8>——Decisioner 传 Some 保持 v1.1 break-rework-loop 行为；
+    // Feedbacker 传 None 实现 retry 后 cache key 稳定。Executor 传 None（v1.1 注释说它的
+    // retry 通过 step.action 变化处理）。
+    #[test]
+    fn cache_key_for_step_uses_action_and_tool_only() {
+        // helper 不应把 step.params 序列化进 signature
+        // （params 任一字节变 → cache miss；user 改个时间戳就破命中）
+        // signature 应只含 action + tool
+        let step = crate::common::types::TaskStep {
+            action: "review code".into(),
+            tool: "read_file".into(),
+            params: serde_json::json!({"path": "/tmp/foo.rs"}),
+            expected_output: None,
+        };
+        let key = cache_key_for_step(
+            &step,
+            crate::common::types::IntentType::CodeReview,
+            crate::common::types::RiskLevel::L0,
+            "default",
+            None,
+        );
+        assert_eq!(key.task_signature, "code_review:read_file:review code");
+        assert!(
+            key.model.is_empty(),
+            "model 字段由 Router 注入，不在 helper 写死"
+        );
     }
 }
 
