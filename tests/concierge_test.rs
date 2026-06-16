@@ -287,3 +287,22 @@ async fn handle_task_dispatch_publishes_task_completed_or_failed_event() {
         event
     );
 }
+
+// ========== v1.2 D3: ProfileSwitch 真切换 active_profile ==========
+
+#[tokio::test]
+async fn concierge_profile_switch_updates_active_profile() {
+    // v1.2 D3: handle_input 收到 ProfileSwitch 意图后，
+    // 应当真把 active_profile 字符串从 default 切到 industry（不再只是发提示）
+    // ——这是删 #[allow(dead_code)] 的先决条件
+    let (c, _events) = make_concierge();
+
+    // 初始 active profile
+    assert_eq!(c.active_profile().await, "developer");
+
+    // 切到 writer（classify_intent 规则：含"切换" + "profile" → parts.last() = industry）
+    let resp = c.handle_input("切换 profile writer".into()).await;
+    assert_eq!(c.active_profile().await, "writer");
+    // 响应应包含新 profile 名（用户确认）
+    assert!(resp.contains("writer"), "got: {resp}");
+}

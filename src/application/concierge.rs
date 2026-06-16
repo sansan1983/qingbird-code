@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::application::orchestrator::Orchestrator;
@@ -13,21 +14,25 @@ use rust_i18n::t;
 /// Concierge — 零阻塞对话入口
 pub struct Concierge {
     events: EventChannel,
+    // v1.2 D3: 仍 dead（D3 只解 active_profile 这一个字段）；
+    // D4 commit 一并删 dead_code 注解（届时 memory 会被 recall_smart 读到）
     #[allow(dead_code)]
-    memory: Arc<tokio::sync::Mutex<CompositeMemory>>,
+    memory: Arc<Mutex<CompositeMemory>>,
+    // v1.2 D3: 仍 dead（D3/D4 都不直接读 profiles，只用 active_profile 字符串）
     #[allow(dead_code)]
     profiles: Arc<tokio::sync::RwLock<ProfileRegistry>>,
-    orchestrator: Arc<tokio::sync::Mutex<Orchestrator>>,
-    #[allow(dead_code)]
-    active_profile: String,
+    orchestrator: Arc<Mutex<Orchestrator>>,
+    // v1.2 D3: 用 Mutex 包裹让 ProfileSwitch 意图能真改；通过 active_profile()
+    // getter 和 handle_input 的 ProfileSwitch 分支都用到，不再 dead
+    active_profile: Arc<Mutex<String>>,
 }
 
 impl Concierge {
     pub fn new(
         events: EventChannel,
-        memory: Arc<tokio::sync::Mutex<CompositeMemory>>,
+        memory: Arc<Mutex<CompositeMemory>>,
         profiles: Arc<tokio::sync::RwLock<ProfileRegistry>>,
-        orchestrator: Arc<tokio::sync::Mutex<Orchestrator>>,
+        orchestrator: Arc<Mutex<Orchestrator>>,
         default_profile: String,
     ) -> Self {
         Self {
@@ -35,8 +40,13 @@ impl Concierge {
             memory,
             profiles,
             orchestrator,
-            active_profile: default_profile,
+            active_profile: Arc::new(Mutex::new(default_profile)),
         }
+    }
+
+    /// v1.2 D3: 暴露 active_profile 给测试和 UI 读取
+    pub async fn active_profile(&self) -> String {
+        self.active_profile.lock().await.clone()
     }
 
     /// 处理用户输入 — 永不阻塞：派发任务用 `tokio::spawn` 异步执行
@@ -75,6 +85,9 @@ impl Concierge {
             Intent::TaskCancel { task_id } => t!("concierge_task_cancel", id = task_id).to_string(),
             Intent::SkillQuery { keyword } => self.list_skills(&keyword),
             Intent::ProfileSwitch { industry } => {
+                // v1.2 D3: 真改 active_profile，不再只发提示
+                let mut p = self.active_profile.lock().await;
+                *p = industry.clone();
                 t!("concierge_profile_switch", industry = industry).to_string()
             }
         }
