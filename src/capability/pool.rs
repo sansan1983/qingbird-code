@@ -103,6 +103,26 @@ impl SubagentPool {
         self.active.lock().unwrap().len()
     }
 
+    /// v1.2 E2: 列出活跃 agent 的元数据 (id, name, role, capabilities)。
+    /// Orchestrator 用这个做 role-based 调度决策（v1.2 E4 并行派发用）。
+    /// ——返回 owned Vec 而非引用（避免 guard 跨 caller，借用期零问题）
+    #[must_use]
+    pub fn list_active(&self) -> Vec<(Uuid, String, Role, Vec<Capability>)> {
+        self.active
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(id, sa)| {
+                (
+                    *id,
+                    sa.name.clone(),
+                    sa.role.clone(),
+                    sa.capabilities.clone(),
+                )
+            })
+            .collect()
+    }
+
     /// 取出 agent 并返回句柄（drop 时自动归还）
     pub fn take_handle(&self, id: Uuid) -> Option<SubagentHandle> {
         let map = self.active.lock().unwrap();
@@ -267,6 +287,26 @@ mod tests {
         drop(h);
         // drop 后 active map 清空
         assert_eq!(pool.active_count(), 0);
+        pool.shutdown().await;
+    }
+
+    // v1.2 E2: Pool.list_active() 暴露活跃 agent 元数据
+    // 让 Orchestrator 做 role-based 调度决策（E4 并行派发用）
+    #[tokio::test]
+    async fn pool_list_active_returns_metadata() {
+        use crate::common::types::Capability;
+        let pool = SubagentPool::start(2);
+        let _id = pool
+            .dispatch(Role::FileAssistant, vec![Capability::WriteFile])
+            .await
+            .unwrap();
+        let active = pool.list_active();
+        assert_eq!(active.len(), 1);
+        let (_id2, name, role, caps) = &active[0];
+        assert!(name.starts_with("worker-"), "name: {name}");
+        // matches! 而非 assert_eq! —— Role 未 derive PartialEq (out of E2 scope)
+        assert!(matches!(role, Role::FileAssistant));
+        assert!(caps.contains(&Capability::WriteFile));
         pool.shutdown().await;
     }
 }
