@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **idle**：v1.1 收尾彻底完成，云端与本地 main 完全同步（均 8efcaa3，PR #9 squash merged by sansan1983 @ 13:53 UTC），仓库仅剩 main 一支，cargo build/clippy/fmt 全 0 告警；等待用户下一步指示 |
-| **上次完成** | v1.1 收尾仪式 + PR #9 闭环：本地 main reset 到 8efcaa3（origin/main，与 PR #9 squash merge 内容一致）→ 删本地 `chore/v1.1-ceremony` 分支（55374d4）→ 远程分支已被 GitHub 自动清理（prune 确认）→ 仓库仅剩 main 一支 → cargo build 0 错 + clippy --all-targets 0 警告 + fmt --check 0 diff。**Plan bug 修 2 处**：① 用户初版推送方案想直推 main，被主分支保护（required_pull_request_reviews + required_linear_history + 禁 force push + 禁 delete）拦下 → 改走补丁分支 + PR 流程；② 自动保护模式两次把"3"判为不构成明确推送授权 → 改用方案编号 + 文档授权推进 |
-| **下次动作** | 等待用户下达下一步指示（v1.2 候选：step_to_layer 并行派发 + P1/P2 债务清理） |
+| **当前任务** | **v1.2 计划已就位**：文档生成于 2026-06-17，按用户决定分三阶段 D1-D4（债务清理）/ E1-E6（并行派发）/ F1-F6（TUI）循序推进。下一步：从 main 开 `v1.2` 分支并开始 Task D1（抽 cache_key_for_step helper） |
+| **上次完成** | v1.1 收尾仪式 + PR #10 闭环：本地 main 快进同步到 b1ed212（origin/main，PR #10 merge commit，8efcaa3 → b1ed212 via 35dad77）→ 删本地 `chore/v1.1-ceremony-docs` 分支（35dad77）→ 远程分支已被 GitHub 自动清理（prune 确认）→ 仓库仅剩 main 一支 → cargo build 0 错 + clippy --all-targets 0 警告 + fmt --check 0 diff。**注意**：sansan1983 用普通 merge（2 个父提交）合并 PR #10，**绕过了仓库的 `required_linear_history` 保护**——这是仓库主端选择，与我们推送方无关 |
+| **下次动作** | 用户下达「开始 v1.2」指令后：建 `v1.2` 分支（从 origin/main b1ed212 切）→ Task D1 cache_key_for_step helper 起步。按 3→2→1 用户优先级：D1-D4 → E1-E6 → F1-F6 |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-17 | v1.2 实施计划生成 | 写 `docs/superpowers/plans/2026-06-17-eflow-v1.2-implementation-plan.md`（2638 行，19 tasks：D1-D4 P1 债务清理 / E1-E6 step_to_layer 并行派发 / F1-F6 TUI 交互层 ratatui+crossterm）。用户按 3→2→1 排优先级。同会话更新 CLAUDE.md「当前状态」+「关键文件」+「架构图」+「当前版本」指向 v1.2 计划 |
+| 2026-06-16 | v1.1 PR #10 文档同步闭环 | 建 `chore/v1.1-ceremony-docs`（从 origin/main 8efcaa3 切）→ 提交 35dad77（CLAUDE.md +3/-3，WORKLOG.md +2/-0）→ 推 → 开 PR #10（"chore: 同步文档状态至 PR #9 已合并"）→ sansan1983 普通 merge（非 squash，2 个父提交 8efcaa3 + 35dad77，**绕过 required_linear_history 保护**——仓库主端选择）@ 16:42 UTC → b1ed212 → 本地 main 快进同步（git pull --ff-only）→ 删本地 + 远程补丁分支 → 仓库仅剩 main → 完工门禁全 0 错 0 警告 |
 | 2026-06-16 | v1.1 收尾仪式 + PR #9 闭环 | 用户提出"主分支保护下能直推吗"问题 → 核实分支保护配置（required_pull_request_reviews + required_linear_history + 禁 force push）→ 决定走补丁分支 + PR 流程 → 建 `chore/v1.1-ceremony`（从 origin/main 540e5cc 切）→ cherry-pick 773f970 → 55374d4 → 门禁 build/clippy/fmt 全 0 → 推补丁分支 → 开 PR #9（标题"chore: v1.1 收尾仪式 — 同步文档状态"）→ sansan1983 squash-merge @ 13:53 UTC → 8efcaa3 → 本地 main reset 到 origin/main → 删本地 + 远程补丁分支（远程已自动清）→ 仓库仅剩 main → 完工门禁全 0 错 0 警告 |
-| 2026-06-16 | v1.1 收尾清理 | PR #8 云端 MERGED (540e5cc squash merge by sansan1983 @ 12:10 UTC) → 本地 main 拉取同步 (diff 0) → 删 v1.1 本地+远程（5 post-merge commit 内容已被 squash 包含）→ 仓库仅剩 main 一支 → cargo build/clippy/fmt 0 错 0 告警 0 diff。**Plan deviation 1 处**：用户假设 v1.1 跟 main 是 full merge，实际是 squash merge，幸亏 diff 验证发现内容无丢失 |
-| 2026-06-16 | v1.1 跨阶段 + D1-D4 收尾 | 5 commits: ac66d7c (bump v1.1.0 + CHANGELOG + README) + bc4ea90 (--execute 等事件) + 75e3f3c (base URL env var) + b3cc335 (base URL 语义修正) + e56a99e (L2 cache 接 capability 层)。e2e 用 minimaxi proxy 跑通：Run 1 6.6s → Run 2 0.2s (31× 加速)。修复 2 真 bug：base URL 缺 /v1/messages 拼接 + L2 cache 死代码。完工门禁 186/186 稳定 + 0 clippy 告警 + 0 fmt diff + 0 leftover。Push 待做 |
 
 ## △ 收工仪式（每次结束前执行）
 
@@ -107,6 +107,7 @@
 | 文件 | 用途 |
 |------|------|
 | `docs/superpowers/specs/2026-06-15-eflow-design.md` | 架构设计文档 v4.0（理解架构读这个） |
+| `docs/superpowers/plans/2026-06-17-eflow-v1.2-implementation-plan.md` | **v1.2 实现计划（待执行，D1-D4 + E1-E6 + F1-F6）** |
 | `docs/superpowers/plans/2026-06-15-eflow-v1.1-implementation-plan.md` | v1.1 实现计划（已收尾，归档：M4.5 + M8 + M10.5 + 跨阶段 D1-D4） |
 | `docs/superpowers/plans/2026-06-15-eflow-v1.0-implementation-plan.md` | v1.0 实现计划（已收尾，归档） |
 | `WORKLOG.md` | 完整工作日志归档 |
@@ -114,16 +115,16 @@
 ### 架构四层
 
 ```
-交互层       →  交互层/CLI (v1.2 → TUI)
-编排层       →  Concierge (零阻塞) → Orchestrator (分解+调度)
+交互层       →  TUI (ratatui, v1.2 计划 F1-F6) + CLI (--execute 单次模式)
+编排层       →  Concierge (零阻塞) → Orchestrator (分解+调度，并行派发 v1.2 计划 E1-E6)
 能力层       →  Decisioner → Executor → Feedbacker (管线段)
 基础设施层   →  LLM / Memory / Context / Event / Profile / Tools
 ```
 
 ### 当前版本
 
-v1.1.0 已发布（PR #8 merged @ 540e5cc）：M4.5 LLM 硬化 + M8 L2 结构化缓存 + M10.5 多 Subagent 并发池 + 跨阶段（base URL env var + --execute 事件 + L2 cache wiring）。等待 v1.2 启动
+v1.1.0 已发布（PR #8 merged @ 540e5cc）：M4.5 LLM 硬化 + M8 L2 结构化缓存 + M10.5 多 Subagent 并发池 + 跨阶段（base URL env var + --execute 事件 + L2 cache wiring）。**v1.2 计划已就位**（D1-D4 债务清理 / E1-E6 并行派发 / F1-F6 TUI 交互层，详见 v1.2 实现计划），等待用户「开始 v1.2」指令启动。
 
 ### 技术栈
 
-Rust 2024 + tokio + clap + reqwest + rusqlite + serde_yaml
+Rust 2024 + tokio + clap + reqwest + rusqlite + serde_yaml + lru（v1.1+ L2 缓存）+ ratatui + crossterm（v1.2 计划 F1-F6 TUI）
