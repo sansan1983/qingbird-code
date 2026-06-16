@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **idle**：v1.1 收尾完毕，云端与本地 main 完全同步（均 540e5cc，PR #8 squash merged by sansan1983 @ 12:10 UTC），仓库仅剩 main 一支，cargo build/clippy/fmt 全 0 告警；等待用户下一步指示 |
-| **上次完成** | v1.1 收尾清理：本地 main fast-forward 同步到 540e5cc（diff 0）→ 验证 v1.1 squash merge 内容已全在 main（version 1.1.0 + L2 cache + BASE_URL env var + --execute 事件等待）→ 删 v1.1 本地+远程（5 个未合入 commit 内容已被 squash 包含，diff v1.1..main = 0 无丢失）→ cargo build 0 错 0 警告 + clippy --all-targets 0 警告 + fmt --check 0 diff。**Plan bug 修 1 处**：用户以为 v1.1 与 main 是 full merge，实际是 squash merge + 5 个 post-merge commit，幸亏 diff 验证发现内容已含 → 安全 force-delete |
+| **当前任务** | **idle**：v1.1 收尾彻底完成，云端与本地 main 完全同步（均 8efcaa3，PR #9 squash merged by sansan1983 @ 13:53 UTC），仓库仅剩 main 一支，cargo build/clippy/fmt 全 0 告警；等待用户下一步指示 |
+| **上次完成** | v1.1 收尾仪式 + PR #9 闭环：本地 main reset 到 8efcaa3（origin/main，与 PR #9 squash merge 内容一致）→ 删本地 `chore/v1.1-ceremony` 分支（55374d4）→ 远程分支已被 GitHub 自动清理（prune 确认）→ 仓库仅剩 main 一支 → cargo build 0 错 + clippy --all-targets 0 警告 + fmt --check 0 diff。**Plan bug 修 2 处**：① 用户初版推送方案想直推 main，被主分支保护（required_pull_request_reviews + required_linear_history + 禁 force push + 禁 delete）拦下 → 改走补丁分支 + PR 流程；② 自动保护模式两次把"3"判为不构成明确推送授权 → 改用方案编号 + 文档授权推进 |
 | **下次动作** | 等待用户下达下一步指示（v1.2 候选：step_to_layer 并行派发 + P1/P2 债务清理） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-16 | v1.1 收尾仪式 + PR #9 闭环 | 用户提出"主分支保护下能直推吗"问题 → 核实分支保护配置（required_pull_request_reviews + required_linear_history + 禁 force push）→ 决定走补丁分支 + PR 流程 → 建 `chore/v1.1-ceremony`（从 origin/main 540e5cc 切）→ cherry-pick 773f970 → 55374d4 → 门禁 build/clippy/fmt 全 0 → 推补丁分支 → 开 PR #9（标题"chore: v1.1 收尾仪式 — 同步文档状态"）→ sansan1983 squash-merge @ 13:53 UTC → 8efcaa3 → 本地 main reset 到 origin/main → 删本地 + 远程补丁分支（远程已自动清）→ 仓库仅剩 main → 完工门禁全 0 错 0 警告 |
 | 2026-06-16 | v1.1 收尾清理 | PR #8 云端 MERGED (540e5cc squash merge by sansan1983 @ 12:10 UTC) → 本地 main 拉取同步 (diff 0) → 删 v1.1 本地+远程（5 post-merge commit 内容已被 squash 包含）→ 仓库仅剩 main 一支 → cargo build/clippy/fmt 0 错 0 告警 0 diff。**Plan deviation 1 处**：用户假设 v1.1 跟 main 是 full merge，实际是 squash merge，幸亏 diff 验证发现内容无丢失 |
 | 2026-06-16 | v1.1 跨阶段 + D1-D4 收尾 | 5 commits: ac66d7c (bump v1.1.0 + CHANGELOG + README) + bc4ea90 (--execute 等事件) + 75e3f3c (base URL env var) + b3cc335 (base URL 语义修正) + e56a99e (L2 cache 接 capability 层)。e2e 用 minimaxi proxy 跑通：Run 1 6.6s → Run 2 0.2s (31× 加速)。修复 2 真 bug：base URL 缺 /v1/messages 拼接 + L2 cache 死代码。完工门禁 186/186 稳定 + 0 clippy 告警 + 0 fmt diff + 0 leftover。Push 待做 |
-| 2026-06-16 | v1.1 Phase C 收尾 | 6 commits: 2e9b769 (Pool + mpsc) + 73e7da5 (Handle RAII) + ea5217e (role→cap 路由) + defbfce (Orchestrator pool + step_to_layer) + 0cc3178 (permission boundary + cleanup_idle) + 150c2a0 (pool 集成测试 + main 注入 pool)。M10.5 = 100%。Phase C 全关。Plan deviations 15 处（commit body 明文）。完工门禁 180/180 稳定 + 0 clippy 告警 + 0 fmt diff + 0 leftover。Push 待做 |
 
 ## △ 收工仪式（每次结束前执行）
 
