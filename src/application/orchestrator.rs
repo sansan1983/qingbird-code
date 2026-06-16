@@ -142,6 +142,9 @@ impl Orchestrator {
         // 1. 分解任务为步骤
         let plan = self.decompose(&task).await?;
         let planned_steps = plan.steps.clone();
+        // v1.2 E3: 在 plan move 进 with_plan 之前先算 layers
+        // （compute_step_layers 签名是 &TaskPlan，而 with_plan 要 ownership）
+        let layers = Self::compute_step_layers(&plan);
         let bb = Blackboard::new(task).with_plan(plan);
 
         // 2. 构建管线段组件
@@ -150,20 +153,8 @@ impl Orchestrator {
         let feedbacker = Feedbacker::new(self.llm.clone());
 
         // 3. 构建依赖分层（v1.2: 用于并行派发；v1.1: 统计 + tracing）
-        let mut step_to_layer: std::collections::HashMap<u8, usize> =
-            std::collections::HashMap::new();
-        for step in &planned_steps {
-            match step.depends_on {
-                None => {
-                    step_to_layer.insert(step.order, 0);
-                }
-                Some(dep) => {
-                    let dep_layer = step_to_layer.get(&dep).copied().unwrap_or(0);
-                    step_to_layer.insert(step.order, dep_layer + 1);
-                }
-            }
-        }
-        let max_layer = step_to_layer.values().copied().max().unwrap_or(0);
+        // v1.2 E3: 调用 compute_step_layers 独立方法（行为不变，纯 refactor）
+        let max_layer = layers.len().saturating_sub(1);
         tracing::debug!(
             "task {}: {} steps across {} layer(s)",
             task_id,
@@ -221,5 +212,38 @@ impl Orchestrator {
         });
 
         Ok(summary)
+    }
+
+    /// v1.2 E3: 把 TaskPlan 按依赖分层，每层内的步骤可并行执行。
+    ///
+    /// 算法：广度优先遍历 depends_on 图。
+    /// - 无依赖（depends_on=None）→ layer 0
+    /// - 依赖的步骤在 layer N → 本步骤在 layer N+1
+    /// - 多依赖取最大 layer + 1（plan 步骤按 order 升序遍历，前序步骤 layer 已算）
+    ///
+    /// 返回 Vec<Vec<u8>>，外层下标 = layer 索引，内层 = 该层步骤的 order 列表
+    ///
+    /// 关联：v1.2 E4 按层 FuturesUnordered 并行派发；E3 抽方法，E4 用结果
+    ///
+    /// 可见性：v1.2 plan §E3 step 3 写 `pub(crate)`，但 tests/ 集成测试是独立
+    /// crate 看不到 pub(crate) —— 改为 `pub` 让 integration test 可见。
+    #[must_use]
+    pub fn compute_step_layers(plan: &TaskPlan) -> Vec<Vec<u8>> {
+        let mut step_to_layer: std::collections::HashMap<u8, usize> =
+            std::collections::HashMap::new();
+        let mut layers: Vec<Vec<u8>> = vec![vec![]];
+
+        for step in &plan.steps {
+            let layer = match step.depends_on {
+                None => 0,
+                Some(dep) => step_to_layer.get(&dep).copied().unwrap_or(0) + 1,
+            };
+            while layers.len() <= layer {
+                layers.push(vec![]);
+            }
+            layers[layer].push(step.order);
+            step_to_layer.insert(step.order, layer);
+        }
+        layers
     }
 }

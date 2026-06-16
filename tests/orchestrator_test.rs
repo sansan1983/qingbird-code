@@ -246,3 +246,71 @@ async fn orchestrator_uses_subagent_pool() {
     // v1.1 验证：with_pool 构造不 panic
     let _ = orch;
 }
+
+// ========== v1.2 E3: compute_step_layers 把步骤按依赖分层 ==========
+
+#[test]
+fn orchestrator_compute_step_layers_groups_by_dependency() {
+    use eflow::application::orchestrator::Orchestrator;
+    use eflow::common::types::{PlannedStep, TaskPlan};
+    use uuid::Uuid;
+
+    // 构造一个 5 步骤计划：
+    //   step 0 (无依赖)        → layer 0
+    //   step 1 (无依赖)        → layer 0
+    //   step 2 (depends on 0)  → layer 1
+    //   step 3 (depends on 1)  → layer 1
+    //   step 4 (depends on 2)  → layer 2
+    let plan = TaskPlan {
+        task_id: Uuid::new_v4(),
+        steps: vec![
+            PlannedStep {
+                order: 0,
+                action: "a".into(),
+                tool: "llm".into(),
+                params: serde_json::json!({}),
+                depends_on: None,
+            },
+            PlannedStep {
+                order: 1,
+                action: "b".into(),
+                tool: "llm".into(),
+                params: serde_json::json!({}),
+                depends_on: None,
+            },
+            PlannedStep {
+                order: 2,
+                action: "c".into(),
+                tool: "llm".into(),
+                params: serde_json::json!({}),
+                depends_on: Some(0),
+            },
+            PlannedStep {
+                order: 3,
+                action: "d".into(),
+                tool: "llm".into(),
+                params: serde_json::json!({}),
+                depends_on: Some(1),
+            },
+            PlannedStep {
+                order: 4,
+                action: "e".into(),
+                tool: "llm".into(),
+                params: serde_json::json!({}),
+                depends_on: Some(2),
+            },
+        ],
+        estimated_steps: 5,
+        risk_level: RiskLevel::L0,
+    };
+
+    let layers = Orchestrator::compute_step_layers(&plan);
+    assert_eq!(
+        layers.len(),
+        3,
+        "should be 3 layers: layer0=[0,1] layer1=[2,3] layer2=[4]"
+    );
+    assert_eq!(layers[0], vec![0, 1]);
+    assert_eq!(layers[1], vec![2, 3]);
+    assert_eq!(layers[2], vec![4]);
+}
