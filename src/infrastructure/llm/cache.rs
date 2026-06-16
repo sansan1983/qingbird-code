@@ -371,6 +371,71 @@ mod tests {
             "model 字段由 Router 注入，不在 helper 写死"
         );
     }
+
+    // v1.2 D2: action 变化必须产生不同 hash（确保 D1 helper 真的把 action 进了 signature）
+    #[test]
+    fn cache_key_hash_differs_on_action_change() {
+        let k1 = cache_key_for_step(
+            &crate::common::types::TaskStep {
+                action: "read foo.rs".into(),
+                tool: "read_file".into(),
+                params: serde_json::json!({}),
+                expected_output: None,
+            },
+            crate::common::types::IntentType::FileRead,
+            crate::common::types::RiskLevel::L0,
+            "developer",
+            None,
+        );
+        let k2 = cache_key_for_step(
+            &crate::common::types::TaskStep {
+                action: "read bar.rs".into(),
+                tool: "read_file".into(),
+                params: serde_json::json!({}),
+                expected_output: None,
+            },
+            crate::common::types::IntentType::FileRead,
+            crate::common::types::RiskLevel::L0,
+            "developer",
+            None,
+        );
+        assert_ne!(key_hash(&k1), key_hash(&k2));
+    }
+
+    // v1.2 D2: params 变化（即使 JSON 完全不同）应产生相同 hash
+    // ——这是 D1 的核心收益，避免 user 改个时间戳就破命中
+    #[test]
+    fn cache_key_hash_ignores_params_byte_changes() {
+        let k1 = cache_key_for_step(
+            &crate::common::types::TaskStep {
+                action: "review".into(),
+                tool: "read_file".into(),
+                params: serde_json::json!({"path": "/tmp/a.rs", "timestamp": 1000}),
+                expected_output: None,
+            },
+            crate::common::types::IntentType::CodeReview,
+            crate::common::types::RiskLevel::L0,
+            "developer",
+            None,
+        );
+        let k2 = cache_key_for_step(
+            &crate::common::types::TaskStep {
+                action: "review".into(),
+                tool: "read_file".into(),
+                params: serde_json::json!({"path": "/tmp/a.rs", "timestamp": 9999}),
+                expected_output: None,
+            },
+            crate::common::types::IntentType::CodeReview,
+            crate::common::types::RiskLevel::L0,
+            "developer",
+            None,
+        );
+        assert_eq!(
+            key_hash(&k1),
+            key_hash(&k2),
+            "params 变化不应改变 cache key"
+        );
+    }
 }
 
 #[cfg(test)]
