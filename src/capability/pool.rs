@@ -142,6 +142,22 @@ impl SubagentHandle {
     pub fn id(&self) -> Uuid {
         self.id
     }
+
+    /// v1.2 E1: 暴露 pool active map 的 guard，让 Orchestrator 拿到 agent 角色 /
+    /// 能力做调度决策。返回 guard (caller 借用到 &self)，caller 用法:
+    /// ```ignore
+    /// let map = h.subagent().expect("alive");
+    /// let sa = map.get(&h.id()).expect("present");
+    /// ```
+    /// std::sync::Mutex 的 guard 释放后 &Subagent 借用即失效 (E0515),
+    /// 所以返回 guard 让 caller 控制借用期。caller 不能跨 await 持有
+    /// (std mutex 不支持) —— Orchestrator 同步取角色 / 能力路径适用。
+    /// Drop 语义保护: handle 活着 → active map 还在; handle drop 时
+    /// map.remove(self.id) 才会发生。
+    #[must_use]
+    pub fn subagent(&self) -> Option<std::sync::MutexGuard<'_, HashMap<Uuid, Subagent>>> {
+        self.pool_active.lock().ok()
+    }
 }
 
 impl Drop for SubagentHandle {
@@ -224,6 +240,34 @@ mod tests {
         // 验证：fresh pool 调用不 panic，返回 0
         let pool = SubagentPool::start(2);
         assert_eq!(pool.cleanup_idle(), 0);
+    }
+
+    // v1.2 E1: SubagentHandle.subagent() 暴露 pool active map 的 guard,
+    // 让 Orchestrator 拿到 agent 角色 / 能力做调度决策
+    #[tokio::test]
+    async fn handle_exposes_subagent_reference() {
+        use crate::common::types::Capability;
+        let pool = SubagentPool::start(2);
+        let id = pool
+            .dispatch(Role::CodeAssistant, vec![Capability::ReadFile])
+            .await
+            .unwrap();
+        let h = pool.take_handle(id).unwrap();
+        // subagent() 返回 guard; 通过 guard 取 entry
+        {
+            let map = h
+                .subagent()
+                .expect("handle should expose pool active map while alive");
+            let sa = map.get(&h.id()).expect("entry present while handle alive");
+            // 用 matches! 而非 assert_eq! —— Role 当前未 derive PartialEq (out of E1 scope)
+            assert!(matches!(sa.role, Role::CodeAssistant));
+            assert!(sa.capabilities.contains(&Capability::ReadFile));
+            // map (MutexGuard) 在这个 scope 结束处 drop —— 避免跨 await
+        }
+        drop(h);
+        // drop 后 active map 清空
+        assert_eq!(pool.active_count(), 0);
+        pool.shutdown().await;
     }
 }
 
