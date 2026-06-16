@@ -5,6 +5,7 @@ rust_i18n::i18n!("locales", fallback = "en-US");
 
 use eflow::application::concierge::Concierge;
 use eflow::application::orchestrator::Orchestrator;
+use eflow::capability::pool::SubagentPool;
 use eflow::capability::tools::{
     ToolRegistry,
     command::ExecuteCommandTool,
@@ -62,6 +63,16 @@ async fn main() {
         }
     };
 
+    // v1.1 Task B7: 启动时打印 L2 状态（设计 §8.5）
+    if cfg.llm.cache.l2_enabled {
+        tracing::info!(
+            "{}",
+            t!("status_l2_enabled", days = cfg.llm.cache.l2_ttl_days)
+        );
+    } else {
+        tracing::info!("{}", t!("status_l2_disabled"));
+    }
+
     // 初始化工具注册表
     let mut tool_registry = ToolRegistry::new();
     tool_registry.register(Arc::new(ReadFileTool));
@@ -91,7 +102,10 @@ async fn main() {
     let profiles = Arc::new(tokio::sync::RwLock::new(profiles));
 
     // 初始化 Orchestrator
-    let orchestrator = Orchestrator::new(llm.clone(), tools.clone(), events.clone());
+    // v1.1 M10.5 Task C6: 启动 SubagentPool 注入 Orchestrator
+    let pool = Arc::new(SubagentPool::start(4));
+    let orchestrator =
+        Orchestrator::with_pool(llm.clone(), tools.clone(), events.clone(), pool.clone());
     let orchestrator = Arc::new(tokio::sync::Mutex::new(orchestrator));
 
     // 初始化 Concierge
@@ -120,10 +134,34 @@ async fn main() {
         return;
     }
 
-    // 单次执行模式
+    // 单次执行模式（v1.1 e2e: 等异步 TaskCompleted 事件，让 CLI 有真正 \"fire-then-wait\" 语义）
     if let Some(task) = cli.execute {
-        let response = concierge.handle_input(task).await;
-        println!("{response}");
+        // subscribe 必须早于 handle_input，否则 race：超快 LLM 响应可能在 subscribe 之前 fire
+        let mut rx = events.subscribe();
+        let ack = concierge.handle_input(task).await;
+        println!("{ack}");
+
+        // 等 TaskCompleted / TaskFailed，60s timeout 防挂死
+        let result = tokio::time::timeout(std::time::Duration::from_secs(60), async {
+            loop {
+                match rx.recv().await {
+                    Ok(Event::TaskCompleted { summary, .. }) => return Ok(summary),
+                    Ok(Event::TaskFailed { error, .. }) => return Err(error),
+                    Ok(_) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        return Err("event channel closed".to_string());
+                    }
+                }
+            }
+        })
+        .await;
+
+        match result {
+            Ok(Ok(summary)) => println!("{summary}"),
+            Ok(Err(e)) => eprintln!("Task failed: {e}"),
+            Err(_) => eprintln!("Timeout waiting for task completion (60s)"),
+        }
         return;
     }
 
@@ -171,6 +209,8 @@ async fn main() {
         }
     }
 
+    // v1.1 M10.5 Task C6: 优雅关闭 SubagentPool（worker 退出）
+    pool.shutdown().await;
     events.publish(Event::SystemShutdown);
 }
 

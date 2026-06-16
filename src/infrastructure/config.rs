@@ -37,6 +37,22 @@ pub struct ProvidersConfig {
 pub struct ProviderEntry {
     pub api_key: String,
     pub default_model: String,
+    #[serde(default = "default_timeout_secs")]
+    pub timeout_secs: u64,
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u8,
+    #[serde(default = "default_retry_backoff_ms")]
+    pub retry_backoff_ms: u64,
+}
+
+fn default_timeout_secs() -> u64 {
+    30
+}
+fn default_max_retries() -> u8 {
+    3
+}
+fn default_retry_backoff_ms() -> u64 {
+    1000
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -48,7 +64,19 @@ pub struct RoutingConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CacheConfig {
+    #[serde(default = "default_l1_enabled")]
     pub l1_enabled: bool,
+    #[serde(default)]
+    pub l2_enabled: bool,
+    #[serde(default = "default_l2_ttl_days")]
+    pub l2_ttl_days: u32,
+}
+
+fn default_l1_enabled() -> bool {
+    true
+}
+fn default_l2_ttl_days() -> u32 {
+    7
 }
 
 #[derive(Debug, Clone, Deserialize)]

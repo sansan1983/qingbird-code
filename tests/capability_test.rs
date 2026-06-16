@@ -38,6 +38,9 @@ fn make_test_config() -> EflowConfig {
                 anthropic: Some(ProviderEntry {
                     api_key: "test-key".into(),
                     default_model: "claude-test".into(),
+                    timeout_secs: 30,
+                    max_retries: 3,
+                    retry_backoff_ms: 1000,
                 }),
                 openai: None,
             },
@@ -46,7 +49,11 @@ fn make_test_config() -> EflowConfig {
                 medium: "anthropic".into(),
                 light: "anthropic".into(),
             },
-            cache: CacheConfig { l1_enabled: true },
+            cache: CacheConfig {
+                l1_enabled: true,
+                l2_enabled: false,
+                l2_ttl_days: 7,
+            },
         },
         memory: MemoryConfig {
             working_memory_limit: 100,
@@ -66,6 +73,13 @@ fn make_test_config() -> EflowConfig {
 }
 
 fn make_test_router() -> Arc<Mutex<LlmRouter>> {
+    // v1.1 跨阶段: 显式清掉 *BASE_URL env var，避免 dev shell 的 cc-connect 代理
+    // （ANTHROPIC_BASE_URL=http://127.0.0.1:15721）污染 test — 期望 dummy key → 401
+    // SAFETY: 单线程测试构造时清 env var，无 race
+    unsafe {
+        std::env::remove_var("ANTHROPIC_BASE_URL");
+        std::env::remove_var("OPENAI_BASE_URL");
+    }
     let cfg = make_test_config();
     let router = LlmRouter::from_config(&cfg).expect("test router");
     Arc::new(Mutex::new(router))

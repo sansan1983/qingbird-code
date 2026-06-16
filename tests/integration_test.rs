@@ -49,6 +49,9 @@ fn make_test_config() -> EflowConfig {
                 anthropic: Some(ProviderEntry {
                     api_key: "test-key".into(),
                     default_model: "claude-test".into(),
+                    timeout_secs: 30,
+                    max_retries: 3,
+                    retry_backoff_ms: 1000,
                 }),
                 openai: None,
             },
@@ -57,7 +60,11 @@ fn make_test_config() -> EflowConfig {
                 medium: "anthropic".into(),
                 light: "anthropic".into(),
             },
-            cache: CacheConfig { l1_enabled: true },
+            cache: CacheConfig {
+                l1_enabled: true,
+                l2_enabled: false,
+                l2_ttl_days: 7,
+            },
         },
         memory: MemoryConfig {
             working_memory_limit: 100,
@@ -139,9 +146,11 @@ async fn e2e_concierge_dispatch_publishes_lifecycle_events() {
     let _ = c.handle_input("readme".into()).await;
 
     // 第一个事件 = TaskStarted
-    let first = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+    // 30s timeout 容纳 A3 加的指数退避（3 次 retry：1s+2s+4s=7s sleep）+ CI 抢占开销
+    // v1.0.3 时 15s 足够（无 backoff），v1.1 加退避后满套件跑临界 → 拉宽
+    let first = tokio::time::timeout(Duration::from_secs(30), rx.recv())
         .await
-        .expect("5s 内必收到首事件")
+        .expect("30s 内必收到首事件")
         .expect("channel 不应关闭");
     assert!(
         matches!(first, Event::TaskStarted { .. }),
@@ -153,7 +162,7 @@ async fn e2e_concierge_dispatch_publishes_lifecycle_events() {
     let mut terminal_seen = false;
     #[allow(clippy::never_loop)] // 3 次机会 break 模式只用 1 次；v1.x 改 '_ => continue' 用足 3 次
     for _ in 0..3 {
-        match tokio::time::timeout(Duration::from_secs(5), rx.recv()).await {
+        match tokio::time::timeout(Duration::from_secs(30), rx.recv()).await {
             Ok(Ok(Event::TaskCompleted { .. })) => {
                 terminal_seen = true;
                 break;
@@ -394,5 +403,118 @@ async fn e2e_event_channel_publishes_all_6_variants() {
     assert_eq!(received.len(), 6, "应收到全部 6 个事件");
     assert!(
         has_started && has_completed && has_failed && has_escalated && has_input && has_shutdown
+    );
+}
+
+// ========== v1.1 Task A6: timeout 配置端到端贯通 ==========
+
+#[tokio::test]
+async fn llm_router_handles_timeout_via_config() {
+    // v1.1 Task A2 + A3: timeout_secs=0 → reqwest 立即超时 → A3 retry 也耗尽 → Err
+    // （plan 写了 `use std::path::PathBuf;` 没用上，clippy pedantic 必挂 → 已删）
+    use eflow::infrastructure::config::{
+        CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
+        ProviderEntry, ProvidersConfig, RoutingConfig, SecurityConfig,
+    };
+    use eflow::infrastructure::llm::{ChatRequest, LlmRouter, Message};
+
+    let cfg = EflowConfig {
+        core: CoreConfig {
+            language: "zh-CN".into(),
+            timezone: "Asia/Shanghai".into(),
+        },
+        llm: LlmConfig {
+            providers: ProvidersConfig {
+                anthropic: Some(ProviderEntry {
+                    api_key: "sk-test".into(),
+                    default_model: "claude-sonnet-4-6".into(),
+                    timeout_secs: 0, // 立即超时
+                    max_retries: 0,
+                    retry_backoff_ms: 0,
+                }),
+                openai: None,
+            },
+            routing: RoutingConfig {
+                strong: "anthropic".into(),
+                medium: "anthropic".into(),
+                light: "anthropic".into(),
+            },
+            cache: CacheConfig {
+                l1_enabled: true,
+                l2_enabled: false,
+                l2_ttl_days: 7,
+            },
+        },
+        memory: MemoryConfig {
+            working_memory_limit: 100,
+            project_db_path: "./p.db".into(),
+            user_db_path: "./u.db".into(),
+            cleanup_interval_hours: 24,
+        },
+        security: SecurityConfig {
+            risk_threshold: RiskLevel::L2,
+            allowed_paths: vec![],
+        },
+        profiles: ProfileListConfig {
+            default: "dev".into(),
+            available: vec!["dev".into()],
+        },
+    };
+
+    let mut router = LlmRouter::from_config(&cfg).unwrap();
+    let req = ChatRequest::new("", vec![Message::user("hi")]);
+    let result = router.chat_with_retry(ModelTier::Light, req, 0, 0).await;
+    assert!(result.is_err());
+}
+
+// ========== v1.1 Task B7: L2 命中率端到端 ==========
+
+#[tokio::test]
+async fn l2_cache_hit_rate_increases_with_repeated_calls() {
+    // v1.1 Task B7（设计 §8.5）：重复调用同一 key 命中率上升
+    use eflow::common::types::{IntentType, RiskLevel};
+    use eflow::infrastructure::llm::cache::{CacheKey, CacheValue, ContextProfile, L2CacheManager};
+    use tempfile::TempDir;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("cache.db");
+    let cache = L2CacheManager::new(100, &path, 7).unwrap();
+    let key = CacheKey {
+        intent_type: IntentType::CodeReview,
+        task_signature: "sig".into(),
+        context_profile: ContextProfile {
+            conversation_depth_bucket: 1,
+            file_count_bucket: 0,
+            risk_level: RiskLevel::L0,
+            profile_name: "developer".into(),
+        },
+        model: "claude-sonnet-4-6".into(),
+    };
+
+    // 模拟 5 次调用：第一次 miss, 后续 4 次 hit
+    let mut hits = 0;
+    let mut misses = 0;
+    // 第一次 lookup: miss
+    misses += usize::from(cache.lookup(&key).is_none());
+    // 写入
+    cache.store(
+        &key,
+        CacheValue::Execution {
+            result_summary: "result".into(),
+            success: true,
+            duration_ms: 100,
+        },
+    );
+    // 后续 4 次 lookup: hit
+    for _ in 0..4 {
+        hits += usize::from(cache.lookup(&key).is_some());
+    }
+    assert_eq!(hits, 4);
+    assert_eq!(misses, 1);
+    let stats = cache.stats();
+    assert!(
+        (stats.hit_rate - 0.8).abs() < 0.01,
+        "hit_rate 应 ≈0.8, 实际 {}",
+        stats.hit_rate
     );
 }

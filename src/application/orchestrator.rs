@@ -4,6 +4,7 @@ use crate::capability::blackboard::Blackboard;
 use crate::capability::decisioner::Decisioner;
 use crate::capability::executor::Executor;
 use crate::capability::feedbacker::Feedbacker;
+use crate::capability::pool::SubagentPool;
 use crate::capability::subagent::Subagent;
 use crate::capability::tools::ToolRegistry;
 use crate::common::error::Result;
@@ -19,8 +20,8 @@ pub struct Orchestrator {
     llm: Arc<tokio::sync::Mutex<LlmRouter>>,
     tools: Arc<ToolRegistry>,
     events: EventChannel,
-    /// 当前活跃的 Subagent（test-visible，v1.1 C4 改为 `SubagentPool` 时整体删除）
-    pub active_agent: Option<Subagent>,
+    /// Subagent 池（v1.1 M10.5 接入；None 时退化为 v1.0 单 agent 路径）
+    pool: Option<Arc<SubagentPool>>,
 }
 
 impl Orchestrator {
@@ -33,24 +34,23 @@ impl Orchestrator {
             llm,
             tools,
             events,
-            active_agent: None,
+            pool: None,
         }
     }
 
-    /// 确保有一个可用的 Subagent（test-visible，v1.1 C4 改为 `SubagentPool` 时整体删除）
-    pub fn ensure_agent(&mut self) -> &Subagent {
-        if self.active_agent.is_none() {
-            self.active_agent = Some(Subagent::new(
-                "default".into(),
-                Role::Generalist,
-                vec![
-                    Capability::ReadFile,
-                    Capability::WriteFile,
-                    Capability::LlmReasoning,
-                ],
-            ));
+    /// 用 SubagentPool 构造（v1.1 M10.5 C4 新增）
+    pub fn with_pool(
+        llm: Arc<tokio::sync::Mutex<LlmRouter>>,
+        tools: Arc<ToolRegistry>,
+        events: EventChannel,
+        pool: Arc<SubagentPool>,
+    ) -> Self {
+        Self {
+            llm,
+            tools,
+            events,
+            pool: Some(pool),
         }
-        self.active_agent.as_ref().unwrap()
     }
 
     /// LLM 驱动的任务分解
@@ -141,7 +141,6 @@ impl Orchestrator {
 
         // 1. 分解任务为步骤
         let plan = self.decompose(&task).await?;
-        // 克隆 steps 避免循环迭代器与后续 bb 移动的借用冲突
         let planned_steps = plan.steps.clone();
         let bb = Blackboard::new(task).with_plan(plan);
 
@@ -150,9 +149,39 @@ impl Orchestrator {
         let executor = Executor::new(self.llm.clone(), self.tools.clone());
         let feedbacker = Feedbacker::new(self.llm.clone());
 
-        // 3. 逐步执行
-        let agent = self.ensure_agent();
+        // 3. 构建依赖分层（v1.2: 用于并行派发；v1.1: 统计 + tracing）
+        let mut step_to_layer: std::collections::HashMap<u8, usize> =
+            std::collections::HashMap::new();
+        for step in &planned_steps {
+            match step.depends_on {
+                None => {
+                    step_to_layer.insert(step.order, 0);
+                }
+                Some(dep) => {
+                    let dep_layer = step_to_layer.get(&dep).copied().unwrap_or(0);
+                    step_to_layer.insert(step.order, dep_layer + 1);
+                }
+            }
+        }
+        let max_layer = step_to_layer.values().copied().max().unwrap_or(0);
+        tracing::debug!(
+            "task {}: {} steps across {} layer(s)",
+            task_id,
+            planned_steps.len(),
+            max_layer + 1
+        );
+
+        // 4. 逐步执行（v1.1 串行；v1.2 改用 layer 并行）
         let mut bb = bb;
+        let agent = Subagent::new(
+            "default".into(),
+            Role::Generalist,
+            vec![
+                Capability::ReadFile,
+                Capability::WriteFile,
+                Capability::LlmReasoning,
+            ],
+        );
 
         for planned_step in &planned_steps {
             let step = TaskStep {
@@ -163,7 +192,6 @@ impl Orchestrator {
             };
             bb = bb.with_step(step);
 
-            // 步骤进度走 tracing，不发事件（spec 10.1 事件词汇里没有 StepStarted）
             tracing::info!(
                 "task {}: executing step '{}' (tool={})",
                 task_id,
@@ -171,12 +199,20 @@ impl Orchestrator {
                 planned_step.tool
             );
 
+            // v1.1 池路径：dispatch + take_handle 拿 agent 句柄（drop 即归还）。
+            // SubagentHandle 不暴露 Subagent 引用，v1.2 重构后才走纯 pool 执行。
+            if let Some(pool) = &self.pool
+                && let Ok(id) = pool.dispatch_for_role(Role::Generalist).await
+            {
+                let _h = pool.take_handle(id);
+            }
+
             bb = agent
                 .execute_step(bb, &decisioner, &executor, &feedbacker)
                 .await?;
         }
 
-        // 4. 聚合结果
+        // 5. 聚合结果
         let summary = bb.summarize();
 
         self.events.publish(Event::TaskCompleted {

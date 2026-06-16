@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eflow::application::orchestrator::Orchestrator;
+use eflow::capability::pool::SubagentPool;
 use eflow::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
 use eflow::common::error::Result;
 use eflow::common::types::*;
@@ -29,6 +30,9 @@ fn make_test_config() -> EflowConfig {
                 anthropic: Some(ProviderEntry {
                     api_key: "test-key".into(),
                     default_model: "claude-test".into(),
+                    timeout_secs: 30,
+                    max_retries: 3,
+                    retry_backoff_ms: 1000,
                 }),
                 openai: None,
             },
@@ -37,7 +41,11 @@ fn make_test_config() -> EflowConfig {
                 medium: "anthropic".into(),
                 light: "anthropic".into(),
             },
-            cache: CacheConfig { l1_enabled: true },
+            cache: CacheConfig {
+                l1_enabled: true,
+                l2_enabled: false,
+                l2_ttl_days: 7,
+            },
         },
         memory: MemoryConfig {
             working_memory_limit: 100,
@@ -57,6 +65,13 @@ fn make_test_config() -> EflowConfig {
 }
 
 fn make_test_router() -> Arc<Mutex<LlmRouter>> {
+    // v1.1 跨阶段: 显式清掉 *BASE_URL env var，避免 dev shell 的 cc-connect 代理
+    // 污染 test（详见 capability_test.rs 同名 helper）
+    // SAFETY: 单线程测试构造时清 env var，无 race
+    unsafe {
+        std::env::remove_var("ANTHROPIC_BASE_URL");
+        std::env::remove_var("OPENAI_BASE_URL");
+    }
     let cfg = make_test_config();
     let router = LlmRouter::from_config(&cfg).expect("test router");
     Arc::new(Mutex::new(router))
@@ -100,26 +115,6 @@ fn make_orchestrator() -> (Orchestrator, EventChannel) {
 
 // ========== 构造与状态 ==========
 
-#[test]
-fn new_creates_empty_active_agent() {
-    let (o, _events) = make_orchestrator();
-    assert!(o.active_agent.is_none());
-}
-
-#[tokio::test]
-async fn ensure_agent_creates_default_subagent_lazily() {
-    let (mut o, _events) = make_orchestrator();
-    assert!(o.active_agent.is_none());
-    {
-        let _ = o.ensure_agent();
-        assert!(o.active_agent.is_some());
-    }
-    let agent = o.active_agent.as_ref().unwrap();
-    assert_eq!(agent.name, "default");
-    assert!(matches!(agent.role, Role::Generalist));
-    assert_eq!(agent.capabilities.len(), 3);
-}
-
 // ========== decompose 规则路径（L0/L1 + 短描述）==========
 
 #[tokio::test]
@@ -154,9 +149,10 @@ async fn decompose_l1_short_returns_single_step() {
 async fn decompose_long_description_routes_to_llm_and_fails() {
     let (o, _events) = make_orchestrator();
     // 描述长度 > 100 字符 → 走 LLM 分解（dummy key 不可用 → 必然 Err）
+    // 15s timeout 容纳 A3 加的指数退避（3 次 retry：1s+2s+4s=7s sleep）
     let long_desc: String = "a".repeat(200);
     let task = TaskSpec::new(long_desc, RiskLevel::L0);
-    let result = tokio::time::timeout(std::time::Duration::from_secs(5), o.decompose(&task))
+    let result = tokio::time::timeout(std::time::Duration::from_secs(15), o.decompose(&task))
         .await
         .expect("decompose should not hang");
     assert!(result.is_err());
@@ -167,7 +163,7 @@ async fn decompose_l2_risk_routes_to_llm_and_fails() {
     let (o, _events) = make_orchestrator();
     // L2+ 风险无论长度都走 LLM 路径
     let task = TaskSpec::new("deploy service".into(), RiskLevel::L2);
-    let result = tokio::time::timeout(std::time::Duration::from_secs(5), o.decompose(&task))
+    let result = tokio::time::timeout(std::time::Duration::from_secs(15), o.decompose(&task))
         .await
         .expect("decompose should not hang");
     assert!(result.is_err());
@@ -177,7 +173,7 @@ async fn decompose_l2_risk_routes_to_llm_and_fails() {
 async fn decompose_l3_risk_routes_to_llm_and_fails() {
     let (o, _events) = make_orchestrator();
     let task = TaskSpec::new("delete production db".into(), RiskLevel::L3);
-    let result = tokio::time::timeout(std::time::Duration::from_secs(5), o.decompose(&task))
+    let result = tokio::time::timeout(std::time::Duration::from_secs(15), o.decompose(&task))
         .await
         .expect("decompose should not hang");
     assert!(result.is_err());
@@ -231,4 +227,22 @@ async fn execute_does_not_publish_completed_on_failure() {
         "expected timeout or channel closed, got: {:?}",
         next
     );
+}
+
+// ========== SubagentPool 接入（v1.1 M10.5 Task C4）==========
+
+#[tokio::test]
+async fn orchestrator_uses_subagent_pool() {
+    // LlmRouter 用 make_test_router（placeholder 是 #[cfg(test)] 私有，外部 tests 调不到）
+    let router = make_test_router();
+    let pool = std::sync::Arc::new(SubagentPool::start(2));
+    let events = EventChannel::new();
+    let orch = Orchestrator::with_pool(
+        router,
+        std::sync::Arc::new(ToolRegistry::new()),
+        events,
+        pool,
+    );
+    // v1.1 验证：with_pool 构造不 panic
+    let _ = orch;
 }

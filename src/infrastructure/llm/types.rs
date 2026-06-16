@@ -150,6 +150,12 @@ pub trait LlmProvider: Send + Sync {
 
     /// Provider 名称
     fn name(&self) -> &str;
+
+    /// 重试参数 (max_retries, backoff_ms) — 供 Router 读取（fix v1.1 Task A3）
+    /// 默认 (3, 1000)，具体 provider 可 override
+    fn retry_params(&self) -> (u8, u64) {
+        (3, 1000)
+    }
 }
 
 /// 把 `ModelTier` 映射成可读字符串（用于日志/事件）

@@ -4,7 +4,10 @@ use std::sync::Arc;
 use super::blackboard::Blackboard;
 use crate::capability::tools::ToolRegistry;
 use crate::common::error::Result;
-use crate::common::types::{ActionRecord, ActionResult, ModelTier, TaskStep, ToolCallSummary};
+use crate::common::types::{
+    ActionRecord, ActionResult, IntentType, ModelTier, RiskLevel, TaskStep, ToolCallSummary,
+};
+use crate::infrastructure::llm::cache::{CacheKey, ContextProfile};
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 use rust_i18n::t;
 
@@ -40,7 +43,8 @@ impl Executor {
             // 检查是否需要 LLM 推理
             let result = if sub_step.tool.is_empty() || sub_step.tool == "llm_reasoning" {
                 // 纯 LLM 推理步骤
-                self.execute_llm_step(model_tier, sub_step).await?
+                self.execute_llm_step(model_tier, sub_step, plan.risk_level)
+                    .await?
             } else {
                 // 工具执行步骤
                 self.execute_tool_step(sub_step, task_id).await?
@@ -73,6 +77,7 @@ impl Executor {
         &self,
         model_tier: ModelTier,
         step: &TaskStep,
+        risk: RiskLevel,
     ) -> Result<ActionResult> {
         let mut llm = self.llm.lock().await;
 
@@ -85,7 +90,22 @@ impl Executor {
         // （LLM 的工具自选不在 v1.0 范围）
         let request = ChatRequest::new("", messages).with_cache(0);
 
-        let response = llm.chat(model_tier, request).await?;
+        // v1.1 跨阶段 Task D4: 走 L2 cache
+        // 不含 retry_count：step.action 在 rework 时已被 subagent 追加建议
+        // （subagent.rs:91 改 action），key 自动变；同一 logical call 必 cache 命中
+        let key = CacheKey {
+            intent_type: IntentType::Chat,
+            task_signature: format!("execution:{}:{}:{}", step.action, step.tool, step.params),
+            context_profile: ContextProfile {
+                conversation_depth_bucket: 0,
+                file_count_bucket: 0,
+                risk_level: risk,
+                profile_name: "default".into(),
+            },
+            model: String::new(),
+        };
+
+        let response = llm.chat_cached(model_tier, request, &key).await?;
 
         Ok(ActionResult {
             success: true,

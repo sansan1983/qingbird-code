@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 // ========== 风险等级 ==========
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum RiskLevel {
     L0, // 只读操作 — 自动执行
     L1, // 文件写入 — 自动执行 + 安全检查

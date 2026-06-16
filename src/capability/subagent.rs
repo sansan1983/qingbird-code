@@ -20,12 +20,24 @@ pub struct Subagent {
 impl Subagent {
     #[must_use]
     pub fn new(name: String, role: Role, capabilities: Vec<Capability>) -> Self {
+        let mut permission = PermissionSet::default();
+        // 根据 capabilities 推导权限边界（设计 §9.1 + §13.1）
+        if capabilities.contains(&Capability::ExecuteCommand) {
+            permission.allowed_commands.push("ls".into());
+            permission.allowed_commands.push("cat".into());
+        }
+        if capabilities.contains(&Capability::WriteFile) {
+            permission.max_file_size_bytes = 10 * 1024 * 1024;
+        }
+        if !capabilities.contains(&Capability::WebFetch) {
+            permission.network_enabled = false;
+        }
         Self {
             id: Uuid::new_v4(),
             name,
             role,
             capabilities,
-            permission: PermissionSet::default(),
+            permission,
         }
     }
 
@@ -124,5 +136,15 @@ mod tests {
         assert!(s.permission.allowed_paths.is_empty());
         assert!(s.permission.allowed_commands.is_empty());
         assert!(!s.permission.network_enabled);
+    }
+
+    #[test]
+    fn execute_command_capability_unlocks_command_permission() {
+        let s = Subagent::new(
+            "x".into(),
+            Role::Generalist,
+            vec![Capability::ExecuteCommand],
+        );
+        assert!(!s.permission.allowed_commands.is_empty());
     }
 }

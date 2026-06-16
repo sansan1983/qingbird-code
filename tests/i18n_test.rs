@@ -128,3 +128,28 @@ fn test_config_error_translates() {
         msg
     );
 }
+
+#[test]
+#[serial_test::serial]
+fn new_llm_error_keys_exist_in_both_locales() {
+    // v1.1 Task A6: 验证 A5 新增/复用的 LLM 错误键在双 locale 都存在
+    // （plan 写 `(*key).into()` 在 rust_i18n v3 触发 ambiguous From<&str>，
+    //  改用显式 3 个 t!() 调用 — 等价覆盖，避免生命周期推断坑）
+    let zh1 = rust_i18n::t!("err_all_providers_limited", count = 5);
+    let en1 = rust_i18n::t!("err_all_providers_limited", locale = "en-US", count = 5);
+    let zh2 = rust_i18n::t!("err_no_fallback");
+    let en2 = rust_i18n::t!("err_no_fallback", locale = "en-US");
+    let zh3 = rust_i18n::t!("err_tier_degrade", from = "strong", to = "medium");
+    let en3 = rust_i18n::t!(
+        "err_tier_degrade",
+        locale = "en-US",
+        from = "strong",
+        to = "medium"
+    );
+    assert!(!zh1.is_empty(), "zh err_all_providers_limited missing");
+    assert!(!en1.is_empty(), "en err_all_providers_limited missing");
+    assert!(!zh2.is_empty(), "zh err_no_fallback missing");
+    assert!(!en2.is_empty(), "en err_no_fallback missing");
+    assert!(!zh3.is_empty(), "zh err_tier_degrade missing");
+    assert!(!en3.is_empty(), "en err_tier_degrade missing");
+}

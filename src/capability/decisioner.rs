@@ -1,6 +1,9 @@
 use super::blackboard::Blackboard;
 use crate::common::error::Result;
-use crate::common::types::{ExecutionPlan, ModelTier, PlannedStep, RiskLevel, TaskStep};
+use crate::common::types::{
+    ExecutionPlan, IntentType, ModelTier, PlannedStep, RiskLevel, TaskStep,
+};
+use crate::infrastructure::llm::cache::{CacheKey, ContextProfile};
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 
 /// Decisioner — 风险评估 + 执行计划生成 + 模型路由
@@ -31,7 +34,8 @@ impl Decisioner {
 
         // 检查是否需要拆分子步骤（仅 L2+ 需要 LLM 规划）
         let sub_steps = if risk >= RiskLevel::L2 {
-            self.plan_sub_steps(step, risk).await?
+            self.plan_sub_steps(step, risk, blackboard.retry_count)
+                .await?
         } else {
             vec![step.clone()]
         };
@@ -53,7 +57,12 @@ impl Decisioner {
     }
 
     /// 对复杂步骤调用 LLM 拆分子步骤
-    async fn plan_sub_steps(&self, step: &TaskStep, risk: RiskLevel) -> Result<Vec<TaskStep>> {
+    async fn plan_sub_steps(
+        &self,
+        step: &TaskStep,
+        risk: RiskLevel,
+        retry_count: u8,
+    ) -> Result<Vec<TaskStep>> {
         let mut llm = self.llm.lock().await;
 
         let messages = vec![
@@ -66,7 +75,24 @@ impl Decisioner {
 
         let request = ChatRequest::new("", messages).with_cache(0);
 
-        let response = llm.chat(ModelTier::Strong, request).await?;
+        // v1.1 跨阶段 Task D4: 走 L2 cache（chat_cached 替代 chat）
+        // retry_count 必含：break rework loop（同一 step 多次 decide 需不同 plan）
+        let key = CacheKey {
+            intent_type: IntentType::Chat,
+            task_signature: format!(
+                "decision:{}:{}:{}:retry={}",
+                step.action, step.tool, step.params, retry_count
+            ),
+            context_profile: ContextProfile {
+                conversation_depth_bucket: 0,
+                file_count_bucket: 0,
+                risk_level: risk,
+                profile_name: "default".into(),
+            },
+            model: String::new(),
+        };
+
+        let response = llm.chat_cached(ModelTier::Strong, request, &key).await?;
 
         // 简化解析：每行一个子步骤
         let sub_steps: Vec<TaskStep> = response

@@ -1,8 +1,10 @@
 pub mod anthropic;
+pub mod cache;
 pub mod openai;
 pub mod router;
 pub mod types;
 
+pub use cache::{CacheKey, CacheValue, ContextProfile, key_hash};
 pub use router::LlmRouter;
 pub use types::*;
 

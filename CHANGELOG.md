@@ -11,11 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 
-- **M4.5** Config-driven LLM hardening — `Client::builder().timeout()` reading `cfg.llm.timeout_secs`; wire `retry_policy` into providers
-- Multi-Subagent support
 - Additional LLM providers (per design doc v4.0 §10)
 
 ---
+
+## [1.1.0] - 2026-06-16
+
+### Added
+
+- **M4.5 LLM 硬化** (设计 §11.2): Config-driven timeout/retry、exponential backoff、L1 prefix cache 接线、模型 tier 降级路径
+- **M8 L2 结构化缓存**: 内存 LRU + SQLite 磁盘，命中率监控（`MemoryLruBackend` + `SqliteCacheBackend` + `L2CacheManager` + `LlmRouter::chat_cached`）
+- **M10.5 多 Subagent 并发池** (设计 §13.3): `SubagentPool` mpsc + N worker + `SubagentHandle` RAII drop 归还 + role-based capability 路由 + `cleanup_idle` 占位 + `Orchestrator::with_pool` 接入
+
+### Changed (破坏性 / 向后兼容)
+
+- `ProviderEntry` 新增 `timeout_secs` / `max_retries` / `retry_backoff_ms` 字段（带默认值，向后兼容）
+- `CacheConfig` 新增 `l2_enabled` / `l2_ttl_days` 字段
+- `LlmRouter` 新增 `l2_cache` 字段，`from_config` 签名不变（内部读取 cache 配置）
+- `Subagent::new` 根据 capabilities 推导 `PermissionSet`（ExecuteCommand 解锁命令白名单等）
+
+### Fixed
+
+- QA B2: LLM Provider timeout 接线（关硬编码）
 
 ## [1.0.0] - 2026-06-15
 

@@ -3,7 +3,7 @@
 > **Efficient Flow** — Rust 多层 Agent 协作框架
 > *One command to rule them all.*
 
-[![Status](https://img.shields.io/badge/status-v1.0%20released-brightgreen)]()
+[![Status](https://img.shields.io/badge/status-v1.1%20released-brightgreen)]()
 [![License: MIT/Apache-2.0](https://img.shields.io/badge/license-MIT%20%7C%20Apache--2.0-blue)]()
 [![Rust](https://img.shields.io/badge/rust-2024-orange)]()
 [![Tests](https://img.shields.io/badge/tests-12%20files-blue)]()
@@ -103,7 +103,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 | 里程碑 | 状态 |
 |--------|------|
 | v1.0 内核 | ✅ 已发布（端到端可运行骨架） |
-| v1.1 计划 | 🔜 M4.5 Config-driven LLM hardening（timeout/retry 接线） |
+| v1.1 L2 缓存 + 多 Subagent 池 | ✅ 已发布（M4.5 + M8 + M10.5） |
 
 ### 文档
 

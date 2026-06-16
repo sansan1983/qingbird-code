@@ -34,6 +34,9 @@ fn make_test_config() -> EflowConfig {
                 anthropic: Some(ProviderEntry {
                     api_key: "test-key".into(),
                     default_model: "claude-test".into(),
+                    timeout_secs: 30,
+                    max_retries: 3,
+                    retry_backoff_ms: 1000,
                 }),
                 openai: None,
             },
@@ -42,7 +45,11 @@ fn make_test_config() -> EflowConfig {
                 medium: "anthropic".into(),
                 light: "anthropic".into(),
             },
-            cache: CacheConfig { l1_enabled: true },
+            cache: CacheConfig {
+                l1_enabled: true,
+                l2_enabled: false,
+                l2_ttl_days: 7,
+            },
         },
         memory: MemoryConfig {
             working_memory_limit: 100,
@@ -62,6 +69,13 @@ fn make_test_config() -> EflowConfig {
 }
 
 fn make_test_router() -> Arc<Mutex<LlmRouter>> {
+    // v1.1 跨阶段: 显式清掉 *BASE_URL env var，避免 dev shell 的 cc-connect 代理
+    // 污染 test（详见 capability_test.rs 同名 helper）
+    // SAFETY: 单线程测试构造时清 env var，无 race
+    unsafe {
+        std::env::remove_var("ANTHROPIC_BASE_URL");
+        std::env::remove_var("OPENAI_BASE_URL");
+    }
     let cfg = make_test_config();
     let router = LlmRouter::from_config(&cfg).expect("test router");
     Arc::new(Mutex::new(router))
@@ -251,16 +265,17 @@ async fn handle_task_dispatch_publishes_task_completed_or_failed_event() {
 
     let _ = c.handle_input("readme".into()).await;
 
-    // 后台 task 会调 LLM（dummy key 失败）→ 期望 TaskFailed；5s 超时防挂死
+    // 后台 task 会调 LLM（dummy key 失败）→ 期望 TaskFailed
+    // 15s timeout 容纳 A3 加的指数退避（3 次 retry：1s+2s+4s=7s sleep）
     // 第一事件必然是 TaskStarted，跳过
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(15), rx.recv())
         .await
-        .expect("应在 5s 内收到首个事件")
+        .expect("应在 15s 内收到首个事件")
         .expect("channel 不应关闭");
 
-    let event = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+    let event = tokio::time::timeout(std::time::Duration::from_secs(15), rx.recv())
         .await
-        .expect("应在 5s 内收到 task 完成事件")
+        .expect("应在 15s 内收到 task 完成事件")
         .expect("channel 不应关闭");
 
     assert!(

@@ -7,15 +7,23 @@ llm:
     anthropic:
       api_key: ${ANTHROPIC_API_KEY}
       default_model: claude-sonnet-4-6
+      timeout_secs: 30
+      max_retries: 3
+      retry_backoff_ms: 1000
     openai:
       api_key: ${OPENAI_API_KEY}
       default_model: gpt-4o
+      timeout_secs: 30
+      max_retries: 3
+      retry_backoff_ms: 1000
   routing:
     strong: anthropic
     medium: anthropic
     light: openai
   cache:
     l1_enabled: true
+    l2_enabled: false
+    l2_ttl_days: 7
 
 memory:
   working_memory_limit: 1000

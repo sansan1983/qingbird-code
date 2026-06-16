@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **等 PR #7 合入 + 重开 v1.1**（v1.1 计划已就绪待执行）|
-| **上次完成** | v1.0.3 hotfix 完成 + 工程质检全过 — 154/154 pass / 0 clippy 警告 / fmt 干净 / PR #7 已开 |
-| **下次动作** | 等 PR #7 (v1.0.3 → main) 合并 → 切回 v1.1 分支 → 开始 Phase A Task A1 (扩 LlmConfig) |
+| **当前任务** | **v1.1 全完工 → Push + 开 PR**（基于 v1.0.3 + A1-A6 + post-PR hotfix + B1-B7 + C1-C6 + 跨阶段 5 commits，186/186 绿色基线 + 0 告警 + 0 leftover，本地领先 origin/v1.1 共 22 commits）|
+| **上次完成** | v1.1 跨阶段 + D1-D4 收尾 (5 commits)：(1) ac66d7c bump v1.1.0 + CHANGELOG；(2) bc4ea90 --execute 等 TaskCompleted/Failed 事件（e2e UX）；(3) 75e3f3c base URL env var 支持；(4) b3cc335 base URL 语义修正（base + /v1/messages 拼 path，SDK 兼容）；(5) e56a99e L2 cache 接通 Decisioner/Executor/Feedbacker。D4 端到端 e2e 跑通：Run 1 6.6s → Run 2 0.2s（31× 加速，cache 全命中，DB 不增长）。L2 cache 死代码 fix + base URL 修复都解决了。Plan deviations 5 处（ac66d7c: 2 + b3cc335: 3）|
+| **下次动作** | Task 1：git push origin v1.1（22 commits 一次性推出）；Task 2：gh pr create 开 v1.1 PR（target=main）|
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
-| 2026-06-16 | v1.0.3 hotfix + 工程质检 | v1.0.3 分支 (6 commits): 修真 2 bug (UTF-8 panic + task_id 'unknown') + 修 cli dead field + 8 处代码去重 (R1-R8) + 4 处 magic→const (M1+M2+M3+M5) + clippy pedantic 166 个警告 auto-fix。154/154 tests pass, 0 clippy 警告。PR #7 已开 |
-| 2026-06-16 | v1.1 启动 + 暂停 | v1.1 分支已建（无 commit），基线测试发现 cli_test 2 fail → 确认为 v1.0 遗留 bug → 暂停 v1.1 转 v1.0.3 热补 |
-| 2026-06-15 | v1.1 计划生成 | `docs/superpowers/plans/2026-06-15-eflow-v1.1-implementation-plan.md`（2985 行，覆盖 M4.5+M8+M10.5） |
+| 2026-06-16 | v1.1 跨阶段 + D1-D4 收尾 | 5 commits: ac66d7c (bump v1.1.0 + CHANGELOG + README) + bc4ea90 (--execute 等事件) + 75e3f3c (base URL env var) + b3cc335 (base URL 语义修正) + e56a99e (L2 cache 接 capability 层)。e2e 用 minimaxi proxy 跑通：Run 1 6.6s → Run 2 0.2s (31× 加速)。修复 2 真 bug：base URL 缺 /v1/messages 拼接 + L2 cache 死代码。完工门禁 186/186 稳定 + 0 clippy 告警 + 0 fmt diff + 0 leftover。Push 待做 |
+| 2026-06-16 | v1.1 Phase C 收尾 | 6 commits: 2e9b769 (Pool + mpsc) + 73e7da5 (Handle RAII) + ea5217e (role→cap 路由) + defbfce (Orchestrator pool + step_to_layer) + 0cc3178 (permission boundary + cleanup_idle) + 150c2a0 (pool 集成测试 + main 注入 pool)。M10.5 = 100%。Phase C 全关。Plan deviations 15 处（commit body 明文）。完工门禁 180/180 稳定 + 0 clippy 告警 + 0 fmt diff + 0 leftover。Push 待做 |
+| 2026-06-16 | v1.1 Phase B B1-B7 关闭 | 7 commits: 41b5e4e (types) + 4f0a8d3 (LRU) + 8d0f9c2 (SQLite) + d7d8174 (L2CacheManager) + a668594 (Router 集成) + b63a487 (Feedbacker 规则) + 016b5c4 (集成测试 + main.rs 启动日志 + i18n)。M8 = 100%。Phase B 全关。Plan bug 修 4 处 + 5 处 plan/style deviation。完工门禁 174/174 稳定 + 0 clippy 告警 + 0 fmt diff + 0 leftover |
 
 ## △ 收工仪式（每次结束前执行）
 

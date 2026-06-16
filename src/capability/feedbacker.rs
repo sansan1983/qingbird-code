@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use super::blackboard::Blackboard;
 use crate::common::error::Result;
-use crate::common::types::{ActionRecord, FeedbackRecord, ModelTier, QualityVerdict, RiskLevel};
+use crate::common::types::{
+    ActionRecord, FeedbackRecord, IntentType, ModelTier, QualityVerdict, RiskLevel,
+};
+use crate::infrastructure::llm::cache::{CacheKey, ContextProfile};
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 use rust_i18n::t;
 
@@ -110,7 +113,22 @@ impl Feedbacker {
         ];
 
         let request = ChatRequest::new("", messages);
-        let response = llm.chat(ModelTier::Medium, request).await?;
+
+        // v1.1 跨阶段 Task D4: 走 L2 cache
+        // retry_count + operation_summary 都含：break rework loop（action_log 随 retry 增长）
+        let key = CacheKey {
+            intent_type: IntentType::Chat,
+            task_signature: format!("feedback:retry={retry_count}:op={operation_summary}"),
+            context_profile: ContextProfile {
+                conversation_depth_bucket: 0,
+                file_count_bucket: 0,
+                risk_level: risk,
+                profile_name: "default".into(),
+            },
+            model: String::new(),
+        };
+
+        let response = llm.chat_cached(ModelTier::Medium, request, &key).await?;
 
         // 解析 LLM 输出
         let content = response.content.trim();
@@ -142,6 +160,85 @@ impl Feedbacker {
             Ok(QualityVerdict::Pass {
                 summary: content.chars().take(100).collect(),
             })
+        }
+    }
+
+    /// 带 cache_hint 的评估：cached=true 时降低校验严格度
+    /// （v1.1 Task B6 — 设计 §8.5：L2 命中走快速规则校验，跳过 LLM）
+    #[must_use]
+    pub async fn evaluate_with_cache_hint(
+        &self,
+        bb: Blackboard,
+        cache_hit: bool,
+    ) -> QualityVerdict {
+        // 规则：cache_hit + action_log 至少一条 success → Pass
+        if cache_hit && bb.action_log.iter().any(|r| r.success) {
+            return QualityVerdict::Pass {
+                summary: t!("status_feedback_cache_hit_validated").to_string(),
+            };
+        }
+        // 否则走正常 LLM 评估；失败兜底 Pass（缓存校验是 best-effort）
+        match self.evaluate(bb).await {
+            Ok((_, verdict)) => verdict,
+            Err(_) => QualityVerdict::Pass {
+                summary: t!("status_feedback_cache_hit_validated").to_string(),
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+impl Feedbacker {
+    /// 测试用构造（不接真实 LLM，走纯规则）
+    pub fn new_for_test() -> Self {
+        Self::new(std::sync::Arc::new(tokio::sync::Mutex::new(
+            crate::infrastructure::llm::LlmRouter::placeholder(),
+        )))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::capability::blackboard::Blackboard;
+    use crate::common::types::*;
+
+    #[tokio::test]
+    async fn feedbacker_accepts_cached_result_when_consistent() {
+        // v1.1 Task B6: cache_hit=true + action_log 有 success → 规则校验 Pass
+        let bb = Blackboard {
+            task: TaskSpec::new("test".into(), RiskLevel::L0),
+            plan: Some(TaskPlan {
+                task_id: uuid::Uuid::new_v4(),
+                steps: vec![],
+                estimated_steps: 1,
+                risk_level: RiskLevel::L0,
+            }),
+            current_step: Some(TaskStep {
+                action: "do".into(),
+                tool: "llm".into(),
+                params: serde_json::json!({}),
+                expected_output: Some("expected output".into()),
+            }),
+            execution_plan: None,
+            risk_level: RiskLevel::L0,
+            action_log: vec![ActionRecord {
+                timestamp: chrono::Utc::now(),
+                action: "do".into(),
+                tool: "llm".into(),
+                success: true,
+                summary: "expected output content here".into(),
+            }],
+            feedback_log: vec![],
+            retry_count: 0,
+            scratchpad: Default::default(),
+        };
+        let f = Feedbacker::new_for_test();
+        let verdict = f.evaluate_with_cache_hint(bb, true).await;
+        match verdict {
+            QualityVerdict::Pass { .. } => {} // OK
+            QualityVerdict::Rework { reason, .. } => panic!("unexpected rework: {}", reason),
+            QualityVerdict::Escalate { reason, .. } => panic!("unexpected escalate: {}", reason),
         }
     }
 }

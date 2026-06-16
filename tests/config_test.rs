@@ -93,3 +93,49 @@ profiles:
         std::env::remove_var("EFLOW_TEST_KEY");
     }
 }
+
+#[test]
+fn parses_llm_provider_timeout_and_retry() {
+    // v1.1 Task A1: 扩 LlmConfig 加 timeout_secs / max_retries / retry_backoff_ms
+    // + CacheConfig 加 l2_enabled / l2_ttl_days
+    let yaml = r#"
+core:
+  language: zh-CN
+  timezone: Asia/Shanghai
+llm:
+  providers:
+    anthropic:
+      api_key: sk-test
+      default_model: claude-sonnet-4-6
+      timeout_secs: 45
+      max_retries: 5
+      retry_backoff_ms: 500
+  routing:
+    strong: anthropic
+    medium: anthropic
+    light: anthropic
+  cache:
+    l1_enabled: true
+    l2_enabled: true
+    l2_ttl_days: 7
+memory:
+  working_memory_limit: 1000
+  project_db_path: ./p.db
+  user_db_path: ./u.db
+  cleanup_interval_hours: 24
+security:
+  risk_threshold: L2
+  allowed_paths: []
+profiles:
+  default: developer
+  available: [developer]
+"#;
+    let cfg: eflow::infrastructure::config::EflowConfig =
+        serde_yaml::from_str(yaml).expect("parse ok");
+    let anthro = cfg.llm.providers.anthropic.as_ref().unwrap();
+    assert_eq!(anthro.timeout_secs, 45);
+    assert_eq!(anthro.max_retries, 5);
+    assert_eq!(anthro.retry_backoff_ms, 500);
+    assert!(cfg.llm.cache.l2_enabled);
+    assert_eq!(cfg.llm.cache.l2_ttl_days, 7);
+}
