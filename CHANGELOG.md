@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (P1 债务清理)
+
+- **L2 cache key 规范化** (D1): `decisioner`/`executor`/`feedbacker` 三处 CacheKey 构造抽到 `cache_key_for_step` helper；signature 只含 action+tool+intent，不含 params（params 变化不再破 cache 命中）
+- **Feedbacker cache key 行为变化** (D1): 之前 `feedback:retry={N}:op={summary}` 每次 retry 都换 key；改为 `{intent}:{tool}:{summary}`，retry 期间稳定 → 命中率提升
+- **Concierge 真接入 active_profile** (D3): `ProfileSwitch` 意图从"只发提示"升级为真切换，`concierge.active_profile()` getter 可读
+- **Concierge 派发前 recall 历史** (D4): `TaskDispatch` 派发前 recall 项目记忆（关键词取 description 前 32 字符）
+
 ### Planned
 
 - Additional LLM providers (per design doc v4.0 §10)
