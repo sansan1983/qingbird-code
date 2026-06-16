@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **v1.1 全完工 → Push + 开 PR**（基于 v1.0.3 + A1-A6 + post-PR hotfix + B1-B7 + C1-C6 + 跨阶段 5 commits，186/186 绿色基线 + 0 告警 + 0 leftover，本地领先 origin/v1.1 共 22 commits）|
-| **上次完成** | v1.1 跨阶段 + D1-D4 收尾 (5 commits)：(1) ac66d7c bump v1.1.0 + CHANGELOG；(2) bc4ea90 --execute 等 TaskCompleted/Failed 事件（e2e UX）；(3) 75e3f3c base URL env var 支持；(4) b3cc335 base URL 语义修正（base + /v1/messages 拼 path，SDK 兼容）；(5) e56a99e L2 cache 接通 Decisioner/Executor/Feedbacker。D4 端到端 e2e 跑通：Run 1 6.6s → Run 2 0.2s（31× 加速，cache 全命中，DB 不增长）。L2 cache 死代码 fix + base URL 修复都解决了。Plan deviations 5 处（ac66d7c: 2 + b3cc335: 3）|
-| **下次动作** | Task 1：git push origin v1.1（22 commits 一次性推出）；Task 2：gh pr create 开 v1.1 PR（target=main）|
+| **当前任务** | **idle**：v1.1 收尾完毕，云端与本地 main 完全同步（均 540e5cc，PR #8 squash merged by sansan1983 @ 12:10 UTC），仓库仅剩 main 一支，cargo build/clippy/fmt 全 0 告警；等待用户下一步指示 |
+| **上次完成** | v1.1 收尾清理：本地 main fast-forward 同步到 540e5cc（diff 0）→ 验证 v1.1 squash merge 内容已全在 main（version 1.1.0 + L2 cache + BASE_URL env var + --execute 事件等待）→ 删 v1.1 本地+远程（5 个未合入 commit 内容已被 squash 包含，diff v1.1..main = 0 无丢失）→ cargo build 0 错 0 警告 + clippy --all-targets 0 警告 + fmt --check 0 diff。**Plan bug 修 1 处**：用户以为 v1.1 与 main 是 full merge，实际是 squash merge + 5 个 post-merge commit，幸亏 diff 验证发现内容已含 → 安全 force-delete |
+| **下次动作** | 等待用户下达下一步指示（v1.2 候选：step_to_layer 并行派发 + P1/P2 债务清理） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-16 | v1.1 收尾清理 | PR #8 云端 MERGED (540e5cc squash merge by sansan1983 @ 12:10 UTC) → 本地 main 拉取同步 (diff 0) → 删 v1.1 本地+远程（5 post-merge commit 内容已被 squash 包含）→ 仓库仅剩 main 一支 → cargo build/clippy/fmt 0 错 0 告警 0 diff。**Plan deviation 1 处**：用户假设 v1.1 跟 main 是 full merge，实际是 squash merge，幸亏 diff 验证发现内容无丢失 |
 | 2026-06-16 | v1.1 跨阶段 + D1-D4 收尾 | 5 commits: ac66d7c (bump v1.1.0 + CHANGELOG + README) + bc4ea90 (--execute 等事件) + 75e3f3c (base URL env var) + b3cc335 (base URL 语义修正) + e56a99e (L2 cache 接 capability 层)。e2e 用 minimaxi proxy 跑通：Run 1 6.6s → Run 2 0.2s (31× 加速)。修复 2 真 bug：base URL 缺 /v1/messages 拼接 + L2 cache 死代码。完工门禁 186/186 稳定 + 0 clippy 告警 + 0 fmt diff + 0 leftover。Push 待做 |
 | 2026-06-16 | v1.1 Phase C 收尾 | 6 commits: 2e9b769 (Pool + mpsc) + 73e7da5 (Handle RAII) + ea5217e (role→cap 路由) + defbfce (Orchestrator pool + step_to_layer) + 0cc3178 (permission boundary + cleanup_idle) + 150c2a0 (pool 集成测试 + main 注入 pool)。M10.5 = 100%。Phase C 全关。Plan deviations 15 处（commit body 明文）。完工门禁 180/180 稳定 + 0 clippy 告警 + 0 fmt diff + 0 leftover。Push 待做 |
-| 2026-06-16 | v1.1 Phase B B1-B7 关闭 | 7 commits: 41b5e4e (types) + 4f0a8d3 (LRU) + 8d0f9c2 (SQLite) + d7d8174 (L2CacheManager) + a668594 (Router 集成) + b63a487 (Feedbacker 规则) + 016b5c4 (集成测试 + main.rs 启动日志 + i18n)。M8 = 100%。Phase B 全关。Plan bug 修 4 处 + 5 处 plan/style deviation。完工门禁 174/174 稳定 + 0 clippy 告警 + 0 fmt diff + 0 leftover |
 
 ## △ 收工仪式（每次结束前执行）
 
@@ -107,7 +107,7 @@
 | 文件 | 用途 |
 |------|------|
 | `docs/superpowers/specs/2026-06-15-eflow-design.md` | 架构设计文档 v4.0（理解架构读这个） |
-| `docs/superpowers/plans/2026-06-15-eflow-v1.1-implementation-plan.md` | **v1.1 实现计划（按 Task + Step 执行，活跃中）** |
+| `docs/superpowers/plans/2026-06-15-eflow-v1.1-implementation-plan.md` | v1.1 实现计划（已收尾，归档：M4.5 + M8 + M10.5 + 跨阶段 D1-D4） |
 | `docs/superpowers/plans/2026-06-15-eflow-v1.0-implementation-plan.md` | v1.0 实现计划（已收尾，归档） |
 | `WORKLOG.md` | 完整工作日志归档 |
 
@@ -122,7 +122,7 @@
 
 ### 当前版本
 
-v1.1 计划已生成待执行：M4.5 LLM 硬化（关 QA B2）+ M8 L2 结构化缓存 + M10.5 多 Subagent 并发池
+v1.1.0 已发布（PR #8 merged @ 540e5cc）：M4.5 LLM 硬化 + M8 L2 结构化缓存 + M10.5 多 Subagent 并发池 + 跨阶段（base URL env var + --execute 事件 + L2 cache wiring）。等待 v1.2 启动
 
 ### 技术栈
 

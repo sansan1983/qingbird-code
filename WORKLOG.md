@@ -28,6 +28,7 @@
 | 2026-06-16 | v1.1 A6 收尾 + Phase A 关闭 | 1 commit: 9b6f9c6 (A6 集成测试 + i18n 键)。M4.5 = 100%。Phase A 全关。Plan 偏差：删 PathBuf unused import + 改写 `(*key).into()` 显式 3 个 t!() 避 ambiguous From<&str> 编译错 + 删局部 ModelTier use 走顶层 glob |
 | 2026-06-16 | v1.1 post-PR hotfix | 1 commit: 5b8cce7 (e2e_concierge timeout 15s→30s)。触发：完工门禁 build/clippy/fmt/test 发现 1 个 flaky test（满套件 12/13，独立 5/5 全过 8s）→ A3 退避 7s 压穿 15s 边界。修后独立 10/10 + 满套件 163/163 稳定。PR #8 body 增 hotfix 行 + Post-PR Hotfix 段落 |
 | 2026-06-16 | v1.1 跨阶段 + D1-D4 收尾 | 5 commits: ac66d7c (bump v1.1.0 + CHANGELOG + README) + bc4ea90 (--execute 等 TaskCompleted/Failed 事件) + 75e3f3c (base URL env var 支持) + b3cc335 (base URL 语义修正：base + /v1/messages 拼 path，SDK 兼容) + e56a99e (L2 cache 接通 Decisioner/Executor/Feedbacker)。e2e 用 minimaxi proxy 跑通：Run 1 6.6s → Run 2 0.2s (31× 加速，cache 全命中，DB 不增长)。修复 2 真 bug：base URL 缺 /v1/messages 拼接 + L2 cache 在 production 路径上死代码（M8/M9 集成 gap）。完工门禁 186/186 稳定 + 0 clippy 告警 + 0 fmt diff + 0 leftover。Push 待做 |
+| 2026-06-16 | v1.1 收尾清理 | PR #8 云端 MERGED (540e5cc squash merge by sansan1983 @ 12:10 UTC) → 本地 main 拉取同步（fast-forward c51cb67→540e5cc，diff 0）→ 验证 v1.1 squash merge 内容已全在 main（version 1.1.0 + L2 cache + BASE_URL env var + --execute 事件等待）→ 删 v1.1 本地+远程（5 post-merge commit 内容已被 squash 包含，diff v1.1..main = 0 无丢失）+ prune 远程（v1.0.2 + 2 个 chore/v1.0-*）→ cargo build 0 错 0 警告 + clippy --all-targets 0 警告 + fmt --check 0 diff。**Plan bug 修 1 处**：用户假设 v1.1 跟 main 是 full merge，实际是 squash merge + 5 post-merge commit，幸亏 diff 验证发现内容无丢失 |
 
 ---
 
