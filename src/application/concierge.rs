@@ -14,11 +14,10 @@ use rust_i18n::t;
 /// Concierge — 零阻塞对话入口
 pub struct Concierge {
     events: EventChannel,
-    // v1.2 D3: 仍 dead（D3 只解 active_profile 这一个字段）；
-    // D4 commit 一并删 dead_code 注解（届时 memory 会被 recall_smart 读到）
-    #[allow(dead_code)]
+    // v1.2 D4: 删 dead_code 注解——handle_input 的 TaskDispatch 分支调 memory.recall_smart
     memory: Arc<Mutex<CompositeMemory>>,
     // v1.2 D3: 仍 dead（D3/D4 都不直接读 profiles，只用 active_profile 字符串）
+    // ——Phase D 收尾时若仍无读取点，应考虑移除该字段；v1.2 阶段先保留
     #[allow(dead_code)]
     profiles: Arc<tokio::sync::RwLock<ProfileRegistry>>,
     orchestrator: Arc<Mutex<Orchestrator>>,
@@ -58,6 +57,18 @@ impl Concierge {
                 t!("concierge_chat_received", content = content).to_string()
             }
             Intent::TaskDispatch { spec } => {
+                // v1.2 D4: 派发前 recall 相关历史记忆（设计 §7.2）
+                // 关键词取 task description 前 32 字符
+                let keyword: String = spec.description.chars().take(32).collect();
+                let mem_snapshot: Vec<String> = {
+                    let mem = self.memory.lock().await;
+                    mem.recall_smart(&keyword, 3)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|e| e.content)
+                        .collect()
+                };
+
                 let task_id = spec.id;
                 // 异步派发任务，不等待结果
                 let orch = self.orchestrator.clone();
@@ -77,7 +88,17 @@ impl Concierge {
                     }
                 });
                 let id_prefix: String = task_id.to_string().chars().take(8).collect();
-                t!("concierge_task_dispatched", id = id_prefix).to_string()
+                let mem_count = mem_snapshot.len();
+                if mem_count > 0 {
+                    t!(
+                        "concierge_task_dispatched_with_memory",
+                        id = id_prefix,
+                        count = mem_count
+                    )
+                    .to_string()
+                } else {
+                    t!("concierge_task_dispatched", id = id_prefix).to_string()
+                }
             }
             Intent::TaskInterrupt { task_id } => {
                 t!("concierge_task_interrupt", id = task_id).to_string()
