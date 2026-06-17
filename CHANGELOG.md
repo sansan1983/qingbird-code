@@ -102,5 +102,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] (TBD)
+
+**Breaking Changes**:
+
+- **`eflow.yaml::llm.providers` 字段删除** —— v1.2 的 `anthropic` / `openai` 硬编码字段不再存在。LLM provider 改用 `~/.eflow/providers/{name}.yaml` 独立文件管理。详见 `docs/migration-v1.2-to-v1.3.md`。
+
+**Features**:
+
+- **核心 crate 零预置 LLM provider** —— 4 家 preset 厂商（DeepSeek / MiniMax / agnes-ai / OpenCode Go）以示例 YAML 形式存在，不进 core
+- **Generic OpenAI 兼容 / Anthropic 兼容 adapter** —— 通过 `~/.eflow/providers/*.yaml` 加载
+- **env var 退化路径** —— `~/.eflow/providers/` 为空时回退到 v1.2 的 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` 行为
+
+**Internal**:
+
+- ADR-0011 核心零预置 provider
+- ADR-0012 配置格式破坏性变更
+- ADR-0013 GUI 接入路径从 InteractionLayer trait 改为 CLI 稳定契约（spec B 实施）
+
+---
+
 [Unreleased]: https://github.com/sansan1983/eflow/compare/v1.0.0...HEAD
+[1.3.0]: https://github.com/sansan1983/eflow/compare/v1.2.0...v1.3.0
 [1.0.0]: https://github.com/sansan1983/eflow/releases/tag/v1.0.0
