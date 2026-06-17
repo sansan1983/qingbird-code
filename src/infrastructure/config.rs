@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use rust_i18n::t;
 
 /// 完整配置结构
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct EflowConfig {
     pub core: CoreConfig,
     pub llm: LlmConfig,
@@ -14,26 +14,26 @@ pub struct EflowConfig {
     pub profiles: ProfileListConfig,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct CoreConfig {
     pub language: String,
     pub timezone: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct LlmConfig {
     pub routing: RoutingConfig,
     pub cache: CacheConfig,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct RoutingConfig {
     pub strong: String,
     pub medium: String,
     pub light: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct CacheConfig {
     #[serde(default = "default_l1_enabled")]
     pub l1_enabled: bool,
@@ -50,7 +50,7 @@ fn default_l2_ttl_days() -> u32 {
     7
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct MemoryConfig {
     pub working_memory_limit: usize,
     pub project_db_path: String,
@@ -58,13 +58,13 @@ pub struct MemoryConfig {
     pub cleanup_interval_hours: u64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct SecurityConfig {
     pub risk_threshold: RiskLevel,
     pub allowed_paths: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct ProfileListConfig {
     pub default: String,
     pub available: Vec<String>,
