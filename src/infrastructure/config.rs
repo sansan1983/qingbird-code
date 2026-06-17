@@ -112,7 +112,7 @@ pub fn load_config(path: &Path) -> crate::common::error::Result<EflowConfig> {
         )
     })?;
 
-    let expanded = expand_env_vars(&content);
+    let expanded = crate::common::env::expand_env_vars(&content);
 
     let config: EflowConfig = serde_yaml::from_str(&expanded).map_err(|e| {
         crate::common::error::EflowError::Config(
@@ -146,34 +146,4 @@ pub fn find_config() -> Option<PathBuf> {
     }
 
     candidates.into_iter().find(|p| p.exists())
-}
-
-fn expand_env_vars(input: &str) -> String {
-    let re = regex_lite::Regex::new(r"\$\{(\w+)\}").unwrap();
-    re.replace_all(input, |caps: &regex_lite::Captures| {
-        let var_name = &caps[1];
-        std::env::var(var_name).unwrap_or_else(|_| format!("${{{var_name}}}"))
-    })
-    .to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn expand_env_vars_substitutes_known_var() {
-        // SAFETY: 单线程测试中设置环境变量不会与其他测试产生数据竞争
-        unsafe {
-            std::env::set_var("EFLOW_TEST_VAR", "hello");
-        }
-        let out = expand_env_vars("key=${EFLOW_TEST_VAR}");
-        assert_eq!(out, "key=hello");
-    }
-
-    #[test]
-    fn expand_env_vars_leaves_unknown_var_intact() {
-        let out = expand_env_vars("key=${EFLOW_NONEXISTENT_XYZ}");
-        assert_eq!(out, "key=${EFLOW_NONEXISTENT_XYZ}");
-    }
 }
