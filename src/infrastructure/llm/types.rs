@@ -167,3 +167,59 @@ pub fn tier_label(tier: ModelTier) -> &'static str {
         ModelTier::Light => "light",
     }
 }
+
+// =====================================================================
+// v1.3 LLM 抽象扩展（spec A）
+// =====================================================================
+
+/// Provider 元数据，从 `~/.eflow/providers/{name}.yaml` 加载
+///
+/// v1.3 起 LLM provider **不**写死在 core crate——用户放 YAML 文件即可
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProviderConfig {
+    pub id: String,
+    pub display_name: String,
+    pub protocol: ProtocolKind,
+    pub base_url: String,
+    pub api_key: String,
+    pub default_model: String,
+    #[serde(default = "default_timeout_secs")]
+    pub timeout_secs: u64,
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u8,
+    #[serde(default = "default_retry_backoff_ms")]
+    pub retry_backoff_ms: u64,
+    #[serde(default)]
+    pub preset_models: Vec<String>,
+    #[serde(default)]
+    pub list_models_endpoint: Option<String>,
+    #[serde(default)]
+    pub list_models: Vec<ModelEntry>,
+    #[serde(default)]
+    pub extra_config: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ProtocolKind {
+    OpenaiCompatible,
+    AnthropicCompatible,
+}
+
+/// model id → endpoint path 映射（OpenCode Go 场景）
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModelEntry {
+    pub id: String,
+    #[serde(default)]
+    pub endpoint: Option<String>,
+}
+
+fn default_timeout_secs() -> u64 {
+    30
+}
+fn default_max_retries() -> u8 {
+    3
+}
+fn default_retry_backoff_ms() -> u64 {
+    1000
+}
