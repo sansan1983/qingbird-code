@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **v1.2 收尾完成**：17 commits ahead of origin/main（v1.2 branch 已推 `origin/v1.2`，未开 PR）。17 commits 拆为：D1-D4 + Phase D 收尾（4）+ E1-E6 + Phase E 收尾（7）+ F1-F6 + Phase F 收尾（5）+ 跨阶段 v1.2.0 版本号 bump（1）。4 门禁全过：build / clippy -D warnings / fmt --check / cargo test。下一步：v1.3 候选（向量记忆 / GUI 扩展 / OpenAI streaming / 5 步骤独立 plan 并行加速 e2e 测试） |
-| **上次完成** | v1.2 全部 19 tasks（D1-D4 / E1-E6 / F1-F6）落地 + 跨阶段收尾：版本号 1.1.0 → 1.2.0、CHANGELOG Unreleased 段加「TUI 交互」「并行派发」「P1 债务清理」、README 状态表加 v1.2 行 + 架构图标注「TUI (ratatui, v1.2) + CLI (--execute)」+ 编排层加「v1.2 按层并行」。v1.2 branch 17 commits + 0 错 0 警告 0 fmt diff 全绿 |
-| **下次动作** | 等用户决定：(a) **开 PR 把 v1.2 合回 main**（分支已推送，PR 创建是仓库主端选择）；(b) **直接 merge main 后 delete v1.2 branch**；(c) **开始 v1.3**（候选：向量记忆 + L3 语义缓存 / GUI egui-iced / OpenAI chat_stream / 5 步骤独立 plan 并行加速 e2e 集成测试） |
+| **当前任务** | **v1.3 设计阶段收尾完成**：4 个 spec 文档全部 git commit（spec A / B1 / B2 / C）。4 commits ahead of origin/main。下一步：v1.3 实施计划生成（writing-plans 阶段，3 个小版本 v1.3.0 / v1.3.1 / v1.3.2） |
+| **上次完成** | v1.3 design 收尾（spec A + B1 + B2 + C 共 4 篇设计文档，3294 行，4 个 spec 自审循环）。4 个 commit：98272d8 (A) / a0e8975 (B1) / 54da9e8 (B2) / d88de3b (C，含 B1 偏差标注）。spec B1 文档加"已知偏差"标注（WizardStep/SelectList/TuiBackend 渲染违反"零硬编码"原则，留给 v1.4 spec D 重构） |
+| **下次动作** | 等用户决定：(a) **开始 writing-plans**（3 个 plan：A → B1 → B2+C 并行）；(b) **开 PR 把 v1.3 design 合回 main 后再开 plan**；(c) **直接进入实施**（跳 plan 阶段，直接进 v1.3.0 = spec A） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
-| 2026-06-17 | v1.2 全部 19 tasks 落地 | D1-D4 抽 cache_key_for_step helper / Concierge 真切换 active_profile / Concierge recall memory before dispatch；E1-E6 SubagentHandle guard / list_active / compute_step_layers / FuturesUnordered 按层并行 / cleanup_idle timeout-based / parallel_execution_test；F1-F6 ratatui+crossterm / InteractionLayer trait / TuiBackend event loop + state machine + prompt input / main.rs 默认 TUI。17 commits ahead of origin/main，4 门禁全绿，v1.2 已推 origin/v1.2 未开 PR |
-| 2026-06-17 | v1.2 实施计划生成 | 写 `docs/superpowers/plans/2026-06-17-eflow-v1.2-implementation-plan.md`（2638 行，19 tasks：D1-D4 P1 债务清理 / E1-E6 step_to_layer 并行派发 / F1-F6 TUI 交互层 ratatui+crossterm）。用户按 3→2→1 排优先级。同会话更新 CLAUDE.md「当前状态」+「关键文件」+「架构图」+「当前版本」指向 v1.2 计划 |
-| 2026-06-16 | v1.1 PR #10 文档同步闭环 | 建 `chore/v1.1-ceremony-docs`（从 origin/main 8efcaa3 切）→ 提交 35dad77（CLAUDE.md +3/-3，WORKLOG.md +2/-0）→ 推 → 开 PR #10（"chore: 同步文档状态至 PR #9 已合并"）→ sansan1983 普通 merge（非 squash，2 个父提交 8efcaa3 + 35dad77，**绕过 required_linear_history 保护**——仓库主端选择）@ 16:42 UTC → b1ed212 → 本地 main 快进同步（git pull --ff-only）→ 删本地 + 远程补丁分支 → 仓库仅剩 main → 完工门禁全 0 错 0 警告 |
+| 2026-06-17 | v1.3 design 收尾 | 4 个 spec：A（LLM 抽象扩展 21-27 tasks） / B1（向导+斜杠命令 12 tasks）/ B2（CLI 契约 13 tasks）/ C（3 档工作流 7-8 tasks）。总 53-60 tasks，分 v1.3.0 / v1.3.1 / v1.3.2 三个小版本。4 commits 推 main，4 门禁待 plan 实施后跑 |
+| 2026-06-17 | v1.3 spec B1 + B2 头脑风暴 | spec B1 选 B 方案（trait + 内部注册表）；spec B2 选 A 方案（TUI 默认 + subcommand 可选 headless）+ 重要设计哲学"渲染核心引擎零硬编码"（spec B1 已知偏差标注 + spec D 候选 v1.4 实施） |
+| 2026-06-17 | v1.2 收尾完成 | 见 WORKLOG.md 归档 |
 
 ## △ 收工仪式（每次结束前执行）
 
@@ -107,6 +107,10 @@
 | 文件 | 用途 |
 |------|------|
 | `docs/superpowers/specs/2026-06-15-eflow-design.md` | 架构设计文档 v4.0（理解架构读这个） |
+| `docs/superpowers/specs/2026-06-17-eflow-v1.3-llm-abstract-design.md` | v1.3 spec A — LLM 抽象扩展（21-27 tasks） |
+| `docs/superpowers/specs/2026-06-17-eflow-v1.3-b1-wizard-slash-design.md` | v1.3 spec B1 — 向导 + 斜杠命令（12 tasks） |
+| `docs/superpowers/specs/2026-06-17-eflow-v1.3-b2-cli-contract-design.md` | v1.3 spec B2 — CLI 契约（13 tasks） |
+| `docs/superpowers/specs/2026-06-17-eflow-v1.3-c-workflow-levels-design.md` | v1.3 spec C — 3 档工作流（7-8 tasks） |
 | `docs/superpowers/plans/2026-06-17-eflow-v1.2-implementation-plan.md` | v1.2 实现计划（已收尾：D1-D4 + E1-E6 + F1-F6 全完成） |
 | `docs/superpowers/plans/2026-06-15-eflow-v1.1-implementation-plan.md` | v1.1 实现计划（已收尾，归档：M4.5 + M8 + M10.5 + 跨阶段 D1-D4） |
 | `docs/superpowers/plans/2026-06-15-eflow-v1.0-implementation-plan.md` | v1.0 实现计划（已收尾，归档） |
@@ -125,6 +129,15 @@
 
 v1.2.0 已发布（v1.2 branch 17 commits + origin/v1.2 推送，待开 PR）：D1-D4 P1 债务清理（cache_key helper / Concierge 真切换 / recall memory）+ E1-E6 并行派发（SubagentHandle guard / list_active / compute_step_layers / FuturesUnordered 按层执行 / cleanup_idle timeout-based）+ F1-F6 TUI 交互层（ratatui+crossterm / InteractionLayer trait / TuiBackend event loop + state machine / main.rs 默认 TUI 启动）。
 
+**v1.3 设计完成待 plan**：A（LLM 抽象扩展）/ B1（向导+斜杠命令）/ B2（CLI 契约）/ C（3 档工作流）共 4 个 spec，53-60 tasks，分 3 个小版本 v1.3.0 / v1.3.1 / v1.3.2。spec D（渲染引擎重构，留给 v1.4）作为 v1.3 已知偏差标注。
+
 ### 技术栈
 
 Rust 2024 + tokio + clap + reqwest + rusqlite + serde_yaml + lru（L2 缓存）+ ratatui + crossterm（TUI）
+
+**v1.3 新增技术决策**（spec 阶段确认）：
+- LLM 抽象：核心零预置，provider 元数据在 `~/.eflow/providers/*.yaml`
+- 交互层：`SlashCommand` trait + `CommandRegistry`（6 个 builtin 命令）+ `WizardStep` trait（7 个 builtin step）+ `SelectItemSource` trait + `SelectList` widget（多模交互）
+- 工作流：`WorkflowExecutor` trait + `WorkflowRegistry`（3 个 builtin 档位 Simple/Standard/Advanced）
+- CLI 契约：`eflow session start` 持续运行 + stdin 协议 + 契约冻结 v1.3.0 起
+- v1.4 候选：spec D 渲染引擎（`RenderEngine` trait + `DrawCommand` enum）
