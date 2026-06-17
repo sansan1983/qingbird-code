@@ -58,3 +58,67 @@ impl LlmProviderRegistry {
         Ok(providers)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infrastructure::llm::types::ProtocolKind;
+
+    fn make_config(id: &str, protocol: ProtocolKind) -> ProviderConfig {
+        ProviderConfig {
+            id: id.to_string(),
+            display_name: id.to_string(),
+            protocol,
+            base_url: "https://api.test.com".to_string(),
+            api_key: "k".to_string(),
+            default_model: "m".to_string(),
+            timeout_secs: 30,
+            max_retries: 3,
+            retry_backoff_ms: 1000,
+            preset_models: vec!["m".to_string()],
+            list_models_endpoint: None,
+            list_models: vec![],
+            extra_config: serde_json::Value::Null,
+        }
+    }
+
+    #[test]
+    fn build_empty_list() {
+        let providers = LlmProviderRegistry::build(vec![]).unwrap();
+        assert!(providers.is_empty());
+    }
+
+    #[test]
+    fn build_openai_compatible_provider() {
+        let cfg = make_config("deepseek", ProtocolKind::OpenaiCompatible);
+        let providers = LlmProviderRegistry::build(vec![cfg]).unwrap();
+        assert_eq!(providers.len(), 1);
+        assert!(providers.contains_key("deepseek"));
+        assert_eq!(providers["deepseek"].name(), "deepseek");
+    }
+
+    #[test]
+    fn build_anthropic_compatible_provider() {
+        let cfg = make_config("minimax", ProtocolKind::AnthropicCompatible);
+        let providers = LlmProviderRegistry::build(vec![cfg]).unwrap();
+        assert!(providers.contains_key("minimax"));
+        assert_eq!(providers["minimax"].name(), "minimax");
+    }
+
+    #[test]
+    fn build_with_list_models_endpoints() {
+        let mut cfg = make_config("opencode-go", ProtocolKind::OpenaiCompatible);
+        cfg.list_models = vec![
+            ModelEntry {
+                id: "glm-5.1".to_string(),
+                endpoint: Some("/v1/chat/completions".to_string()),
+            },
+            ModelEntry {
+                id: "kimi-k2.7".to_string(),
+                endpoint: Some("/v1/messages".to_string()),
+            },
+        ];
+        let providers = LlmProviderRegistry::build(vec![cfg]).unwrap();
+        assert!(providers.contains_key("opencode-go"));
+    }
+}
