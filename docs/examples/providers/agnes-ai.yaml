@@ -1,0 +1,9 @@
+id: agnes-ai
+display_name: "Agnes AI"
+protocol: openai_compatible
+base_url: "https://apihub.agnes-ai.com/v1"
+api_key: "${AGNES_API_KEY}"
+default_model: "agnes-2.0-flash"
+preset_models:
+  - "agnes-2.0-flash"
+# 唯一模型，无 list_models_endpoint（用户不需要选）

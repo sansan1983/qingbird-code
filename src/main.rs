@@ -57,7 +57,12 @@ async fn main() {
     // 初始化基础设施
     let events = EventChannel::new();
 
-    let llm = match LlmRouter::from_config(&cfg) {
+    // v1.3 起：传 provider_dir 给 from_config
+    let provider_dir = dirs::config_dir()
+        .map(|p| p.join("eflow").join("providers"))
+        .unwrap_or_else(|| std::path::PathBuf::from("./providers"));
+    let _ = std::fs::create_dir_all(&provider_dir); // 不存在就建（首次启动友好）
+    let llm = match LlmRouter::from_config(&cfg, &provider_dir) {
         Ok(l) => Arc::new(tokio::sync::Mutex::new(l)),
         Err(e) => {
             eprintln!("Failed to init LLM: {e}");

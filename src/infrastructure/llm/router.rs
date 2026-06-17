@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,9 +8,11 @@ use crate::common::types::ModelTier;
 use crate::infrastructure::config::EflowConfig;
 use rust_i18n::t;
 
-use super::anthropic::AnthropicProvider;
 use super::cache::{CacheKey, CacheValue, L2CacheManager};
-use super::openai::OpenAiProvider;
+use super::generic_anthropic::GenericAnthropicProvider;
+use super::generic_openai::GenericOpenAiProvider;
+use super::preset_loader::PresetLoader;
+use super::registry::LlmProviderRegistry;
 use super::types::{ChatRequest, ChatResponse, LlmProvider, TokenUsage};
 
 /// LLM Router — 统一入口，按 `ModelTier` 路由到具体 Provider
@@ -22,61 +25,62 @@ pub struct LlmRouter {
 
 impl LlmRouter {
     /// 从配置创建 Router
-    pub fn from_config(config: &EflowConfig) -> Result<Self> {
-        let mut providers: HashMap<String, Arc<dyn LlmProvider>> = HashMap::new();
+    ///
+    /// v1.3 改造：扫 `~/.eflow/providers/*.yaml` 加载 N 个 provider，
+    /// `providers` 配置块已弃用（旧 `AnthropicProvider`/`OpenAiProvider` struct 也不再使用）。
+    /// 退化路径：`providers/` 为空时从 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` env var 构造。
+    pub fn from_config(config: &EflowConfig, provider_dir: &Path) -> Result<Self> {
+        // 1. 扫目录加载 presets
+        let presets = PresetLoader::load_all(provider_dir)?;
+        let mut providers = LlmProviderRegistry::build(presets)?;
 
-        if let Some(ref anthro) = config.llm.providers.anthropic
-            && !anthro.api_key.is_empty()
-            && !anthro.api_key.starts_with("${")
-        {
-            // v1.1 跨阶段: 读 ANTHROPIC_BASE_URL env var（企业代理 / 第三方兼容服务）
-            let base_url = std::env::var("ANTHROPIC_BASE_URL").ok();
-            let provider = AnthropicProvider::with_options(
-                anthro.api_key.clone(),
-                anthro.default_model.clone(),
-                anthro.timeout_secs,
-                anthro.max_retries,
-                anthro.retry_backoff_ms,
-                base_url,
-            );
-            providers.insert("anthropic".into(), Arc::new(provider));
+        // 2. 退化路径：providers 为空时用 v1.2 的 env var 行为
+        if providers.is_empty() {
+            providers = Self::fallback_from_env_vars()?;
         }
 
-        if let Some(ref openai) = config.llm.providers.openai
-            && !openai.api_key.is_empty()
-            && !openai.api_key.starts_with("${")
-        {
-            let base_url = std::env::var("OPENAI_BASE_URL").ok();
-            let provider = OpenAiProvider::with_options(
-                openai.api_key.clone(),
-                openai.default_model.clone(),
-                openai.timeout_secs,
-                openai.max_retries,
-                openai.retry_backoff_ms,
-                base_url,
-            );
-            providers.insert("openai".into(), Arc::new(provider));
-        }
-
+        // 3. 全部为空 → 报错
         if providers.is_empty() {
             return Err(EflowError::Config(t!("err_no_llm_providers").to_string()));
         }
 
+        // 4. 构造 routing（routing 引用校验 + 降级）
         let mut routing = HashMap::new();
         let strong = config.llm.routing.strong.clone();
         let medium = config.llm.routing.medium.clone();
         let light = config.llm.routing.light.clone();
 
-        if providers.contains_key(&strong) {
-            routing.insert(ModelTier::Strong, strong);
+        let try_route = |tier_name: &str, id: String| {
+            if providers.contains_key(&id) {
+                Some(id)
+            } else {
+                let fallback = providers.keys().next().cloned();
+                if let Some(ref fb) = fallback {
+                    tracing::warn!(
+                        "{}",
+                        t!(
+                            "warn_routing_unknown_tier",
+                            tier = tier_name,
+                            id = id.clone(),
+                            fallback = fb.clone()
+                        )
+                    );
+                }
+                fallback
+            }
+        };
+
+        if let Some(id) = try_route("strong", strong) {
+            routing.insert(ModelTier::Strong, id);
         }
-        if providers.contains_key(&medium) {
-            routing.insert(ModelTier::Medium, medium);
+        if let Some(id) = try_route("medium", medium) {
+            routing.insert(ModelTier::Medium, id);
         }
-        if providers.contains_key(&light) {
-            routing.insert(ModelTier::Light, light);
+        if let Some(id) = try_route("light", light) {
+            routing.insert(ModelTier::Light, id);
         }
 
+        // 5. 如果某 tier 还没填，用第一个可用
         for tier in [ModelTier::Strong, ModelTier::Medium, ModelTier::Light] {
             if !routing.contains_key(&tier)
                 && let Some(name) = providers.keys().next()
@@ -85,7 +89,7 @@ impl LlmRouter {
             }
         }
 
-        // v1.1 Task B5: 可选 L2 缓存（设计 §8.5）
+        // 6. L2 cache（不变）
         let l2_cache = if config.llm.cache.l2_enabled {
             let path = std::path::Path::new("./data/llm_cache.db");
             if let Some(parent) = path.parent() {
@@ -108,6 +112,56 @@ impl LlmRouter {
             rate_limit_counters: HashMap::new(),
             l2_cache,
         })
+    }
+
+    /// 退化路径：当 `~/.eflow/providers/` 为空时，从 env var 构造 anthropic + openai
+    ///
+    /// v1.2 行为：读 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` + `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` 构造 provider。
+    fn fallback_from_env_vars() -> Result<HashMap<String, Arc<dyn LlmProvider>>> {
+        let mut providers = HashMap::new();
+
+        if let Ok(api_key) = std::env::var("ANTHROPIC_API_KEY")
+            && !api_key.is_empty()
+            && !api_key.starts_with("${")
+        {
+            let base_url = std::env::var("ANTHROPIC_BASE_URL")
+                .unwrap_or_else(|_| "https://api.anthropic.com".to_string());
+            let provider = GenericAnthropicProvider::new(
+                "anthropic".into(),
+                api_key,
+                base_url,
+                "claude-sonnet-4-6".into(),
+                30,
+                3,
+                1000,
+                HashMap::new(),
+            );
+            providers.insert(
+                "anthropic".into(),
+                Arc::new(provider) as Arc<dyn LlmProvider>,
+            );
+        }
+
+        if let Ok(api_key) = std::env::var("OPENAI_API_KEY")
+            && !api_key.is_empty()
+            && !api_key.starts_with("${")
+        {
+            let base_url = std::env::var("OPENAI_BASE_URL")
+                .unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
+            let provider = GenericOpenAiProvider::new(
+                "openai".into(),
+                api_key,
+                base_url,
+                "gpt-4o".into(),
+                30,
+                3,
+                1000,
+                HashMap::new(),
+            );
+            providers.insert("openai".into(), Arc::new(provider) as Arc<dyn LlmProvider>);
+        }
+
+        Ok(providers)
     }
 
     /// 按 `ModelTier` 路由调用（含指数退避重试 + 降级）
@@ -356,11 +410,30 @@ impl LlmRouter {
     pub fn inject_test_routing(&mut self, tier: ModelTier, name: String) {
         self.routing.insert(tier, name);
     }
+
+    /// v1.3 T14/T15: 测试用——查询 provider 是否存在。
+    /// **非测试代码不应调用**。
+    #[doc(hidden)]
+    pub fn has_test_provider(&self, name: &str) -> bool {
+        self.providers.contains_key(name)
+    }
+
+    /// v1.3 T15: 测试用——查询某 tier 的 routing。
+    /// **非测试代码不应调用**。
+    #[doc(hidden)]
+    pub fn routing_for_test(&self, tier: ModelTier) -> Option<String> {
+        self.routing.get(&tier).cloned()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::types::RiskLevel;
+    use crate::infrastructure::config::{
+        CacheConfig, CoreConfig, LlmConfig, MemoryConfig, ProfileListConfig, RoutingConfig,
+        SecurityConfig,
+    };
     use crate::infrastructure::llm::cache::L2CacheManager;
     use crate::infrastructure::llm::types::{ChatChunk, ChatResponse, Message, TokenUsage};
     use async_trait::async_trait;
@@ -598,5 +671,190 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.content, "cached");
+    }
+
+    // ========== v1.3 Task T14: 退化路径 ==========
+
+    #[tokio::test]
+    async fn router_empty_provider_dir_falls_back_to_env_vars() {
+        // v1.3 Task T14: provider dir 为空时，从 env var 读 anthropic + openai
+        unsafe {
+            std::env::set_var("ANTHROPIC_API_KEY", "sk-test");
+            std::env::set_var("OPENAI_API_KEY", "sk-test-openai");
+        }
+        let dir = tempfile::TempDir::new().unwrap();
+        let config = EflowConfig {
+            core: CoreConfig {
+                language: "zh-CN".into(),
+                timezone: "Asia/Shanghai".into(),
+            },
+            llm: LlmConfig {
+                routing: RoutingConfig {
+                    strong: "anthropic".into(),
+                    medium: "anthropic".into(),
+                    light: "openai".into(),
+                },
+                cache: CacheConfig {
+                    l1_enabled: true,
+                    l2_enabled: false,
+                    l2_ttl_days: 7,
+                },
+            },
+            memory: MemoryConfig {
+                working_memory_limit: 1000,
+                project_db_path: "./data/project.db".into(),
+                user_db_path: "./data/user.db".into(),
+                cleanup_interval_hours: 24,
+            },
+            security: SecurityConfig {
+                risk_threshold: RiskLevel::L2,
+                allowed_paths: vec![],
+            },
+            profiles: ProfileListConfig {
+                default: "developer".into(),
+                available: vec![],
+            },
+        };
+        let router = LlmRouter::from_config(&config, dir.path()).unwrap();
+        assert!(router.has_test_provider("anthropic"));
+        assert!(router.has_test_provider("openai"));
+    }
+
+    #[tokio::test]
+    async fn router_provider_dir_with_files_skips_env_vars() {
+        // v1.3 Task T14: dir 有 provider 时不读 env var
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("custom.yaml"),
+            r#"
+id: custom
+display_name: Custom
+protocol: openai_compatible
+base_url: https://custom.example.com
+api_key: "k"
+default_model: m
+"#,
+        )
+        .unwrap();
+
+        let config = EflowConfig {
+            core: CoreConfig {
+                language: "zh-CN".into(),
+                timezone: "Asia/Shanghai".into(),
+            },
+            llm: LlmConfig {
+                routing: RoutingConfig {
+                    strong: "custom".into(),
+                    medium: "custom".into(),
+                    light: "custom".into(),
+                },
+                cache: CacheConfig {
+                    l1_enabled: true,
+                    l2_enabled: false,
+                    l2_ttl_days: 7,
+                },
+            },
+            memory: MemoryConfig {
+                working_memory_limit: 1000,
+                project_db_path: "./data/project.db".into(),
+                user_db_path: "./data/user.db".into(),
+                cleanup_interval_hours: 24,
+            },
+            security: SecurityConfig {
+                risk_threshold: RiskLevel::L2,
+                allowed_paths: vec![],
+            },
+            profiles: ProfileListConfig {
+                default: "developer".into(),
+                available: vec![],
+            },
+        };
+        let router = LlmRouter::from_config(&config, dir.path()).unwrap();
+        assert!(router.has_test_provider("custom"));
+        // 不应该读 env var，所以 anthropic / openai 都不在
+        assert!(!router.has_test_provider("anthropic"));
+        assert!(!router.has_test_provider("openai"));
+    }
+
+    // ========== v1.3 Task T15: routing 引用校验 ==========
+
+    #[tokio::test]
+    async fn router_unknown_routing_id_degrades_to_first_provider() {
+        // v1.3 Task T15: routing 引用不存在的 id → 降级到第一个可用 + warn
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("first.yaml"),
+            r#"
+id: first
+display_name: First
+protocol: openai_compatible
+base_url: https://first.example.com
+api_key: "k"
+default_model: m
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("second.yaml"),
+            r#"
+id: second
+display_name: Second
+protocol: openai_compatible
+base_url: https://second.example.com
+api_key: "k"
+default_model: m
+"#,
+        )
+        .unwrap();
+
+        let config = EflowConfig {
+            core: CoreConfig {
+                language: "zh-CN".into(),
+                timezone: "Asia/Shanghai".into(),
+            },
+            llm: LlmConfig {
+                routing: RoutingConfig {
+                    strong: "nonexistent".into(), // 引用不存在的
+                    medium: "second".into(),
+                    light: "nonexistent".into(),
+                },
+                cache: CacheConfig {
+                    l1_enabled: true,
+                    l2_enabled: false,
+                    l2_ttl_days: 7,
+                },
+            },
+            memory: MemoryConfig {
+                working_memory_limit: 1000,
+                project_db_path: "./data/project.db".into(),
+                user_db_path: "./data/user.db".into(),
+                cleanup_interval_hours: 24,
+            },
+            security: SecurityConfig {
+                risk_threshold: RiskLevel::L2,
+                allowed_paths: vec![],
+            },
+            profiles: ProfileListConfig {
+                default: "developer".into(),
+                available: vec![],
+            },
+        };
+        let router = LlmRouter::from_config(&config, dir.path()).unwrap();
+        // strong 和 light 降级到某个可用 provider（HashMap 迭代顺序非确定）
+        let strong = router.routing_for_test(ModelTier::Strong);
+        assert!(
+            strong == Some("first".to_string()) || strong == Some("second".to_string()),
+            "Strong should degrade to an available provider, got {strong:?}"
+        );
+        let light = router.routing_for_test(ModelTier::Light);
+        assert!(
+            light == Some("first".to_string()) || light == Some("second".to_string()),
+            "Light should degrade to an available provider, got {light:?}"
+        );
+        // medium 是合法的 second
+        assert_eq!(
+            router.routing_for_test(ModelTier::Medium),
+            Some("second".to_string())
+        );
     }
 }

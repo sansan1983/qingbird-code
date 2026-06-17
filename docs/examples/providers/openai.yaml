@@ -1,0 +1,11 @@
+id: openai
+display_name: "OpenAI"
+protocol: openai_compatible
+base_url: "https://api.openai.com/v1"
+api_key: "${OPENAI_API_KEY}"
+default_model: "gpt-4o"
+preset_models:
+  - "gpt-4o"
+  - "gpt-4o-mini"
+  - "o1"
+  - "o1-mini"

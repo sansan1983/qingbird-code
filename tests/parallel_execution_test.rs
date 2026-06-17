@@ -33,7 +33,7 @@ use eflow::common::error::Result;
 use eflow::common::types::{ModelTier, RiskLevel, TaskSpec};
 use eflow::infrastructure::config::{
     CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
-    ProviderEntry, ProvidersConfig, RoutingConfig, SecurityConfig,
+    RoutingConfig, SecurityConfig,
 };
 use eflow::infrastructure::event::EventChannel;
 use eflow::infrastructure::llm::{
@@ -84,16 +84,6 @@ fn make_test_config() -> EflowConfig {
             timezone: "UTC".into(),
         },
         llm: LlmConfig {
-            providers: ProvidersConfig {
-                anthropic: Some(ProviderEntry {
-                    api_key: "test-key".into(),
-                    default_model: "claude-test".into(),
-                    timeout_secs: 30,
-                    max_retries: 0, // v1.2 E6: 关重试避免 wall-clock 翻倍
-                    retry_backoff_ms: 0,
-                }),
-                openai: None,
-            },
             routing: RoutingConfig {
                 strong: "anthropic".into(),
                 medium: "anthropic".into(),
