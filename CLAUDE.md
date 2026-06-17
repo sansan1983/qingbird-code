@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **v1.2 计划已就位**：文档生成于 2026-06-17，按用户决定分三阶段 D1-D4（债务清理）/ E1-E6（并行派发）/ F1-F6（TUI）循序推进。下一步：从 main 开 `v1.2` 分支并开始 Task D1（抽 cache_key_for_step helper） |
-| **上次完成** | v1.1 收尾仪式 + PR #10 闭环：本地 main 快进同步到 b1ed212（origin/main，PR #10 merge commit，8efcaa3 → b1ed212 via 35dad77）→ 删本地 `chore/v1.1-ceremony-docs` 分支（35dad77）→ 远程分支已被 GitHub 自动清理（prune 确认）→ 仓库仅剩 main 一支 → cargo build 0 错 + clippy --all-targets 0 警告 + fmt --check 0 diff。**注意**：sansan1983 用普通 merge（2 个父提交）合并 PR #10，**绕过了仓库的 `required_linear_history` 保护**——这是仓库主端选择，与我们推送方无关 |
-| **下次动作** | 用户下达「开始 v1.2」指令后：建 `v1.2` 分支（从 origin/main b1ed212 切）→ Task D1 cache_key_for_step helper 起步。按 3→2→1 用户优先级：D1-D4 → E1-E6 → F1-F6 |
+| **当前任务** | **v1.2 收尾完成**：17 commits ahead of origin/main（v1.2 branch 已推 `origin/v1.2`，未开 PR）。17 commits 拆为：D1-D4 + Phase D 收尾（4）+ E1-E6 + Phase E 收尾（7）+ F1-F6 + Phase F 收尾（5）+ 跨阶段 v1.2.0 版本号 bump（1）。4 门禁全过：build / clippy -D warnings / fmt --check / cargo test。下一步：v1.3 候选（向量记忆 / GUI 扩展 / OpenAI streaming / 5 步骤独立 plan 并行加速 e2e 测试） |
+| **上次完成** | v1.2 全部 19 tasks（D1-D4 / E1-E6 / F1-F6）落地 + 跨阶段收尾：版本号 1.1.0 → 1.2.0、CHANGELOG Unreleased 段加「TUI 交互」「并行派发」「P1 债务清理」、README 状态表加 v1.2 行 + 架构图标注「TUI (ratatui, v1.2) + CLI (--execute)」+ 编排层加「v1.2 按层并行」。v1.2 branch 17 commits + 0 错 0 警告 0 fmt diff 全绿 |
+| **下次动作** | 等用户决定：(a) **开 PR 把 v1.2 合回 main**（分支已推送，PR 创建是仓库主端选择）；(b) **直接 merge main 后 delete v1.2 branch**；(c) **开始 v1.3**（候选：向量记忆 + L3 语义缓存 / GUI egui-iced / OpenAI chat_stream / 5 步骤独立 plan 并行加速 e2e 集成测试） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-17 | v1.2 全部 19 tasks 落地 | D1-D4 抽 cache_key_for_step helper / Concierge 真切换 active_profile / Concierge recall memory before dispatch；E1-E6 SubagentHandle guard / list_active / compute_step_layers / FuturesUnordered 按层并行 / cleanup_idle timeout-based / parallel_execution_test；F1-F6 ratatui+crossterm / InteractionLayer trait / TuiBackend event loop + state machine + prompt input / main.rs 默认 TUI。17 commits ahead of origin/main，4 门禁全绿，v1.2 已推 origin/v1.2 未开 PR |
 | 2026-06-17 | v1.2 实施计划生成 | 写 `docs/superpowers/plans/2026-06-17-eflow-v1.2-implementation-plan.md`（2638 行，19 tasks：D1-D4 P1 债务清理 / E1-E6 step_to_layer 并行派发 / F1-F6 TUI 交互层 ratatui+crossterm）。用户按 3→2→1 排优先级。同会话更新 CLAUDE.md「当前状态」+「关键文件」+「架构图」+「当前版本」指向 v1.2 计划 |
 | 2026-06-16 | v1.1 PR #10 文档同步闭环 | 建 `chore/v1.1-ceremony-docs`（从 origin/main 8efcaa3 切）→ 提交 35dad77（CLAUDE.md +3/-3，WORKLOG.md +2/-0）→ 推 → 开 PR #10（"chore: 同步文档状态至 PR #9 已合并"）→ sansan1983 普通 merge（非 squash，2 个父提交 8efcaa3 + 35dad77，**绕过 required_linear_history 保护**——仓库主端选择）@ 16:42 UTC → b1ed212 → 本地 main 快进同步（git pull --ff-only）→ 删本地 + 远程补丁分支 → 仓库仅剩 main → 完工门禁全 0 错 0 警告 |
-| 2026-06-16 | v1.1 收尾仪式 + PR #9 闭环 | 用户提出"主分支保护下能直推吗"问题 → 核实分支保护配置（required_pull_request_reviews + required_linear_history + 禁 force push）→ 决定走补丁分支 + PR 流程 → 建 `chore/v1.1-ceremony`（从 origin/main 540e5cc 切）→ cherry-pick 773f970 → 55374d4 → 门禁 build/clippy/fmt 全 0 → 推补丁分支 → 开 PR #9（标题"chore: v1.1 收尾仪式 — 同步文档状态"）→ sansan1983 squash-merge @ 13:53 UTC → 8efcaa3 → 本地 main reset 到 origin/main → 删本地 + 远程补丁分支（远程已自动清）→ 仓库仅剩 main → 完工门禁全 0 错 0 警告 |
 
 ## △ 收工仪式（每次结束前执行）
 
@@ -107,7 +107,7 @@
 | 文件 | 用途 |
 |------|------|
 | `docs/superpowers/specs/2026-06-15-eflow-design.md` | 架构设计文档 v4.0（理解架构读这个） |
-| `docs/superpowers/plans/2026-06-17-eflow-v1.2-implementation-plan.md` | **v1.2 实现计划（待执行，D1-D4 + E1-E6 + F1-F6）** |
+| `docs/superpowers/plans/2026-06-17-eflow-v1.2-implementation-plan.md` | v1.2 实现计划（已收尾：D1-D4 + E1-E6 + F1-F6 全完成） |
 | `docs/superpowers/plans/2026-06-15-eflow-v1.1-implementation-plan.md` | v1.1 实现计划（已收尾，归档：M4.5 + M8 + M10.5 + 跨阶段 D1-D4） |
 | `docs/superpowers/plans/2026-06-15-eflow-v1.0-implementation-plan.md` | v1.0 实现计划（已收尾，归档） |
 | `WORKLOG.md` | 完整工作日志归档 |
@@ -115,16 +115,16 @@
 ### 架构四层
 
 ```
-交互层       →  TUI (ratatui, v1.2 计划 F1-F6) + CLI (--execute 单次模式)
-编排层       →  Concierge (零阻塞) → Orchestrator (分解+调度，并行派发 v1.2 计划 E1-E6)
+交互层       →  TUI (ratatui) + CLI (--execute 单次模式)
+编排层       →  Concierge (零阻塞) → Orchestrator (分解+调度，按层并行)
 能力层       →  Decisioner → Executor → Feedbacker (管线段)
 基础设施层   →  LLM / Memory / Context / Event / Profile / Tools
 ```
 
 ### 当前版本
 
-v1.1.0 已发布（PR #8 merged @ 540e5cc）：M4.5 LLM 硬化 + M8 L2 结构化缓存 + M10.5 多 Subagent 并发池 + 跨阶段（base URL env var + --execute 事件 + L2 cache wiring）。**v1.2 计划已就位**（D1-D4 债务清理 / E1-E6 并行派发 / F1-F6 TUI 交互层，详见 v1.2 实现计划），等待用户「开始 v1.2」指令启动。
+v1.2.0 已发布（v1.2 branch 17 commits + origin/v1.2 推送，待开 PR）：D1-D4 P1 债务清理（cache_key helper / Concierge 真切换 / recall memory）+ E1-E6 并行派发（SubagentHandle guard / list_active / compute_step_layers / FuturesUnordered 按层执行 / cleanup_idle timeout-based）+ F1-F6 TUI 交互层（ratatui+crossterm / InteractionLayer trait / TuiBackend event loop + state machine / main.rs 默认 TUI 启动）。
 
 ### 技术栈
 
-Rust 2024 + tokio + clap + reqwest + rusqlite + serde_yaml + lru（v1.1+ L2 缓存）+ ratatui + crossterm（v1.2 计划 F1-F6 TUI）
+Rust 2024 + tokio + clap + reqwest + rusqlite + serde_yaml + lru（L2 缓存）+ ratatui + crossterm（TUI）
