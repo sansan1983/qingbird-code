@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use tokio::sync::Mutex;
 
 use crate::common::error::{EflowError, Result};
 
@@ -43,16 +44,19 @@ pub trait SlashCommand: Send + Sync {
     async fn execute(&self, args: SlashArgs, ctx: &mut CommandContext) -> Result<SlashOutput>;
 }
 
-/// 命令上下文（在 `execute` 调用期间持有 Concierge 借用）
+/// 命令上下文（在 `execute` 调用期间持有 Concierge 借用 + router Arc 共享）
+///
+/// v1.3.1 deviation: router 改成 `Arc<Mutex<>>` 共享——避免 v1.3.0 Concierge 不持 router
+/// 时借用冲突。execute 内需要 router 时 lock 一次。
 pub struct CommandContext<'a> {
     pub concierge: &'a mut crate::application::concierge::Concierge,
-    pub router: &'a mut crate::infrastructure::llm::router::LlmRouter,
+    pub router: Arc<Mutex<crate::infrastructure::llm::router::LlmRouter>>,
 }
 
 impl<'a> CommandContext<'a> {
     pub fn new(
         concierge: &'a mut crate::application::concierge::Concierge,
-        router: &'a mut crate::infrastructure::llm::router::LlmRouter,
+        router: Arc<Mutex<crate::infrastructure::llm::router::LlmRouter>>,
     ) -> Self {
         Self { concierge, router }
     }

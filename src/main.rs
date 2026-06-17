@@ -121,6 +121,7 @@ async fn main() {
         memory.clone(),
         profiles.clone(),
         orchestrator.clone(),
+        llm.clone(), // v1.3.1 增量
         cfg.profiles.default.clone(),
     );
     let concierge = std::sync::Arc::new(tokio::sync::Mutex::new(concierge));

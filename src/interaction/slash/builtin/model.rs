@@ -44,25 +44,20 @@ impl SlashCommand for ModelCmd {
     }
     async fn execute(&self, _args: SlashArgs, ctx: &mut CommandContext) -> Result<SlashOutput> {
         // v1.3.1 阶段：检查 router 是否有 provider，没有 → 错误
-        if ctx.router.provider_for(ModelTier::Light).is_none() {
+        let router = ctx.router.lock().await;
+        if router.provider_for(ModelTier::Light).is_none() {
             return Err(EflowError::Config(
                 "无法切换模型：未配置 LLM provider。运行 eflow init 配置".into(),
             ));
         }
 
         // 拿当前 provider id（这里简化：直接拿 Light tier 的 provider id）
-        let provider_id = ctx
-            .router
-            .provider_for(ModelTier::Light)
-            .unwrap()
-            .to_string();
+        let provider_id = router.provider_for(ModelTier::Light).unwrap().to_string();
 
         // 简化：从 router 拿当前 provider 的 preset_models（v1.3.1 阶段没有 model cache 抽象）
         // v1.3.1 计划走"返回 None"——`/model` 显示"暂无模型列表"
-        let preset_models = ctx
-            .router
-            .preset_models_for(&provider_id)
-            .unwrap_or_default();
+        let preset_models = router.preset_models_for(&provider_id).unwrap_or_default();
+        drop(router); // 提前释放锁——下面 SelectList::load 不需要 router
 
         let source = Arc::new(ModelListSource {
             provider_id,

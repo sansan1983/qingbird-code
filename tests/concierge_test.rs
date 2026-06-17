@@ -128,7 +128,15 @@ fn make_concierge() -> (Concierge, EventChannel) {
     let orch = Arc::new(Mutex::new(orch));
     let mem = make_memory();
     let profiles = make_profiles();
-    let c = Concierge::new(events.clone(), mem, profiles, orch, "developer".into());
+    let llm = make_test_router(); // v1.3.1 增量
+    let c = Concierge::new(
+        events.clone(),
+        mem,
+        profiles,
+        orch,
+        llm, // v1.3.1 增量
+        "developer".into(),
+    );
     (c, events)
 }
 
@@ -210,7 +218,7 @@ fn classify_default_is_task_dispatch() {
 #[tokio::test]
 async fn handle_input_default_routes_to_dispatch() {
     // v1.0 simplify: classify_intent 删了 Chat 路径，所有输入默认走 task dispatch
-    let (c, _events) = make_concierge();
+    let (mut c, _events) = make_concierge();
     let resp = c.handle_input("你好".into()).await;
     // 派发响应含 task id 或 "派发"/"dispatched" 字样
     assert!(
@@ -222,7 +230,7 @@ async fn handle_input_default_routes_to_dispatch() {
 
 #[tokio::test]
 async fn handle_skill_query_returns_placeholder() {
-    let (c, _events) = make_concierge();
+    let (mut c, _events) = make_concierge();
     let resp = c.handle_input("list skill".into()).await;
     assert!(
         resp.contains("v1.0"),
@@ -235,7 +243,7 @@ async fn handle_skill_query_returns_placeholder() {
 async fn handle_task_dispatch_does_not_block_on_execution() {
     // L0 短任务应走规则分解 → llm_reasoning 会尝试调 LLM（必然失败）。
     // 但 handle_input 必须在 tokio::spawn 后立即返回，不等执行完成。
-    let (c, _events) = make_concierge();
+    let (mut c, _events) = make_concierge();
 
     let start = std::time::Instant::now();
     let resp = tokio::time::timeout(
@@ -257,7 +265,7 @@ async fn handle_task_dispatch_does_not_block_on_execution() {
 #[tokio::test]
 async fn handle_task_dispatch_publishes_task_completed_or_failed_event() {
     // 派发后等子任务完成（成功或失败）→ 应收到 TaskCompleted 或 TaskFailed 事件
-    let (c, events) = make_concierge();
+    let (mut c, events) = make_concierge();
     let mut rx = events.subscribe();
 
     let _ = c.handle_input("readme".into()).await;
@@ -292,7 +300,7 @@ async fn concierge_profile_switch_updates_active_profile() {
     // v1.2 D3: handle_input 收到 ProfileSwitch 意图后，
     // 应当真把 active_profile 字符串从 default 切到 industry（不再只是发提示）
     // ——这是删 #[allow(dead_code)] 的先决条件
-    let (c, _events) = make_concierge();
+    let (mut c, _events) = make_concierge();
 
     // 初始 active profile
     assert_eq!(c.active_profile().await, "developer");
@@ -302,6 +310,43 @@ async fn concierge_profile_switch_updates_active_profile() {
     assert_eq!(c.active_profile().await, "writer");
     // 响应应包含新 profile 名（用户确认）
     assert!(resp.contains("writer"), "got: {resp}");
+}
+
+// ========== v1.3.1 T9: 斜杠命令分发 ==========
+
+#[tokio::test]
+async fn handle_input_slash_unknown_command_returns_error_key() {
+    // v1.3.1 T9: 未知斜杠命令走 dispatch_slash 的 None 分支 → 返回非空提示
+    // (具体文本由 T11 i18n 决定——v1.3.1 阶段 fallback 用 en-US)
+    let (mut c, _events) = make_concierge();
+    let resp = c.handle_input("/nonexistent".into()).await;
+    // 关键不变量：未知命令不 panic + 返回非空 + 含命令名
+    assert!(!resp.is_empty(), "未知命令应返回非空响应");
+    assert!(
+        resp.contains("nonexistent"),
+        "响应应包含命令名, got: {resp}"
+    );
+}
+
+#[tokio::test]
+async fn handle_input_slash_with_empty_registry_returns_unknown() {
+    // v1.3.1 T9: 未注册任何命令时,/xxx 都应返回错误——不 panic
+    let (mut c, _events) = make_concierge();
+    let resp = c.handle_input("/help".into()).await;
+    assert!(!resp.is_empty(), "空注册表下 /help 应返回非空错误");
+    assert!(resp.contains("help"), "响应应含命令名, got: {resp}");
+}
+
+#[tokio::test]
+async fn handle_input_non_slash_still_routes_to_dispatch() {
+    // v1.3.1 T9: 非 / 前缀输入仍走 v1.2 分类（不变更原行为）
+    let (mut c, _events) = make_concierge();
+    let resp = c.handle_input("读 README".into()).await;
+    // 派发响应
+    assert!(
+        resp.contains("派发") || resp.contains("dispatched"),
+        "非斜杠应走原派发路径, got: {resp}"
+    );
 }
 
 // ========== v1.2 D4: TaskDispatch 前 recall memory ==========
@@ -333,11 +378,12 @@ async fn concierge_recalls_memory_before_dispatching_task() {
             Importance::Normal,
         ))
         .expect("remember_smart");
-    let c = Concierge::new(
+    let mut c = Concierge::new(
         events.clone(),
         mem.clone(),
         profiles,
         orch,
+        make_test_router(), // v1.3.1 增量
         "developer".into(),
     );
 
