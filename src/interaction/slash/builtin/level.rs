@@ -39,3 +39,18 @@ impl SlashCommand for LevelCmd {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_args_validates_4_levels() {
+        let cmd = LevelCmd;
+        assert!(cmd.parse_args("simple").is_ok());
+        assert!(cmd.parse_args("standard").is_ok());
+        assert!(cmd.parse_args("advanced").is_ok());
+        assert!(cmd.parse_args("auto").is_ok());
+        assert!(cmd.parse_args("turbo").is_err());
+    }
+}

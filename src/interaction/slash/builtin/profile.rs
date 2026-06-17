@@ -30,3 +30,15 @@ impl SlashCommand for ProfileCmd {
         Ok(SlashOutput::Text(format!("已切换 profile 到 {}", name)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_args_requires_name() {
+        let cmd = ProfileCmd;
+        assert!(cmd.parse_args("").is_err());
+        assert!(cmd.parse_args("developer").is_ok());
+    }
+}

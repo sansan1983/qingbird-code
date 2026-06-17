@@ -73,3 +73,16 @@ impl SlashCommand for ModelCmd {
         Ok(SlashOutput::OpenSubView(Arc::new(list)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_name_and_help() {
+        // v1.3.1 简化：execute 需要 Concierge placeholder（复杂），T9 集成测试覆盖
+        let cmd = ModelCmd;
+        assert_eq!(cmd.name(), "model");
+        assert!(!cmd.help().is_empty());
+    }
+}

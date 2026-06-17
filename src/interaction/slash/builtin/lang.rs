@@ -34,3 +34,17 @@ impl SlashCommand for LangCmd {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_args_validates_locale() {
+        let cmd = LangCmd;
+        assert!(cmd.parse_args("zh-CN").is_ok());
+        assert!(cmd.parse_args("en-US").is_ok());
+        assert!(cmd.parse_args("fr-FR").is_err());
+        assert!(cmd.parse_args("").is_err());
+    }
+}

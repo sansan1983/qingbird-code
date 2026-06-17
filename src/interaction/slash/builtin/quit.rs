@@ -19,3 +19,15 @@ impl SlashCommand for QuitCmd {
         Ok(SlashOutput::Shutdown)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn quit_name_and_help() {
+        let cmd = QuitCmd;
+        assert_eq!(cmd.name(), "quit");
+        assert!(!cmd.help().is_empty());
+    }
+}
