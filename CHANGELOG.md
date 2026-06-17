@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (TUI 交互)
+
+- **TUI 交互层** (F1-F6): ratatui + crossterm 异步终端 UI，事件流实时刷新，prompt 异步输入（设计 §14.3）
+- **InteractionLayer trait** (F2): 核心层与交互层解耦，未来 GUI / Web 接入零侵入
+- **TUI 默认启动** (F6): 无参数启动进入 TUI；`--execute` / `--show-config` / `--list-profiles` 保留 CLI 直输出
+
 ### Added (并行派发)
 
 - **Orchestrator 真正并行派发** (E4): `compute_step_layers` 把 TaskPlan 按依赖分层，每层内步骤用 `FuturesUnordered` 并发执行（设计 §5.1）
