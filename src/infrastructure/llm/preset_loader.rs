@@ -176,4 +176,30 @@ default_model: b
         assert_eq!(result[0].display_name, "A"); // 排序后 a.yaml 先
         assert_eq!(result[0].base_url, "https://a.com");
     }
+
+    #[test]
+    fn load_all_filters_non_yaml_files() {
+        // v1.3 Task T25: 路径 glob 跨平台稳定性
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("deepseek.yaml"),
+            r#"
+id: deepseek
+display_name: DeepSeek
+protocol: openai_compatible
+base_url: https://api.deepseek.com
+api_key: "k"
+default_model: m
+"#,
+        )
+        .unwrap();
+        fs::write(dir.path().join("README.md"), "# not yaml").unwrap();
+        fs::write(dir.path().join("config.txt"), "not yaml").unwrap();
+        fs::create_dir(dir.path().join("subdir")).unwrap(); // 目录不是文件
+
+        let result = PresetLoader::load_all(dir.path()).unwrap();
+        // 只 yaml 文件被加载
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "deepseek");
+    }
 }
