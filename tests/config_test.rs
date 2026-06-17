@@ -11,13 +11,6 @@ core:
   language: zh-CN
   timezone: Asia/Shanghai
 llm:
-  providers:
-    anthropic:
-      api_key: test-key
-      default_model: claude-sonnet
-    openai:
-      api_key: test-key-2
-      default_model: gpt-4o
   routing:
     strong: anthropic
     medium: anthropic
@@ -52,6 +45,8 @@ fn test_missing_config_file() {
 
 #[test]
 fn test_env_var_expansion_in_config() {
+    // v1.3: env var expansion 在 expand_env_vars 阶段处理整段 yaml
+    // 这里验证 eflow.yaml 内任意字段（含 routing）都做 expansion。
     unsafe {
         std::env::set_var("EFLOW_TEST_KEY", "expanded-key-value");
     }
@@ -61,12 +56,8 @@ core:
   language: en
   timezone: UTC
 llm:
-  providers:
-    anthropic:
-      api_key: ${EFLOW_TEST_KEY}
-      default_model: claude-sonnet
   routing:
-    strong: anthropic
+    strong: ${EFLOW_TEST_KEY}
     medium: anthropic
     light: anthropic
   cache:
@@ -85,10 +76,8 @@ profiles:
 "#;
     tmp.write_all(yaml.as_bytes()).unwrap();
     let config = load_config(tmp.path()).unwrap();
-    assert_eq!(
-        config.llm.providers.anthropic.unwrap().api_key,
-        "expanded-key-value"
-    );
+    // v1.3: routing.strong 引用了 env var，应被 expand
+    assert_eq!(config.llm.routing.strong, "expanded-key-value");
     unsafe {
         std::env::remove_var("EFLOW_TEST_KEY");
     }
@@ -96,20 +85,13 @@ profiles:
 
 #[test]
 fn parses_llm_provider_timeout_and_retry() {
-    // v1.1 Task A1: 扩 LlmConfig 加 timeout_secs / max_retries / retry_backoff_ms
-    // + CacheConfig 加 l2_enabled / l2_ttl_days
+    // v1.3: timeout / retry 已迁到 ProviderConfig（per-provider YAML 字段）
+    // 这里只测 cache 字段仍在 LlmConfig 里。
     let yaml = r#"
 core:
   language: zh-CN
   timezone: Asia/Shanghai
 llm:
-  providers:
-    anthropic:
-      api_key: sk-test
-      default_model: claude-sonnet-4-6
-      timeout_secs: 45
-      max_retries: 5
-      retry_backoff_ms: 500
   routing:
     strong: anthropic
     medium: anthropic
@@ -132,10 +114,6 @@ profiles:
 "#;
     let cfg: eflow::infrastructure::config::EflowConfig =
         serde_yaml::from_str(yaml).expect("parse ok");
-    let anthro = cfg.llm.providers.anthropic.as_ref().unwrap();
-    assert_eq!(anthro.timeout_secs, 45);
-    assert_eq!(anthro.max_retries, 5);
-    assert_eq!(anthro.retry_backoff_ms, 500);
     assert!(cfg.llm.cache.l2_enabled);
     assert_eq!(cfg.llm.cache.l2_ttl_days, 7);
 }

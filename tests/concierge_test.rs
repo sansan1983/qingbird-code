@@ -10,7 +10,7 @@ use eflow::common::error::Result;
 use eflow::common::types::*;
 use eflow::infrastructure::config::{
     CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
-    ProviderEntry, ProvidersConfig, RoutingConfig, SecurityConfig,
+    RoutingConfig, SecurityConfig,
 };
 use eflow::infrastructure::event::{Event, EventChannel};
 use eflow::infrastructure::llm::LlmRouter;
@@ -30,16 +30,6 @@ fn make_test_config() -> EflowConfig {
             timezone: "UTC".into(),
         },
         llm: LlmConfig {
-            providers: ProvidersConfig {
-                anthropic: Some(ProviderEntry {
-                    api_key: "test-key".into(),
-                    default_model: "claude-test".into(),
-                    timeout_secs: 30,
-                    max_retries: 3,
-                    retry_backoff_ms: 1000,
-                }),
-                openai: None,
-            },
             routing: RoutingConfig {
                 strong: "anthropic".into(),
                 medium: "anthropic".into(),
@@ -77,7 +67,14 @@ fn make_test_router() -> Arc<Mutex<LlmRouter>> {
         std::env::remove_var("OPENAI_BASE_URL");
     }
     let cfg = make_test_config();
-    let router = LlmRouter::from_config(&cfg).expect("test router");
+    // v1.3: 把 provider 写到临时 dir（构造测试 provider 注入）
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("anthropic.yaml"),
+        "id: anthropic\ndisplay_name: Anthropic\nprotocol: anthropic_compatible\nbase_url: https://api.anthropic.com\napi_key: test-key\ndefault_model: claude-test\n",
+    )
+    .unwrap();
+    let router = LlmRouter::from_config(&cfg, dir.path()).expect("test router");
     Arc::new(Mutex::new(router))
 }
 

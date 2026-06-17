@@ -23,7 +23,7 @@ use eflow::common::error::Result;
 use eflow::common::types::*;
 use eflow::infrastructure::config::{
     CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
-    ProviderEntry, ProvidersConfig, RoutingConfig, SecurityConfig,
+    RoutingConfig, SecurityConfig,
 };
 use eflow::infrastructure::context::ContextCompressor;
 use eflow::infrastructure::event::{Event, EventChannel};
@@ -45,16 +45,6 @@ fn make_test_config() -> EflowConfig {
             timezone: "UTC".into(),
         },
         llm: LlmConfig {
-            providers: ProvidersConfig {
-                anthropic: Some(ProviderEntry {
-                    api_key: "test-key".into(),
-                    default_model: "claude-test".into(),
-                    timeout_secs: 30,
-                    max_retries: 3,
-                    retry_backoff_ms: 1000,
-                }),
-                openai: None,
-            },
             routing: RoutingConfig {
                 strong: "anthropic".into(),
                 medium: "anthropic".into(),
@@ -85,7 +75,14 @@ fn make_test_config() -> EflowConfig {
 
 fn make_test_router() -> Arc<Mutex<LlmRouter>> {
     let cfg = make_test_config();
-    let router = LlmRouter::from_config(&cfg).expect("test router");
+    // v1.3: 把 provider 写到临时 dir
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("anthropic.yaml"),
+        "id: anthropic\ndisplay_name: Anthropic\nprotocol: anthropic_compatible\nbase_url: https://api.anthropic.com\napi_key: test-key\ndefault_model: claude-test\n",
+    )
+    .unwrap();
+    let router = LlmRouter::from_config(&cfg, dir.path()).expect("test router");
     Arc::new(Mutex::new(router))
 }
 
@@ -414,7 +411,7 @@ async fn llm_router_handles_timeout_via_config() {
     // （plan 写了 `use std::path::PathBuf;` 没用上，clippy pedantic 必挂 → 已删）
     use eflow::infrastructure::config::{
         CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
-        ProviderEntry, ProvidersConfig, RoutingConfig, SecurityConfig,
+        RoutingConfig, SecurityConfig,
     };
     use eflow::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 
@@ -424,16 +421,6 @@ async fn llm_router_handles_timeout_via_config() {
             timezone: "Asia/Shanghai".into(),
         },
         llm: LlmConfig {
-            providers: ProvidersConfig {
-                anthropic: Some(ProviderEntry {
-                    api_key: "sk-test".into(),
-                    default_model: "claude-sonnet-4-6".into(),
-                    timeout_secs: 0, // 立即超时
-                    max_retries: 0,
-                    retry_backoff_ms: 0,
-                }),
-                openai: None,
-            },
             routing: RoutingConfig {
                 strong: "anthropic".into(),
                 medium: "anthropic".into(),
@@ -461,7 +448,14 @@ async fn llm_router_handles_timeout_via_config() {
         },
     };
 
-    let mut router = LlmRouter::from_config(&cfg).unwrap();
+    // v1.3: 临时 dir 提供 anthropic provider
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("anthropic.yaml"),
+        "id: anthropic\ndisplay_name: Anthropic\nprotocol: anthropic_compatible\nbase_url: https://api.anthropic.com\napi_key: sk-test\ndefault_model: claude-sonnet-4-6\n",
+    )
+    .unwrap();
+    let mut router = LlmRouter::from_config(&cfg, dir.path()).unwrap();
     let req = ChatRequest::new("", vec![Message::user("hi")]);
     let result = router.chat_with_retry(ModelTier::Light, req, 0, 0).await;
     assert!(result.is_err());
