@@ -22,37 +22,8 @@ pub struct CoreConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct LlmConfig {
-    pub providers: ProvidersConfig,
     pub routing: RoutingConfig,
     pub cache: CacheConfig,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ProvidersConfig {
-    pub anthropic: Option<ProviderEntry>,
-    pub openai: Option<ProviderEntry>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ProviderEntry {
-    pub api_key: String,
-    pub default_model: String,
-    #[serde(default = "default_timeout_secs")]
-    pub timeout_secs: u64,
-    #[serde(default = "default_max_retries")]
-    pub max_retries: u8,
-    #[serde(default = "default_retry_backoff_ms")]
-    pub retry_backoff_ms: u64,
-}
-
-fn default_timeout_secs() -> u64 {
-    30
-}
-fn default_max_retries() -> u8 {
-    3
-}
-fn default_retry_backoff_ms() -> u64 {
-    1000
 }
 
 #[derive(Debug, Clone, Deserialize)]
