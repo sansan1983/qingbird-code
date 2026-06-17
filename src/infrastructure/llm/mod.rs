@@ -1,6 +1,7 @@
 pub mod anthropic;
 pub mod cache;
 pub mod openai;
+pub mod preset_loader;
 pub mod router;
 pub mod types;
 
