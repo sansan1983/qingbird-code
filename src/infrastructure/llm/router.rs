@@ -328,9 +328,11 @@ impl LlmRouter {
     }
 }
 
-#[cfg(test)]
+/// v1.2 E6: 测试用——构造空 Router（unit + integration test 都可见，
+/// 集成测试在独立 crate 看不到 #[cfg(test)] impl，所以不 cfg）。
+/// **非测试代码不应调用**——用 `LlmRouter::from_config`。
+#[doc(hidden)]
 impl LlmRouter {
-    /// 测试用空 Router（v1.1 Task B6 — Feedbacker 单元测试用）
     #[must_use]
     pub fn placeholder() -> Self {
         Self {
@@ -339,6 +341,20 @@ impl LlmRouter {
             rate_limit_counters: HashMap::new(),
             l2_cache: None,
         }
+    }
+
+    /// v1.2 E6: 测试用——往 router 注入一个 provider。
+    /// **非测试代码不应调用**。
+    #[doc(hidden)]
+    pub fn inject_test_provider(&mut self, name: String, provider: Arc<dyn LlmProvider>) {
+        self.providers.insert(name, provider);
+    }
+
+    /// v1.2 E6: 测试用——设置 tier→provider 路由。
+    /// **非测试代码不应调用**。
+    #[doc(hidden)]
+    pub fn inject_test_routing(&mut self, tier: ModelTier, name: String) {
+        self.routing.insert(tier, name);
     }
 }
 
