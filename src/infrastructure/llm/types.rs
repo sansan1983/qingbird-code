@@ -151,6 +151,14 @@ pub trait LlmProvider: Send + Sync {
     /// Provider 名称
     fn name(&self) -> &str;
 
+    /// v1.3 候选：列出 provider 支持的模型
+    ///
+    /// 默认实现返回 `None`——表示"不支持自动拉取，调用方用 preset_models"。
+    /// Generic adapter override 这个方法做实际 HTTP GET。
+    fn list_models_endpoint(&self) -> Option<&str> {
+        None
+    }
+
     /// 重试参数 (max_retries, backoff_ms) — 供 Router 读取（fix v1.1 Task A3）
     /// 默认 (3, 1000)，具体 provider 可 override
     fn retry_params(&self) -> (u8, u64) {
