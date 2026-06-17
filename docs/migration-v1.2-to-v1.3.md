@@ -1,5 +1,7 @@
 # eflow v1.2 → v1.3 配置迁移指南
 
+> **背景**: 见 spec `2026-06-17-eflow-v1.3-llm-abstract-design.md` §10 ADR-0011（核心零预置）+ ADR-0012（配置破坏性变更）。
+
 v1.3 起 LLM provider **不**在 `eflow.yaml` 里配置，**改**用 `~/.eflow/providers/{name}.yaml` 独立文件管理。
 
 ## 破坏性变更
