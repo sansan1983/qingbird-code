@@ -1,0 +1,13 @@
+id: minimax
+display_name: "MiniMax"
+protocol: openai_compatible
+base_url: "https://api.minimaxi.com/v1"
+api_key: "${MINIMAX_API_KEY}"
+default_model: "MiniMax-M3"
+preset_models:
+  - "MiniMax-M3"
+  - "MiniMax-M2.7"
+  - "MiniMax-M2.5"
+  - "MiniMax-M2.1"
+  - "MiniMax-M2"
+list_models_endpoint: "/models"
