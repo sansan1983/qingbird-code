@@ -31,11 +31,19 @@ pub struct SubagentPool {
     tx: mpsc::Sender<PoolRequest>,
     /// 池中活跃 agent
     active: Arc<std::sync::Mutex<HashMap<Uuid, Subagent>>>,
+    /// v1.2 E5: idle 超时（None = 不超时，v1.1 行为兼容）
+    idle_timeout: Option<std::time::Duration>,
 }
 
 impl SubagentPool {
     /// 启动池（spawn N 个 worker task）
+    /// v1.2 E5: 默认 5 分钟 idle timeout（v1.1 行为保持"几乎不会自动清理"）
     pub fn start(worker_count: usize) -> Self {
+        Self::with_idle_timeout(worker_count, std::time::Duration::from_secs(300))
+    }
+
+    /// v1.2 E5: 显式指定 idle timeout 的池
+    pub fn with_idle_timeout(worker_count: usize, idle_timeout: std::time::Duration) -> Self {
         let (tx, rx) = mpsc::channel::<PoolRequest>(64);
         let active: Arc<std::sync::Mutex<HashMap<Uuid, Subagent>>> =
             Arc::new(std::sync::Mutex::new(HashMap::new()));
@@ -74,7 +82,11 @@ impl SubagentPool {
             });
         }
 
-        Self { tx, active }
+        Self {
+            tx,
+            active,
+            idle_timeout: Some(idle_timeout),
+        }
     }
 
     /// 派发一个新 agent
@@ -103,6 +115,26 @@ impl SubagentPool {
         self.active.lock().unwrap().len()
     }
 
+    /// v1.2 E2: 列出活跃 agent 的元数据 (id, name, role, capabilities)。
+    /// Orchestrator 用这个做 role-based 调度决策（v1.2 E4 并行派发用）。
+    /// ——返回 owned Vec 而非引用（避免 guard 跨 caller，借用期零问题）
+    #[must_use]
+    pub fn list_active(&self) -> Vec<(Uuid, String, Role, Vec<Capability>)> {
+        self.active
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(id, sa)| {
+                (
+                    *id,
+                    sa.name.clone(),
+                    sa.role.clone(),
+                    sa.capabilities.clone(),
+                )
+            })
+            .collect()
+    }
+
     /// 取出 agent 并返回句柄（drop 时自动归还）
     pub fn take_handle(&self, id: Uuid) -> Option<SubagentHandle> {
         let map = self.active.lock().unwrap();
@@ -121,13 +153,24 @@ impl SubagentPool {
         let _ = self.tx.send(PoolRequest::Shutdown).await;
     }
 
-    /// Idle cleanup — v1.1 简化：handle drop 时已自动归还
-    ///
-    /// v1.1 实现：返回 0（无超时机制，handle drop 即清理路径已覆盖）
-    /// v1.2 计划：加 timeout-based 清理，长时间空闲的 agent 主动回收
-    /// （设计 §13.3 idle cleanup 子节）
+    /// v1.2 E5: 扫活跃 map，移除 created_at + idle_timeout < now 的 agent。
+    /// 返回移除数量。idle_timeout = None 时不清理（v1.1 占位兼容）
     pub fn cleanup_idle(&self) -> usize {
-        0
+        let Some(timeout) = self.idle_timeout else {
+            return 0;
+        };
+        let now = std::time::SystemTime::now();
+        let mut map = match self.active.lock() {
+            Ok(g) => g,
+            Err(_) => return 0,
+        };
+        let before = map.len();
+        map.retain(|_, sa| {
+            now.duration_since(sa.created_at)
+                .map(|d| d < timeout)
+                .unwrap_or(true) // 时钟回退 → 保留
+        });
+        before - map.len()
     }
 }
 
@@ -141,6 +184,22 @@ impl SubagentHandle {
     #[must_use]
     pub fn id(&self) -> Uuid {
         self.id
+    }
+
+    /// v1.2 E1: 暴露 pool active map 的 guard，让 Orchestrator 拿到 agent 角色 /
+    /// 能力做调度决策。返回 guard (caller 借用到 &self)，caller 用法:
+    /// ```ignore
+    /// let map = h.subagent().expect("alive");
+    /// let sa = map.get(&h.id()).expect("present");
+    /// ```
+    /// std::sync::Mutex 的 guard 释放后 &Subagent 借用即失效 (E0515),
+    /// 所以返回 guard 让 caller 控制借用期。caller 不能跨 await 持有
+    /// (std mutex 不支持) —— Orchestrator 同步取角色 / 能力路径适用。
+    /// Drop 语义保护: handle 活着 → active map 还在; handle drop 时
+    /// map.remove(self.id) 才会发生。
+    #[must_use]
+    pub fn subagent(&self) -> Option<std::sync::MutexGuard<'_, HashMap<Uuid, Subagent>>> {
+        self.pool_active.lock().ok()
     }
 }
 
@@ -224,6 +283,82 @@ mod tests {
         // 验证：fresh pool 调用不 panic，返回 0
         let pool = SubagentPool::start(2);
         assert_eq!(pool.cleanup_idle(), 0);
+    }
+
+    // v1.2 E1: SubagentHandle.subagent() 暴露 pool active map 的 guard,
+    // 让 Orchestrator 拿到 agent 角色 / 能力做调度决策
+    #[tokio::test]
+    async fn handle_exposes_subagent_reference() {
+        use crate::common::types::Capability;
+        let pool = SubagentPool::start(2);
+        let id = pool
+            .dispatch(Role::CodeAssistant, vec![Capability::ReadFile])
+            .await
+            .unwrap();
+        let h = pool.take_handle(id).unwrap();
+        // subagent() 返回 guard; 通过 guard 取 entry
+        {
+            let map = h
+                .subagent()
+                .expect("handle should expose pool active map while alive");
+            let sa = map.get(&h.id()).expect("entry present while handle alive");
+            // 用 matches! 而非 assert_eq! —— Role 当前未 derive PartialEq (out of E1 scope)
+            assert!(matches!(sa.role, Role::CodeAssistant));
+            assert!(sa.capabilities.contains(&Capability::ReadFile));
+            // map (MutexGuard) 在这个 scope 结束处 drop —— 避免跨 await
+        }
+        drop(h);
+        // drop 后 active map 清空
+        assert_eq!(pool.active_count(), 0);
+        pool.shutdown().await;
+    }
+
+    // v1.2 E5: cleanup_idle 真实现（按 created_at + idle_timeout 移除）
+    // 验证：50ms timeout，等 100ms 后 cleanup 移除 1 个 agent
+    #[tokio::test]
+    async fn cleanup_idle_removes_agents_past_timeout() {
+        use crate::common::types::Capability;
+        use std::time::Duration;
+        let pool = SubagentPool::with_idle_timeout(2, Duration::from_millis(50));
+        let _ = pool
+            .dispatch(Role::Generalist, vec![Capability::ReadFile])
+            .await
+            .unwrap();
+        assert_eq!(pool.active_count(), 1);
+        // 等超过 idle timeout
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let removed = pool.cleanup_idle();
+        assert_eq!(removed, 1, "1 个 agent 超时应被清理");
+        assert_eq!(pool.active_count(), 0);
+        pool.shutdown().await;
+    }
+
+    // v1.2 E5: cleanup_idle 不会清理未超时的 agent
+    #[tokio::test]
+    async fn cleanup_idle_keeps_agents_within_timeout() {
+        use crate::common::types::Capability;
+        use std::time::Duration;
+        let pool = SubagentPool::with_idle_timeout(2, Duration::from_secs(300));
+        let _ = pool
+            .dispatch(Role::Generalist, vec![Capability::ReadFile])
+            .await
+            .unwrap();
+        assert_eq!(pool.active_count(), 1);
+        // 立即 cleanup，未超时
+        let removed = pool.cleanup_idle();
+        assert_eq!(removed, 0, "未超时应保留");
+        assert_eq!(pool.active_count(), 1);
+        pool.shutdown().await;
+    }
+
+    // v1.2 E5: 默认 start() pool 的 cleanup_idle 是 noop（v1.1 兼容）
+    #[tokio::test]
+    async fn cleanup_idle_default_pool_is_noop() {
+        let pool = SubagentPool::start(2);
+        let _ = pool.dispatch(Role::Generalist, vec![]).await.unwrap();
+        let removed = pool.cleanup_idle();
+        assert_eq!(removed, 0, "默认 pool 不应自动清理");
+        pool.shutdown().await;
     }
 }
 

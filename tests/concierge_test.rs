@@ -287,3 +287,76 @@ async fn handle_task_dispatch_publishes_task_completed_or_failed_event() {
         event
     );
 }
+
+// ========== v1.2 D3: ProfileSwitch 真切换 active_profile ==========
+
+#[tokio::test]
+async fn concierge_profile_switch_updates_active_profile() {
+    // v1.2 D3: handle_input 收到 ProfileSwitch 意图后，
+    // 应当真把 active_profile 字符串从 default 切到 industry（不再只是发提示）
+    // ——这是删 #[allow(dead_code)] 的先决条件
+    let (c, _events) = make_concierge();
+
+    // 初始 active profile
+    assert_eq!(c.active_profile().await, "developer");
+
+    // 切到 writer（classify_intent 规则：含"切换" + "profile" → parts.last() = industry）
+    let resp = c.handle_input("切换 profile writer".into()).await;
+    assert_eq!(c.active_profile().await, "writer");
+    // 响应应包含新 profile 名（用户确认）
+    assert!(resp.contains("writer"), "got: {resp}");
+}
+
+// ========== v1.2 D4: TaskDispatch 前 recall memory ==========
+
+#[tokio::test]
+async fn concierge_recalls_memory_before_dispatching_task() {
+    // v1.2 D4: handle_input 收到 TaskDispatch 后、tokio::spawn 派发前，
+    // 应当调 memory.recall_smart(keyword, 3) 拿前 32 字对应的历史记忆。
+    // 召回命中 → 响应走 concierge_task_dispatched_with_memory（"已派发任务 ... 召回 N 条..."）。
+    //
+    // 测试策略（v1.2 plan deviation: 计划测试用 load_profiles + 手搓 router + 占位
+    // LlmRouter，但 concierge_test.rs 已有 make_concierge helper；并且 plan 写的
+    // resp.contains("review") 断言不通过——D4 响应是中文 i18n 不含 "review" 字面）：
+    // - 复用 make_orchestrator + make_profiles + make_memory
+    // - 把 make_memory 的 Arc 多 clone 一份用于预置条目
+    // - 断言响应走 with_memory 分支（中文"召回"字面）
+    use eflow::infrastructure::memory::MemoryEntry;
+    let (orch, events) = make_orchestrator();
+    let orch = Arc::new(Mutex::new(orch));
+    let mem = make_memory();
+    let profiles = make_profiles();
+    // 预置一条含"review"关键词的记忆（spec description = "review src/main.rs"，
+    // 前 32 字符 = "review src/main.rs" 整串，recall_smart 会命中此条）
+    mem.lock()
+        .await
+        .remember_smart(MemoryEntry::new(
+            "上次 user 让 review src/main.rs".to_string(),
+            MemoryCategory::TaskResult,
+            Importance::Normal,
+        ))
+        .expect("remember_smart");
+    let c = Concierge::new(
+        events.clone(),
+        mem.clone(),
+        profiles,
+        orch,
+        "developer".into(),
+    );
+
+    // TaskDispatch：派发前 recall 历史
+    let resp = c.handle_input("review src/main.rs".into()).await;
+    // 响应应包含"召回 N 条"或"recalled N"（说明走了 with_memory 分支 → 证明 recall 命中）
+    // ——i18n 双 locale 都允许，concierge_test 顶层 i18n! 默认 en-US（fallback）
+    assert!(
+        resp.contains("召回") || resp.contains("recalled"),
+        "got: {resp}"
+    );
+    // 验证：再 recall 一次能拿回预置条目（说明 memory 状态完好，recall 路径没有破坏它）
+    let rec = mem
+        .lock()
+        .await
+        .recall_smart("review", 5)
+        .expect("recall_smart");
+    assert!(!rec.is_empty(), "recall 应能拿回预置条目");
+}

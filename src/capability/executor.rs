@@ -7,7 +7,7 @@ use crate::common::error::Result;
 use crate::common::types::{
     ActionRecord, ActionResult, IntentType, ModelTier, RiskLevel, TaskStep, ToolCallSummary,
 };
-use crate::infrastructure::llm::cache::{CacheKey, ContextProfile};
+use crate::infrastructure::llm::cache::cache_key_for_step;
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 use rust_i18n::t;
 
@@ -90,20 +90,10 @@ impl Executor {
         // （LLM 的工具自选不在 v1.0 范围）
         let request = ChatRequest::new("", messages).with_cache(0);
 
-        // v1.1 跨阶段 Task D4: 走 L2 cache
-        // 不含 retry_count：step.action 在 rework 时已被 subagent 追加建议
-        // （subagent.rs:91 改 action），key 自动变；同一 logical call 必 cache 命中
-        let key = CacheKey {
-            intent_type: IntentType::Chat,
-            task_signature: format!("execution:{}:{}:{}", step.action, step.tool, step.params),
-            context_profile: ContextProfile {
-                conversation_depth_bucket: 0,
-                file_count_bucket: 0,
-                risk_level: risk,
-                profile_name: "default".into(),
-            },
-            model: String::new(),
-        };
+        // v1.2 D1: 用 helper 替换内联 CacheKey 构造。retry_count 传 None——
+        // v1.1 注释说 step.action 在 rework 时已被 subagent 追加建议（subagent.rs:91），
+        // key 自动变；同一 logical call 必 cache 命中。
+        let key = cache_key_for_step(step, IntentType::Chat, risk, "default", None);
 
         let response = llm.chat_cached(model_tier, request, &key).await?;
 

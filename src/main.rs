@@ -19,7 +19,9 @@ use eflow::infrastructure::llm::LlmRouter;
 use eflow::infrastructure::locale;
 use eflow::infrastructure::memory::CompositeMemory;
 use eflow::infrastructure::profile::ProfileRegistry;
+use eflow::interaction::InteractionLayer;
 use eflow::interaction::cli::Cli;
+use eflow::interaction::tui::TuiBackend;
 use rust_i18n::t;
 
 #[tokio::main]
@@ -116,6 +118,7 @@ async fn main() {
         orchestrator.clone(),
         cfg.profiles.default.clone(),
     );
+    let concierge = std::sync::Arc::new(tokio::sync::Mutex::new(concierge));
 
     // 显示配置
     if cli.show_config {
@@ -138,7 +141,7 @@ async fn main() {
     if let Some(task) = cli.execute {
         // subscribe 必须早于 handle_input，否则 race：超快 LLM 响应可能在 subscribe 之前 fire
         let mut rx = events.subscribe();
-        let ack = concierge.handle_input(task).await;
+        let ack = concierge.lock().await.handle_input(task).await;
         println!("{ack}");
 
         // 等 TaskCompleted / TaskFailed，60s timeout 防挂死
@@ -165,82 +168,18 @@ async fn main() {
         return;
     }
 
-    // 交互模式
+    // 交互模式（TUI — 设计 §14.3）
+    // v1.2 F6: 默认走 TUI，--execute / --show-config / --list-profiles 保留 CLI 直输出
     println!("{}", t!("cli_interactive_banner"));
 
-    // 后台监听事件
-    let event_rx = events.clone();
-    tokio::spawn(async move {
-        let mut rx = event_rx.subscribe();
-        loop {
-            match rx.recv().await {
-                Ok(
-                    event @ (Event::TaskCompleted { .. }
-                    | Event::TaskFailed { .. }
-                    | Event::RiskEscalated { .. }),
-                ) => print_event(&event),
-                Ok(Event::SystemShutdown) => break,
-                _ => {}
-            }
-        }
-    });
-
-    loop {
-        // v1.0: 行输入模式（v1.2 升级为 TUI）
-        let mut input = String::new();
-        match std::io::stdin().read_line(&mut input) {
-            Ok(0) => break, // EOF
-            Ok(_) => {
-                let input = input.trim().to_string();
-                if input.is_empty() {
-                    continue;
-                }
-                if input == "quit" || input == "exit" {
-                    break;
-                }
-
-                let response = concierge.handle_input(input).await;
-                println!("> {response}");
-            }
-            Err(e) => {
-                eprintln!("Input error: {e}");
-                break;
-            }
-        }
-    }
+    // TUI 模式：先在 async 上下文填好 profile + cache stats（F3 with_initial）
+    // —— TuiBackend::run 是 sync，profile/cache_hit_rate 必须在 run() 前准备好
+    let initial_profile = concierge.lock().await.active_profile().await;
+    let initial_cache_hit_rate = "0/0".to_string(); // v1.2 占位：v1.3 接 L2 cache stats
+    let tui = TuiBackend::with_initial(initial_profile, initial_cache_hit_rate);
+    tui.run(concierge.clone(), events.clone());
 
     // v1.1 M10.5 Task C6: 优雅关闭 SubagentPool（worker 退出）
     pool.shutdown().await;
     events.publish(Event::SystemShutdown);
-}
-
-/// 打印 CLI 事件（统一前缀处理，v1.0.3 R3 抽离）
-fn print_event(event: &Event) {
-    let line = match event {
-        Event::TaskCompleted { task_id, summary } => format!(
-            "{} [{}]: {}",
-            t!("cli_task_completed"),
-            short_id(task_id),
-            summary.chars().take(200).collect::<String>()
-        ),
-        Event::TaskFailed { task_id, error } => format!(
-            "{} [{}]: {}",
-            t!("cli_task_failed"),
-            short_id(task_id),
-            error
-        ),
-        Event::RiskEscalated { task_id, from, to } => format!(
-            "{} [{}]: {:?}→{:?}",
-            t!("cli_risk_escalated"),
-            short_id(task_id),
-            from,
-            to
-        ),
-        _ => return,
-    };
-    println!("\n{line}");
-}
-
-fn short_id(task_id: &uuid::Uuid) -> String {
-    task_id.to_string().chars().take(8).collect()
 }

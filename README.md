@@ -90,8 +90,8 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 ### 架构
 
 ```
-交互层       →  CLI (v1.2 → TUI)
-编排层       →  Concierge (零阻塞) → Orchestrator (分解+调度)
+交互层       →  TUI (ratatui, v1.2) + CLI (--execute 单次模式)
+编排层       →  Concierge (零阻塞) → Orchestrator (分解+调度, v1.2 按层并行)
 能力层       →  Decisioner → Executor → Feedbacker (管线段)
 基础设施层   →  LLM / Memory / Context / Event / Profile / Tools
 ```
@@ -104,6 +104,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 |--------|------|
 | v1.0 内核 | ✅ 已发布（端到端可运行骨架） |
 | v1.1 L2 缓存 + 多 Subagent 池 | ✅ 已发布（M4.5 + M8 + M10.5） |
+| v1.2 债务清理 + 并行派发 + TUI | ✅ 已发布（D1-D4 + E1-E6 + F1-F6） |
 
 ### 文档
 

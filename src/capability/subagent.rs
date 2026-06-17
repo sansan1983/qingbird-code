@@ -15,6 +15,8 @@ pub struct Subagent {
     pub role: Role,
     pub capabilities: Vec<Capability>,
     pub permission: PermissionSet,
+    /// v1.2 E5: idle cleanup 用（pool.rs cleanup_idle 扫超时）
+    pub created_at: std::time::SystemTime,
 }
 
 impl Subagent {
@@ -38,6 +40,7 @@ impl Subagent {
             role,
             capabilities,
             permission,
+            created_at: std::time::SystemTime::now(),
         }
     }
 
