@@ -10,16 +10,16 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **v1.3 设计阶段收尾完成**：4 个 spec 文档全部 git commit（spec A / B1 / B2 / C）。4 commits ahead of origin/main。下一步：v1.3 实施计划生成（writing-plans 阶段，3 个小版本 v1.3.0 / v1.3.1 / v1.3.2） |
-| **上次完成** | v1.3 design 收尾（spec A + B1 + B2 + C 共 4 篇设计文档，3294 行，4 个 spec 自审循环）。4 个 commit：98272d8 (A) / a0e8975 (B1) / 54da9e8 (B2) / d88de3b (C，含 B1 偏差标注）。spec B1 文档加"已知偏差"标注（WizardStep/SelectList/TuiBackend 渲染违反"零硬编码"原则，留给 v1.4 spec D 重构） |
-| **下次动作** | 等用户决定：(a) **开始 writing-plans**（3 个 plan：A → B1 → B2+C 并行）；(b) **开 PR 把 v1.3 design 合回 main 后再开 plan**；(c) **直接进入实施**（跳 plan 阶段，直接进 v1.3.0 = spec A） |
+| **当前任务** | **v1.3 writing-plans 阶段收官完成**：4 个实施 plan 全部 git commit（spec A / B1 / B2 / C）。writing-plans 阶段已结束，**待用户决定下一步**：(a) **开始实施 v1.3.0**（按 spec A 计划 26 tasks 派 subagent 实施）；(b) **开 PR 把 7 个 spec/plan commits 合回 main**；(c) **暂停 v1.3，先做 v1.4 spec D 头脑风暴**（spec B1 已知偏差的渲染引擎 + TUI 重构，8-10 tasks） |
+| **上次完成** | v1.3 writing-plans 阶段：4 个 spec（spec A 98272d8 / B1 a0e8975 / B2 54da9e8 / C d88de3b） + 4 个 plan（5a7dfef / 54a5515 / 4fba0a9 / 31713b2）。每个 plan 3135/3612/2141/1478 行，task 26/12/12/9 = 总 59 tasks。v1.3 总文档 4 spec (3294 行) + 4 plan (10,366 行) = 13,660 行 |
+| **下次动作** | 等用户决定：(a) **开始 v1.3.0 实施**（spec A 计划 26 tasks 派 subagent 实施，跑 subagent-driven-development）；(b) **开 PR 把 v1.3 design 9 个 commits 合回 main**（4 spec + 4 plan + 1 CLAUDE.md 状态表）；(c) **先做 v1.4 spec D 头脑风暴**（spec B1 §12 已知偏差的渲染引擎 + TUI 重构候选，8-10 tasks） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
-| 2026-06-17 | v1.3 design 收尾 | 4 个 spec：A（LLM 抽象扩展 21-27 tasks） / B1（向导+斜杠命令 12 tasks）/ B2（CLI 契约 13 tasks）/ C（3 档工作流 7-8 tasks）。总 53-60 tasks，分 v1.3.0 / v1.3.1 / v1.3.2 三个小版本。4 commits 推 main，4 门禁待 plan 实施后跑 |
-| 2026-06-17 | v1.3 spec B1 + B2 头脑风暴 | spec B1 选 B 方案（trait + 内部注册表）；spec B2 选 A 方案（TUI 默认 + subcommand 可选 headless）+ 重要设计哲学"渲染核心引擎零硬编码"（spec B1 已知偏差标注 + spec D 候选 v1.4 实施） |
+| 2026-06-17 | v1.3 writing-plans 收官 | 4 个 plan：spec A（5a7dfef 3135 行 / 26 tasks）/ B1（54a5515 3612 行 / 12 tasks）/ B2（4fba0a9 2141 行 / 12 tasks）/ C（31713b2 1478 行 / 9 tasks）。总 59 tasks 分 4 个小版本发布 v1.3.0/1.3.1/1.3.2/1.3.3。每个 plan 3 项自审（spec coverage / placeholder / type consistency）全过 |
+| 2026-06-17 | v1.3 design 收尾 | 4 个 spec：A（LLM 抽象扩展 21-27 tasks） / B1（向导+斜杠命令 12 tasks）/ B2（CLI 契约 13 tasks）/ C（3 档工作流 7-8 tasks）。总 53-60 tasks，分 3 个小版本 v1.3.0 / v1.3.1 / v1.3.2。3 commits 推 main，4 门禁待 plan 实施后跑 |
 | 2026-06-17 | v1.2 收尾完成 | 见 WORKLOG.md 归档 |
 
 ## △ 收工仪式（每次结束前执行）
@@ -111,6 +111,10 @@
 | `docs/superpowers/specs/2026-06-17-eflow-v1.3-b1-wizard-slash-design.md` | v1.3 spec B1 — 向导 + 斜杠命令（12 tasks） |
 | `docs/superpowers/specs/2026-06-17-eflow-v1.3-b2-cli-contract-design.md` | v1.3 spec B2 — CLI 契约（13 tasks） |
 | `docs/superpowers/specs/2026-06-17-eflow-v1.3-c-workflow-levels-design.md` | v1.3 spec C — 3 档工作流（7-8 tasks） |
+| `docs/superpowers/plans/2026-06-17-eflow-v1.3.0-llm-abstract-plan.md` | v1.3.0 实施计划（spec A 实施，26 tasks / 7 milestones） |
+| `docs/superpowers/plans/2026-06-17-eflow-v1.3.1-wizard-slash-plan.md` | v1.3.1 实施计划（spec B1 实施，12 tasks / 6 milestones） |
+| `docs/superpowers/plans/2026-06-17-eflow-v1.3.2-cli-contract-plan.md` | v1.3.2 实施计划（spec B2 实施，12 tasks / 8 milestones） |
+| `docs/superpowers/plans/2026-06-17-eflow-v1.3.3-workflow-levels-plan.md` | v1.3.3 实施计划（spec C 实施，9 tasks / 5 milestones） |
 | `docs/superpowers/plans/2026-06-17-eflow-v1.2-implementation-plan.md` | v1.2 实现计划（已收尾：D1-D4 + E1-E6 + F1-F6 全完成） |
 | `docs/superpowers/plans/2026-06-15-eflow-v1.1-implementation-plan.md` | v1.1 实现计划（已收尾，归档：M4.5 + M8 + M10.5 + 跨阶段 D1-D4） |
 | `docs/superpowers/plans/2026-06-15-eflow-v1.0-implementation-plan.md` | v1.0 实现计划（已收尾，归档） |
