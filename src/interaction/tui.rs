@@ -33,12 +33,21 @@ use crate::infrastructure::event::{Event, EventChannel};
 ///
 /// v1.2 F3: `profile` / `cache_hit_rate` 需要明确初值（不能随便 ""），所以不 derive Default，
 /// 改用 `initial()` 显式构造。`std::sync::Mutex`（不是 tokio）因为 event loop 是 sync。
+///
+/// v1.3.1 增量：
+/// - `configured`: router 非空 = true；false 时 header 显 ⚠ 警告
+/// - `wizard_active`: 向导运行时为 true（v1.3.1 阶段 TUI 不实装 wizard，保留字段待 v1.3.2）
 struct TuiState {
     messages: Vec<String>,
     status: String,
     prompt_buffer: String,
     profile: String,
     cache_hit_rate: String,
+    /// v1.3.1 增量：是否已配置 LLM provider
+    configured: bool,
+    /// v1.3.1 增量：向导是否在运行（v1.3.1 阶段保留字段，渲染层暂不消费）
+    #[allow(dead_code)]
+    wizard_active: bool,
 }
 
 impl TuiState {
@@ -50,6 +59,8 @@ impl TuiState {
             prompt_buffer: String::new(),
             profile: String::new(), // run() 启动时同步 block_on 填充
             cache_hit_rate: "n/a".into(),
+            configured: true, // 由 main.rs 启动时覆盖
+            wizard_active: false,
         }
     }
 }
@@ -76,6 +87,16 @@ fn handle_input_key(state: &mut TuiState, code: KeyCode) -> Option<String> {
                 None
             }
         }
+        // v1.3.1 增量：Up/Down 键在 TUI 主循环里更新 status。
+        // 完整 SelectList widget 集成（让 Up/Down 真做选择）留 v1.3.2 spec B 实施。
+        KeyCode::Up => {
+            state.status = "↑".into();
+            None
+        }
+        KeyCode::Down => {
+            state.status = "↓".into();
+            None
+        }
         _ => None,
     }
 }
@@ -86,6 +107,8 @@ pub struct TuiBackend {
     /// v1.2 F3 补充：F6 main.rs 在 async 上下文填好后注入
     initial_profile: String,
     initial_cache_hit_rate: String,
+    /// v1.3.1 增量：是否已配置 LLM provider（false 时 header 显 ⚠ 警告）
+    initial_configured: bool,
 }
 
 impl TuiBackend {
@@ -95,6 +118,7 @@ impl TuiBackend {
             tick_rate: Duration::from_millis(250),
             initial_profile: String::new(),
             initial_cache_hit_rate: "n/a".into(),
+            initial_configured: true, // v1.3.1 增量：默认已配置（v1.2 行为）
         }
     }
 
@@ -106,6 +130,19 @@ impl TuiBackend {
             tick_rate: Duration::from_millis(250),
             initial_profile: profile,
             initial_cache_hit_rate: cache_hit_rate,
+            initial_configured: true, // v1.3.1 增量：with_initial 假设已配置
+        }
+    }
+
+    /// v1.3.1 增量：bare TUI 模式——未配置 LLM provider 时启动。
+    /// header 显 "⚠ 未配置 LLM provider" 警告。
+    #[must_use]
+    pub fn with_bare_mode() -> Self {
+        Self {
+            tick_rate: Duration::from_millis(250),
+            initial_profile: String::new(),
+            initial_cache_hit_rate: "n/a".into(),
+            initial_configured: false,
         }
     }
 
@@ -122,7 +159,8 @@ impl TuiBackend {
             .split(f.area());
 
         // Header
-        let header = Paragraph::new(Line::from(vec![
+        // v1.3.1 增量：未配置时末尾追加红色 "⚠ 未配置 LLM provider" 警告 Span
+        let mut header_spans = vec![
             Span::raw("eflow | "),
             Span::styled(
                 format!("profile: {}", state.profile),
@@ -133,7 +171,15 @@ impl TuiBackend {
                 format!("L2 cache: {}", state.cache_hit_rate),
                 Style::default().fg(Color::Yellow),
             ),
-        ]));
+        ];
+        if !state.configured {
+            header_spans.push(Span::raw(" | "));
+            header_spans.push(Span::styled(
+                "⚠ 未配置 LLM provider",
+                Style::default().fg(Color::Red),
+            ));
+        }
+        let header = Paragraph::new(Line::from(header_spans));
         f.render_widget(header, chunks[0]);
 
         // Messages
@@ -182,6 +228,7 @@ impl InteractionLayer for TuiBackend {
         let mut initial = TuiState::initial();
         initial.profile = self.initial_profile.clone();
         initial.cache_hit_rate = self.initial_cache_hit_rate.clone();
+        initial.configured = self.initial_configured; // v1.3.1 增量
         let state = std::sync::Arc::new(std::sync::Mutex::new(initial));
 
         // task 事件 channel
@@ -370,5 +417,58 @@ mod tests {
         let cmd = handle_input_key(&mut state, KeyCode::Enter);
         assert_eq!(cmd, Some("review main.rs".into()));
         assert!(state.prompt_buffer.is_empty());
+    }
+
+    // ========== v1.3.1 T8: 焦点感知 + Up/Down 键 + bare 模式 ==========
+
+    #[test]
+    fn tui_state_initial_has_configured_true_wizard_false() {
+        let s = TuiState::initial();
+        assert!(s.configured, "默认已配置（v1.2 行为）");
+        assert!(!s.wizard_active, "默认未运行向导");
+    }
+
+    #[test]
+    fn input_handler_up_sets_status_arrow_up() {
+        let mut state = TuiState::initial();
+        state.messages.clear();
+        let cmd = handle_input_key(&mut state, KeyCode::Up);
+        assert_eq!(cmd, None, "Up 键不提交命令");
+        assert_eq!(state.status, "↑");
+    }
+
+    #[test]
+    fn input_handler_down_sets_status_arrow_down() {
+        let mut state = TuiState::initial();
+        state.messages.clear();
+        let cmd = handle_input_key(&mut state, KeyCode::Down);
+        assert_eq!(cmd, None, "Down 键不提交命令");
+        assert_eq!(state.status, "↓");
+    }
+
+    #[test]
+    fn tui_backend_with_bare_mode_sets_initial_configured_false() {
+        let backend = TuiBackend::with_bare_mode();
+        assert!(!backend.initial_configured, "bare 模式：未配置");
+    }
+
+    #[test]
+    fn tui_backend_new_defaults_to_configured_true() {
+        let backend = TuiBackend::new();
+        assert!(backend.initial_configured, "默认已配置（v1.2 兼容）");
+    }
+
+    #[test]
+    fn render_with_bare_mode_does_not_panic() {
+        // v1.3.1 T8: 验证 render 在 configured=false 时不 panic
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        let mut state = TuiState::initial();
+        state.configured = false; // bare 模式
+        terminal
+            .draw(|f| {
+                TuiBackend::render(&state, f);
+            })
+            .unwrap();
     }
 }
