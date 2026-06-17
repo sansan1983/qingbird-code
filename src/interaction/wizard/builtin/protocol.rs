@@ -60,3 +60,36 @@ impl WizardStep for ProtocolStep {
         Some(Arc::new(super::apikey::ApikeyStep))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infrastructure::llm::types::ProtocolKind;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn skip_protocol_step_returns_next_immediately() {
+        let step = ProtocolStep;
+        let mut state = WizardState {
+            skip_protocol_step: true,
+            ..WizardState::default()
+        };
+        // 任何 key 都应返回 Next
+        let key = KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE);
+        let action = step.on_key(key, &mut state);
+        assert!(matches!(action, StepAction::Next));
+    }
+
+    #[test]
+    fn char_1_sets_openai_compatible() {
+        let step = ProtocolStep;
+        let mut state = WizardState::default();
+        let key = KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE);
+        let action = step.on_key(key, &mut state);
+        assert!(matches!(action, StepAction::Next));
+        assert!(matches!(
+            state.provider_protocol,
+            Some(ProtocolKind::OpenaiCompatible)
+        ));
+    }
+}

@@ -57,3 +57,25 @@ impl WizardStep for ApikeyStep {
         Some(Arc::new(super::model::ModelStep))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_complete_false_when_no_key() {
+        let step = ApikeyStep;
+        let state = WizardState::default();
+        assert!(!step.is_complete(&state));
+    }
+
+    #[test]
+    fn is_complete_true_when_key_set() {
+        let step = ApikeyStep;
+        let state = WizardState {
+            provider_api_key: Some("sk-test".into()),
+            ..WizardState::default()
+        };
+        assert!(step.is_complete(&state));
+    }
+}

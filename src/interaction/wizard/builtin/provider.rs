@@ -82,3 +82,31 @@ impl WizardStep for ProviderStep {
         Some(Arc::new(super::protocol::ProtocolStep))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn char_1_selects_deepseek_and_skips_protocol() {
+        let step = ProviderStep;
+        let mut state = WizardState::default();
+        let key = KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE);
+        let action = step.on_key(key, &mut state);
+        assert!(matches!(action, StepAction::Next));
+        assert_eq!(state.provider_id.as_deref(), Some("deepseek"));
+        assert!(state.skip_protocol_step);
+    }
+
+    #[test]
+    fn char_5_selects_custom_and_does_not_skip_protocol() {
+        let step = ProviderStep;
+        let mut state = WizardState::default();
+        let key = KeyEvent::new(KeyCode::Char('5'), KeyModifiers::NONE);
+        let action = step.on_key(key, &mut state);
+        assert!(matches!(action, StepAction::Next));
+        assert_eq!(state.provider_id.as_deref(), Some("custom"));
+        assert!(!state.skip_protocol_step);
+    }
+}

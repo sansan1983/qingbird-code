@@ -54,3 +54,26 @@ impl WizardStep for WelcomeStep {
         Some(Arc::new(super::language::LanguageStep))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn id_and_title_not_empty() {
+        let step = WelcomeStep;
+        assert_eq!(step.id(), "welcome");
+        assert!(!step.title().is_empty());
+    }
+
+    #[test]
+    fn enter_returns_next_esc_returns_cancel() {
+        let step = WelcomeStep;
+        let mut state = WizardState::default();
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        assert!(matches!(step.on_key(enter, &mut state), StepAction::Next));
+        assert!(matches!(step.on_key(esc, &mut state), StepAction::Cancel));
+    }
+}

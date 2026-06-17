@@ -75,3 +75,25 @@ impl WizardStep for ModelStep {
         Some(Arc::new(super::confirm::ConfirmStep))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_complete_false_when_no_model() {
+        let step = ModelStep;
+        let state = WizardState::default();
+        assert!(!step.is_complete(&state));
+    }
+
+    #[test]
+    fn is_complete_true_when_model_set() {
+        let step = ModelStep;
+        let state = WizardState {
+            default_model: Some("gpt-4o".into()),
+            ..WizardState::default()
+        };
+        assert!(step.is_complete(&state));
+    }
+}

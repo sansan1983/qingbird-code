@@ -142,3 +142,26 @@ fn atomic_write(path: &std::path::Path, content: &str) -> Result<()> {
     std::fs::rename(&tmp, path).map_err(EflowError::Io)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn id_and_title_not_empty() {
+        let step = ConfirmStep;
+        assert_eq!(step.id(), "confirm");
+        assert!(!step.title().is_empty());
+    }
+
+    #[test]
+    fn enter_returns_next_esc_returns_cancel() {
+        let step = ConfirmStep;
+        let mut state = WizardState::default();
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        assert!(matches!(step.on_key(enter, &mut state), StepAction::Next));
+        assert!(matches!(step.on_key(esc, &mut state), StepAction::Cancel));
+    }
+}

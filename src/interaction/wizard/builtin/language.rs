@@ -53,3 +53,28 @@ impl WizardStep for LanguageStep {
         Some(Arc::new(super::provider::ProviderStep))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn char_1_sets_zh_cn() {
+        let step = LanguageStep;
+        let mut state = WizardState::default();
+        let key = KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE);
+        step.on_key(key, &mut state);
+        assert_eq!(state.config.core.language, "zh-CN");
+    }
+
+    #[test]
+    fn char_2_sets_en_us() {
+        let step = LanguageStep;
+        let mut state = WizardState::default();
+        let key = KeyEvent::new(KeyCode::Char('2'), KeyModifiers::NONE);
+        let action = step.on_key(key, &mut state);
+        assert!(matches!(action, StepAction::Next));
+        assert_eq!(state.config.core.language, "en-US");
+    }
+}
