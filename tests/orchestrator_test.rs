@@ -314,3 +314,31 @@ fn orchestrator_compute_step_layers_groups_by_dependency() {
     assert_eq!(layers[1], vec![2, 3]);
     assert_eq!(layers[2], vec![4]);
 }
+
+// ========== v1.2 E4: 步骤按层并行派发 ==========
+// plan §E4 step 1 标注 E4 的"真"测试在 E6（pool_test 集成测试），
+// 此处只保留一个轻量 witness 防止 Orchestrator::compute_step_layers 被改签名。
+// 验证：函数指针 + 单 step 计划（1 步走 1 层）→ 1 层含 1 步骤。
+
+#[test]
+fn orchestrator_parallel_dispatch_witness_single_layer() {
+    use eflow::application::orchestrator::Orchestrator;
+    use eflow::common::types::{PlannedStep, TaskPlan};
+    use uuid::Uuid;
+
+    let plan = TaskPlan {
+        task_id: Uuid::new_v4(),
+        steps: vec![PlannedStep {
+            order: 0,
+            action: "only".into(),
+            tool: "llm".into(),
+            params: serde_json::json!({}),
+            depends_on: None,
+        }],
+        estimated_steps: 1,
+        risk_level: RiskLevel::L0,
+    };
+    let layers = Orchestrator::compute_step_layers(&plan);
+    assert_eq!(layers.len(), 1, "单步计划应只产生 1 层");
+    assert_eq!(layers[0], vec![0], "该层只含 order=0 这一步");
+}

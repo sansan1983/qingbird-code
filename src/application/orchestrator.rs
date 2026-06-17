@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use futures_util::stream::{FuturesUnordered, StreamExt};
+
 use crate::capability::blackboard::Blackboard;
 use crate::capability::decisioner::Decisioner;
 use crate::capability::executor::Executor;
@@ -147,12 +149,9 @@ impl Orchestrator {
         let layers = Self::compute_step_layers(&plan);
         let bb = Blackboard::new(task).with_plan(plan);
 
-        // 2. 构建管线段组件
-        let decisioner = Decisioner::new(self.llm.clone());
-        let executor = Executor::new(self.llm.clone(), self.tools.clone());
-        let feedbacker = Feedbacker::new(self.llm.clone());
-
-        // 3. 构建依赖分层（v1.2: 用于并行派发；v1.1: 统计 + tracing）
+        // 2. 管线段组件（D/E/F）在按层派发时按 step 独立构造，
+        //    v1.2 E4 不再在 execute 入口共享（每个 future 各自 clone llm/tools）
+        // 3. 构建依赖分层（v1.2 E4: 实际用于并行派发；v1.1: 仅 tracing）
         // v1.2 E3: 调用 compute_step_layers 独立方法（行为不变，纯 refactor）
         let max_layer = layers.len().saturating_sub(1);
         tracing::debug!(
@@ -162,46 +161,102 @@ impl Orchestrator {
             max_layer + 1
         );
 
-        // 4. 逐步执行（v1.1 串行；v1.2 改用 layer 并行）
-        let mut bb = bb;
-        let agent = Subagent::new(
-            "default".into(),
-            Role::Generalist,
-            vec![
-                Capability::ReadFile,
-                Capability::WriteFile,
-                Capability::LlmReasoning,
-            ],
-        );
-
-        for planned_step in &planned_steps {
-            let step = TaskStep {
-                action: planned_step.action.clone(),
-                tool: planned_step.tool.clone(),
-                params: planned_step.params.clone(),
-                expected_output: None,
-            };
-            bb = bb.with_step(step);
-
-            tracing::info!(
-                "task {}: executing step '{}' (tool={})",
+        // 4. 按层并行执行（v1.2 E4）
+        // v1.1 串行 for-loop 升级为 FuturesUnordered：每层内的步骤并发派发，
+        // 层间串行（保证依赖顺序）。每层所有 future 完成后再启下一层。
+        //
+        // 注：v1.1 `step_to_layer` 仅做 tracing，v1.2 升级为真正并行派发。
+        // plan §E4 step 3 的 `bb.plan.clone().expect(...)` 路径：plan 在 E3
+        // 之前写的，没有 `compute_step_layers` 复用入口；E3 后我已经在
+        // 第 147 行算过 `layers`，直接复用即可。
+        let pool_ref = self.pool.clone();
+        let mut step_results: std::collections::HashMap<u8, Blackboard> =
+            std::collections::HashMap::new();
+        for (layer_idx, layer) in layers.iter().enumerate() {
+            tracing::debug!(
+                "task {}: dispatching layer {} ({} step(s))",
                 task_id,
-                planned_step.action,
-                planned_step.tool
+                layer_idx,
+                layer.len()
             );
+            let mut layer_futures = FuturesUnordered::new();
+            for &order in layer {
+                let step = TaskStep {
+                    action: planned_steps[order as usize].action.clone(),
+                    tool: planned_steps[order as usize].tool.clone(),
+                    params: planned_steps[order as usize].params.clone(),
+                    expected_output: None,
+                };
 
-            // v1.1 池路径：dispatch + take_handle 拿 agent 句柄（drop 即归还）。
-            // SubagentHandle 不暴露 Subagent 引用，v1.2 重构后才走纯 pool 执行。
-            if let Some(pool) = &self.pool
-                && let Ok(id) = pool.dispatch_for_role(Role::Generalist).await
-            {
-                let _h = pool.take_handle(id);
+                tracing::info!(
+                    "task {}: executing step '{}' (tool={})",
+                    task_id,
+                    step.action,
+                    step.tool
+                );
+
+                // v1.1 池路径：dispatch + take_handle 拿 agent 句柄（drop 即归还）
+                // —— 与 E1 deviation 一致：subagent() 拿的是 guard（不能跨 await），
+                // 所以 E4 不通过 handle 拿 agent 引用，handle 仅用于占位（让
+                // active map 不被提前清空）。真正的执行 agent 是 closure 内
+                // 新建的 `Subagent`（plan §E4 称之为"退化单 agent"路径）。
+                if let Some(pool) = &pool_ref
+                    && let Ok(id) = pool.dispatch_for_role(Role::Generalist).await
+                {
+                    let _h = pool.take_handle(id);
+                }
+
+                let agent = Subagent::new(
+                    format!("layer{}-step{}", layer_idx, order),
+                    Role::Generalist,
+                    vec![
+                        Capability::ReadFile,
+                        Capability::WriteFile,
+                        Capability::LlmReasoning,
+                    ],
+                );
+
+                let bb_in = bb.clone();
+                let llm_in = self.llm.clone();
+                let tools_in = self.tools.clone();
+                layer_futures.push(async move {
+                    let decisioner = Decisioner::new(llm_in.clone());
+                    let executor = Executor::new(llm_in.clone(), tools_in.clone());
+                    let feedbacker = Feedbacker::new(llm_in);
+                    let bb_step = bb_in.with_step(step);
+                    let result = agent
+                        .execute_step(bb_step, &decisioner, &executor, &feedbacker)
+                        .await;
+                    (order, result)
+                });
             }
-
-            bb = agent
-                .execute_step(bb, &decisioner, &executor, &feedbacker)
-                .await?;
+            // 等本层所有步骤完成
+            while let Some((order, result)) = layer_futures.next().await {
+                match result {
+                    Ok(new_bb) => {
+                        step_results.insert(order, new_bb);
+                    }
+                    Err(e) => {
+                        tracing::error!("task {}: step {} failed: {}", task_id, order, e);
+                        return Err(e);
+                    }
+                }
+            }
         }
+
+        // 5. 聚合结果：把每步 Blackboard 的 action_log / feedback_log 折回主 bb
+        let mut final_bb = bb;
+        for order in 0..planned_steps.len() as u8 {
+            if let Some(step_bb) = step_results.get(&order) {
+                for r in &step_bb.action_log {
+                    final_bb = final_bb.clone().with_action(r.clone());
+                }
+                for r in &step_bb.feedback_log {
+                    final_bb = final_bb.clone().with_feedback(r.clone());
+                }
+            }
+        }
+        let bb = final_bb;
 
         // 5. 聚合结果
         let summary = bb.summarize();
