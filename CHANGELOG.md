@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (并行派发)
+
+- **Orchestrator 真正并行派发** (E4): `compute_step_layers` 把 TaskPlan 按依赖分层，每层内步骤用 `FuturesUnordered` 并发执行（设计 §5.1）
+- **SubagentHandle 暴露 pool active map guard** (E1): 调度方能拿到 agent 角色 / 能力做决策
+- **SubagentPool.list_active** (E2): 暴露活跃 agent 元数据给 Orchestrator
+- **SubagentPool timeout-based cleanup_idle** (E5): 5min 默认 idle timeout（v1.1 行为兼容），超时未活动的 agent 自动回收（设计 §13.3）
+- **LlmRouter 测试 helper** (E6): `placeholder` / `inject_test_provider` / `inject_test_routing` — `#[doc(hidden)]` 标"非测试代码不应调用"
+
+### Changed
+
+- **Subagent 加 `created_at` 字段** (E5): 用于 idle cleanup 计算
+- **Parallel execution 集成测试** (E6): `tests/parallel_execution_test.rs` 验证 E4 分层派发 + D→E→F 集成不破
+
 ### Changed (P1 债务清理)
 
 - **L2 cache key 规范化** (D1): `decisioner`/`executor`/`feedbacker` 三处 CacheKey 构造抽到 `cache_key_for_step` helper；signature 只含 action+tool+intent，不含 params（params 变化不再破 cache 命中）
