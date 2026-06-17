@@ -194,7 +194,7 @@ pub fn tier_label(tier: ModelTier) -> &'static str {
 /// Provider 元数据，从 `~/.eflow/providers/{name}.yaml` 加载
 ///
 /// v1.3 起 LLM provider **不**写死在 core crate——用户放 YAML 文件即可
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderConfig {
     pub id: String,
     pub display_name: String,
@@ -226,7 +226,7 @@ pub enum ProtocolKind {
 }
 
 /// model id → endpoint path 映射（OpenCode Go 场景）
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelEntry {
     pub id: String,
     #[serde(default)]
