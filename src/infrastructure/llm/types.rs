@@ -199,7 +199,7 @@ pub struct ProviderConfig {
     pub extra_config: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ProtocolKind {
     OpenaiCompatible,
@@ -222,4 +222,59 @@ fn default_max_retries() -> u8 {
 }
 fn default_retry_backoff_ms() -> u64 {
     1000
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn protocol_kind_serde_roundtrip_openai() {
+        let json = serde_json::to_string(&ProtocolKind::OpenaiCompatible).unwrap();
+        assert_eq!(json, "\"openai_compatible\"");
+        let back: ProtocolKind = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, ProtocolKind::OpenaiCompatible);
+    }
+
+    #[test]
+    fn protocol_kind_serde_roundtrip_anthropic() {
+        let json = serde_json::to_string(&ProtocolKind::AnthropicCompatible).unwrap();
+        assert_eq!(json, "\"anthropic_compatible\"");
+        let back: ProtocolKind = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, ProtocolKind::AnthropicCompatible);
+    }
+
+    #[test]
+    fn model_entry_endpoint_optional() {
+        let yaml = "id: deepseek-v4-pro\n";
+        let entry: ModelEntry = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(entry.id, "deepseek-v4-pro");
+        assert_eq!(entry.endpoint, None);
+    }
+
+    #[test]
+    fn model_entry_with_endpoint() {
+        let yaml = "id: glm-5.1\nendpoint: /v1/chat/completions\n";
+        let entry: ModelEntry = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(entry.id, "glm-5.1");
+        assert_eq!(entry.endpoint, Some("/v1/chat/completions".to_string()));
+    }
+
+    #[test]
+    fn provider_config_defaults() {
+        let yaml = r#"
+id: test
+display_name: Test
+protocol: openai_compatible
+base_url: https://api.test.com
+api_key: "key"
+default_model: test-model
+"#;
+        let cfg: ProviderConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(cfg.timeout_secs, 30); // 默认
+        assert_eq!(cfg.max_retries, 3); // 默认
+        assert_eq!(cfg.retry_backoff_ms, 1000); // 默认
+        assert!(cfg.preset_models.is_empty());
+        assert!(cfg.list_models_endpoint.is_none());
+    }
 }
