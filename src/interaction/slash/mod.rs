@@ -103,6 +103,8 @@ pub struct CommandRegistry {
     commands: HashMap<&'static str, std::sync::Arc<dyn SlashCommand>>,
 }
 
+pub mod builtin;
+
 impl CommandRegistry {
     pub fn new() -> Self {
         Self {

@@ -380,6 +380,15 @@ impl LlmRouter {
     pub fn provider_for(&self, tier: ModelTier) -> Option<&str> {
         self.routing.get(&tier).map(std::string::String::as_str)
     }
+
+    /// v1.3.1 增量：取指定 provider 的 preset_models
+    ///
+    /// v1.3.0 router 不持有 preset_models map，本方法 v1.3.1 阶段先返回 None。
+    /// `/model` 命令会显示空列表，等 spec B 后续实施时再补完整 model cache。
+    #[must_use]
+    pub fn preset_models_for(&self, _provider_id: &str) -> Option<Vec<String>> {
+        None
+    }
 }
 
 /// v1.2 E6: 测试用——构造空 Router（unit + integration test 都可见，

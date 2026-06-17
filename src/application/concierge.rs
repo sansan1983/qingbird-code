@@ -48,6 +48,12 @@ impl Concierge {
         self.active_profile.lock().await.clone()
     }
 
+    /// v1.3.1: 公开 setter 让 `/profile` 斜杠命令能真切换
+    pub async fn set_active_profile(&self, name: String) {
+        let mut p = self.active_profile.lock().await;
+        *p = name;
+    }
+
     /// 处理用户输入 — 永不阻塞：派发任务用 `tokio::spawn` 异步执行
     pub async fn handle_input(&self, input: String) -> String {
         let intent = self.classify_intent(&input);
