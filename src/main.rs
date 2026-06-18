@@ -12,7 +12,6 @@ use eflow::capability::tools::{
     file::{ReadFileTool, WriteFileTool},
     search::SearchCodeTool,
 };
-use eflow::common::error::Result;
 use eflow::common::types::ModelTier;
 use eflow::infrastructure::config;
 use eflow::infrastructure::event::{Event, EventChannel};
@@ -35,14 +34,11 @@ async fn main() {
         )
         .init();
 
-    // v1.3.1 T10: `eflow init` 子命令——强制进配置向导
+    // v1.3.2 T7: `eflow init` 子命令委托 cli::init（v1.3.1 main.rs 也有 init 路由——cli/init.rs 是 surgical 搬移）
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).map(String::as_str) == Some("init") {
-        if let Err(e) = run_init_wizard() {
-            eprintln!("init 失败: {e}");
-            std::process::exit(1);
-        }
-        return;
+        let exit_code = eflow::cli::init::run();
+        std::process::exit(exit_code);
     }
 
     // v1.3.2 T1: `eflow session start` 子命令——headless 持续运行（spec B2）
@@ -87,9 +83,9 @@ async fn main() {
             let _ = std::io::stdin().lock().read_line(&mut line);
             let line = line.trim().to_lowercase();
             if !line.starts_with('n') {
-                if let Err(e) = run_init_wizard() {
-                    eprintln!("init 失败: {e}");
-                    std::process::exit(1);
+                let code = eflow::cli::init::run();
+                if code != 0 {
+                    std::process::exit(code);
                 }
                 eprintln!("配置已写入。运行 eflow 启动 TUI。");
                 return;
@@ -259,38 +255,7 @@ async fn main() {
     events.publish(Event::SystemShutdown);
 }
 
-/// v1.3.1 T10: 走配置向导（通过 stdin 简化实现，v1.4 spec D 改为 TUI）
-fn run_init_wizard() -> Result<()> {
-    use eflow::interaction::wizard::Wizard;
-    use eflow::interaction::wizard::builtin::{
-        apikey::ApikeyStep, confirm::ConfirmStep, language::LanguageStep, model::ModelStep,
-        protocol::ProtocolStep, provider::ProviderStep, welcome::WelcomeStep,
-    };
-
-    let steps: Vec<std::sync::Arc<dyn eflow::interaction::wizard::WizardStep>> = vec![
-        std::sync::Arc::new(WelcomeStep),
-        std::sync::Arc::new(LanguageStep),
-        std::sync::Arc::new(ProviderStep),
-        std::sync::Arc::new(ProtocolStep),
-        std::sync::Arc::new(ApikeyStep),
-        std::sync::Arc::new(ModelStep),
-        std::sync::Arc::new(ConfirmStep),
-    ];
-    let wizard = Wizard::new(steps);
-    match wizard.run() {
-        Ok(eflow::interaction::wizard::WizardOutcome::Completed(_state)) => {
-            eprintln!("配置完成。运行 eflow 启动 TUI。");
-            Ok(())
-        }
-        Ok(eflow::interaction::wizard::WizardOutcome::Cancelled) => {
-            eprintln!("已取消。");
-            Ok(())
-        }
-        Err(e) => Err(e),
-    }
-}
-
-/// v1.3.1 T10: 注册 6 个 builtin 斜杠命令到 Concierge
+/// v1.3.2 T7: 注册 6 个 builtin 斜杠命令到 Concierge
 fn register_slash_commands(
     concierge: &mut Concierge,
 ) -> std::result::Result<(), eflow::common::error::EflowError> {
