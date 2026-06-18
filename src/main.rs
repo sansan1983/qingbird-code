@@ -45,6 +45,33 @@ async fn main() {
         return;
     }
 
+    // v1.3.2 T1: `eflow session start` 子命令——headless 持续运行（spec B2）
+    // plan deviation #12f：v1.3.1 main.rs 没有 clap SubCommand enum，
+    // 用 std::env::args() 手工切路由，匹配 v1.3.1 既有 init 子命令风格。
+    if args.get(1).map(String::as_str) == Some("session") {
+        // 用法：eflow session start [--config PATH] [--lang LANG]
+        match args.get(2).map(String::as_str) {
+            Some("start") => {
+                let config = parse_session_flag(&args, "--config");
+                let lang = parse_session_flag(&args, "--lang");
+                let exit_code = eflow::cli::start::run(config, lang).await;
+                std::process::exit(exit_code.into());
+            }
+            Some(other) => {
+                eprintln!(
+                    "未知 session 子命令: {other}。用法: eflow session start [--config PATH] [--lang LANG]"
+                );
+                std::process::exit(1);
+            }
+            None => {
+                eprintln!(
+                    "缺少 session 子命令。用法: eflow session start [--config PATH] [--lang LANG]"
+                );
+                std::process::exit(1);
+            }
+        }
+    }
+
     let cli = Cli::parse_args();
 
     // v1.3.1 T10: 首次启动检测——配置不存在时,提示是否进 init 向导
@@ -283,4 +310,24 @@ fn register_slash_commands(
     registry.required_register(&["model", "profile", "lang", "level", "help", "quit"])?;
     concierge.command_registry = registry;
     Ok(())
+}
+
+/// v1.3.2 T1: 解析 `eflow session start --flag VALUE` 的 flag 值
+///
+/// # 行为
+/// - 从 args 找 `--flag`，下一个 arg 当 value
+/// - flag 存在但无 value → 视为 None（让 start.rs 用默认）
+/// - flag 不存在 → None
+///
+/// # 简单实现理由
+/// - v1.3.2 spec B2 阶段只用 `--config` / `--lang` 两个 flag
+/// - 等 v1.4 spec D 引入 clap derive 时替换
+fn parse_session_flag(args: &[String], flag: &str) -> Option<String> {
+    let mut iter = args.iter();
+    while let Some(a) = iter.next() {
+        if a == flag {
+            return iter.next().cloned();
+        }
+    }
+    None
 }
