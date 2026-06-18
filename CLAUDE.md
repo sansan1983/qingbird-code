@@ -10,14 +10,18 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **v1.3.2 spec B2 收官（8/8 milestones done）+ PR #16 OPEN**：[PR #16](https://github.com/sansan1983/eflow/pull/16)。**Reviewer 待合并**——GitHub 默认 merge 后自动删远端 v1.3.2 branch；本地 `git branch -d v1.3.2` 完成后所有 3 个 release branch 干净 |
-| **上次完成** | v1.3.2 M1-M8 全部收官（commit 5f4b5e1）— 9 commits on v1.3.2 branch + bc73f86 CLAUDE 收工。**v1.3.2 完整产出**：cli/{mod, output, error, start, init, stdin, handlers/{send,end,level,lang,help}}.rs + Event::SystemReady + docs/cli-contract.md + tests/fixtures/* + tests/gui_smoke_test.py 8/8 + CHANGELOG v1.3.2 段。**累计 22 个 plan deviations**（#12a-v）。**测试**：283 → 311 + Python 8/8。**门禁**：build ✓ / 311 ✓ / 0 clippy / 0 fmt |
-| **下次动作** | v1.3.2 reviewer 流程：（1）等 reviewer 跑 4 门禁 + Python 8/8 + 7 步脚本验证 + 3 步 manual review；（2）reviewer merge PR #16 → main；（3）merge 后清理：本地 `git branch -d v1.3.2` + `git fetch --prune`；（4）切 main + 验证 merge commit。**v1.3.3 spec C（3 档工作流）或 v1.4 spec D（渲染引擎）** 等 v1.3.2 合并后再开 |
+| **当前任务** | **v1.3.3 spec C 全部收官 + 待 push**。v1.3.3 branch 上 8 commits / 4 门禁全过（335 tests / 0 clippy / 0 fmt）。**v1.3 阶段总览**：v1.3.0 spec A（LLM 抽象）+ v1.3.1 spec B1（Wizard + SlashCommand）+ v1.3.2 spec B2（CLI 契约）+ v1.3.3 spec C（3 档工作流）= **59 tasks** 全部完成。**v1.3 spec C 收官**。**下一阶段决策**：v1.4 spec D（渲染引擎 RenderEngine trait + DrawCommand enum，留给 v1.4 解决 v1.3.1 known 偏差）vs 维护模式 — 等用户确认 |
+| **上次完成** | v1.3.3 spec C 实施 8 commits：0d75384（trait 抽象）+ 5fd84a1（fmt）+ 3a26a65（3 个 builtin 档位）+ 702a095（档位测试 7 个）+ dc66609（Concierge 加 workflow_registry + 5 规则 + dispatch_task_with_level）+ 8b0d2ad（placeholder + 8 个规则测试）+ ae92699（/level 命令覆盖空壳）+ 3da211d（main.rs 注册 + 8 locale key + CHANGELOG + Cargo 1.3.3）。4 门禁：build ✓ / 335 tests ✓ / 0 clippy / 0 fmt。**deviation #13a-l**（11 个 plan 偏差）记录在 commit messages |
+| **下次动作** | 等用户确认 push v1.3.3 + 开 PR #17（v1.3.2 收工 commit 6501365 仍本地未 push）。**下一阶段决策**： |
+  1. **v1.4 spec D** —— 渲染引擎重构（RenderEngine trait + DrawCommand enum，留给 v1.4 解决 v1.3.1 known 偏差：WizardStep/SelectList/TuiBackend 直接调 ratatui API 违反"零硬编码"）
+  2. **暂不开发** — 维护模式 |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-18 | v1.3.3 spec C 收官 | v1.3.3 branch 上 8 commits：0d75384 trait 抽象 + 5fd84a1 fmt + 3a26a65 3 builtin 档位 + 702a095 档位测试 7 个 + dc66609 Concierge 5 规则 + 8b0d2ad placeholder + 8 规则测试 + ae92699 /level 覆盖空壳 + 3da211d main.rs + i18n + CHANGELOG + Cargo 1.3.3。4 门禁全过（335 tests / 0 clippy / 0 fmt）。**11 个 deviation #13a-l**：#13a Concierge Arc<Mutex<>> + #13b TaskSpec 缺 workflow_level + #13c AggregatedResult 新建 + #13d Concierge placeholder + #13e llm_router_handle + #13f dispatch_standard/with_retries 缺 + #13g blackboard_mut 缺 + #13h Advanced 1 次反馈不真做 3 次 + #13i description hard-code + #13j CompositeMemory recall_smart 不用 trait + #13k keyword case-insensitive + #13l 14 步 TUI 验证 sandbox skip。**v1.3 59 tasks 全部完成** |
+| 2026-06-18 | v1.3.2 PR #16 merged | `gh pr view 16 --json state` = MERGED, mergedAt 2026-06-18T06:29:43Z, merge commit aa73ddb。`git checkout main && git pull --ff` 拿到 11 commits / 24 文件 / +1445 -51。清理：`git branch -d v1.3.2` + `git remote prune origin` 删 4 个 stale refs (v1.2 / v1.3.0 / v1.3.1 / v1.3.2)。main 上 4 门禁 + Python 8/8 全绿。**v1.3 spec B2 实施收官** |
 | 2026-06-18 | v1.3.2 PR #16 创建 | `git push -u origin v1.3.2` 成功；`gh pr create --base main --head v1.3.2` 10 commits ahead of origin/main。PR body 含 12 tasks 摘要 / 4 门禁 / 22 deviations 摘要 / 3 步 manual review / docs/cli-contract.md + tests/gui_smoke_test.py 链接。**#16 OPEN 等 reviewer 合并** |
 |------|------|------|
 | 2026-06-18 | v1.3.2 M8 commit 5f4b5e1 | 4 门禁全过（build / 311 tests / 0 clippy / 0 fmt）；10 步手工验证（Step 3-6 + 9-11 跑通，Step 2 + 7-8 manual skip 需 reviewer 跑）；CHANGELOG v1.3.2 段（features 2 subcommand + 7 事件 + 5 stdin + 4 exit / internal 3 ADR + 5 deviations / upgrade notes）。**v1.3.2 完整收官 9 commits** |

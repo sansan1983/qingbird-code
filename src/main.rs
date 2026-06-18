@@ -191,6 +191,9 @@ async fn main() {
         std::process::exit(1);
     }
 
+    // v1.3.3 增量：注册 3 个工作流档位 + required_register 校验
+    register_workflows(&mut concierge);
+
     let concierge = std::sync::Arc::new(tokio::sync::Mutex::new(concierge));
 
     // 显示配置
@@ -277,6 +280,31 @@ fn register_slash_commands(
     registry.required_register(&["model", "profile", "lang", "level", "help", "quit"])?;
     concierge.command_registry = registry;
     Ok(())
+}
+
+/// v1.3.3 增量：注册 3 个工作流档位（Simple/Standard/Advanced）到 Concierge
+///
+/// **加新档位零改 core**：写 1 个 `impl` + 1 行 `register()`，**核心零修改**。
+/// v1.3.3 ADR-0019 —— 加 "Turbo" / "Debug" 档留 v1.4+。
+fn register_workflows(concierge: &mut Concierge) {
+    use eflow::workflow::builtin::{
+        advanced::AdvancedWorkflow, simple::SimpleWorkflow, standard::StandardWorkflow,
+    };
+    use eflow::workflow::{WorkflowLevel, WorkflowRegistry};
+
+    let mut registry = WorkflowRegistry::new();
+    registry.register(std::sync::Arc::new(SimpleWorkflow));
+    registry.register(std::sync::Arc::new(StandardWorkflow));
+    registry.register(std::sync::Arc::new(AdvancedWorkflow));
+    if let Err(e) = registry.required_register(&[
+        WorkflowLevel::Simple,
+        WorkflowLevel::Standard,
+        WorkflowLevel::Advanced,
+    ]) {
+        eprintln!("工作流档位注册失败: {e}");
+        std::process::exit(1);
+    }
+    concierge.set_workflow_registry(registry);
 }
 
 /// v1.3.2 T1: 解析 `eflow session start --flag VALUE` 的 flag 值

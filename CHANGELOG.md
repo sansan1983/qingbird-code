@@ -175,6 +175,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.3] (TBD)
+
+**Features**:
+
+- **3 档工作流**：`SimpleWorkflow`（1 次 LLM 直接答）/ `StandardWorkflow`（3 角色 + 1 次反馈，v1.0-v1.2 既有行为）/ `AdvancedWorkflow`（3 角色 + 记忆检索）
+- **5 条规则自动判定**（`Concierge::determine_workflow_level`）：多文件（≥ 3 扩展名）/ 关键词（中英 case-insensitive）/ 长度（短 < 30 / 中 30-100 / 长 ≥ 100）—— **零 LLM 成本**
+- **会话级 override**：`/level simple|standard|advanced|auto`（v1.3.1 空壳实装）—— `/level auto` 清除 override，回自动判定
+- **核心零硬编码档位行为**（spec C ADR-0019）：`WorkflowExecutor` trait + `WorkflowRegistry` 注册表
+- **加新档位零改 core**（v1.4+ "Turbo" / "Debug" 档）—— 写 1 个 `impl` + 1 行 `register()`
+
+**Internal**:
+
+- ADR-0019 核心零硬编码工作流档位
+- 11 deviations（#13a-k）记录在 commit messages
+- `WorkflowLevel` 是 `#[non_exhaustive]` —— 外部代码加 match 必须有 `_` 分支
+- `AggregatedResult` 新建在 `src/workflow/mod.rs`（v1.2 Orchestrator.execute 返 String 不变）
+- `CompositeMemory` 不用 `MemoryManager` trait object —— WorkflowContext 持具体类型
+
+**Upgrade Notes**:
+
+- v1.3.2 → v1.3.3 **不**破坏 eflow.yaml schema
+- `/level` override 会话级（重启清空，不持久化）
+- `WorkflowLevel` 用 `#[non_exhaustive]` —— 外部 match 必有 `_`
+
+---
+
 [Unreleased]: https://github.com/sansan1983/eflow/compare/v1.0.0...HEAD
 [1.3.0]: https://github.com/sansan1983/eflow/compare/v1.2.0...v1.3.0
 [1.0.0]: https://github.com/sansan1983/eflow/releases/tag/v1.0.0

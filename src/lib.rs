@@ -10,3 +10,4 @@ pub mod cli;
 pub mod common;
 pub mod infrastructure;
 pub mod interaction;
+pub mod workflow;
