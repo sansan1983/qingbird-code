@@ -61,3 +61,18 @@ impl WorkflowExecutor for SimpleWorkflow {
 
 #[allow(dead_code)]
 fn _ensure_types(_r: &ChatResponse, _t: &TaskSpec) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn level_returns_simple() {
+        assert_eq!(SimpleWorkflow.level(), WorkflowLevel::Simple);
+    }
+
+    #[test]
+    fn description_non_empty() {
+        assert!(!SimpleWorkflow.description().is_empty());
+    }
+}

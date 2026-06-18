@@ -59,3 +59,23 @@ impl WorkflowExecutor for AdvancedWorkflow {
         Ok(AggregatedResult::new(wrapped, WorkflowLevel::Advanced))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn level_returns_advanced() {
+        assert_eq!(AdvancedWorkflow.level(), WorkflowLevel::Advanced);
+    }
+
+    #[test]
+    fn description_non_empty() {
+        assert!(!AdvancedWorkflow.description().is_empty());
+    }
+
+    #[test]
+    fn max_retries_overrides_default_to_3() {
+        assert_eq!(AdvancedWorkflow.max_retries(), 3);
+    }
+}

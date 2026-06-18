@@ -35,3 +35,18 @@ impl WorkflowExecutor for StandardWorkflow {
         Ok(AggregatedResult::new(summary, WorkflowLevel::Standard))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn level_returns_standard() {
+        assert_eq!(StandardWorkflow.level(), WorkflowLevel::Standard);
+    }
+
+    #[test]
+    fn description_non_empty() {
+        assert!(!StandardWorkflow.description().is_empty());
+    }
+}
