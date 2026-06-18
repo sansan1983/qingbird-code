@@ -10,9 +10,19 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **v1.3.2 spec B2 收官（8/8 milestones done）+ PR #16 OPEN**：[PR #16](https://github.com/sansan1983/eflow/pull/16)。**Reviewer 待合并**——GitHub 默认 merge 后自动删远端 v1.3.2 branch；本地 `git branch -d v1.3.2` 完成后所有 3 个 release branch 干净 |
-| **上次完成** | v1.3.2 M1-M8 全部收官（commit 5f4b5e1）— 9 commits on v1.3.2 branch + bc73f86 CLAUDE 收工。**v1.3.2 完整产出**：cli/{mod, output, error, start, init, stdin, handlers/{send,end,level,lang,help}}.rs + Event::SystemReady + docs/cli-contract.md + tests/fixtures/* + tests/gui_smoke_test.py 8/8 + CHANGELOG v1.3.2 段。**累计 22 个 plan deviations**（#12a-v）。**测试**：283 → 311 + Python 8/8。**门禁**：build ✓ / 311 ✓ / 0 clippy / 0 fmt |
-| **下次动作** | v1.3.2 reviewer 流程：（1）等 reviewer 跑 4 门禁 + Python 8/8 + 7 步脚本验证 + 3 步 manual review；（2）reviewer merge PR #16 → main；（3）merge 后清理：本地 `git branch -d v1.3.2` + `git fetch --prune`；（4）切 main + 验证 merge commit。**v1.3.3 spec C（3 档工作流）或 v1.4 spec D（渲染引擎）** 等 v1.3.2 合并后再开 |
+| **当前任务** | **v1.3.2 spec B2 全部收官 + 已合并到 main**。merge commit aa73ddb 在 main。**清理完成**：本地 v1.3.2 branch 已删 + 4 个 stale remote refs pruned (v1.2 / v1.3.0 / v1.3.1 / v1.3.2) + 4 门禁 + Python 8/8 在 main 全绿。**v1.3.2 收官**。**下一阶段决策**：v1.3.3 spec C（3 档工作流 Simple/Standard/Advanced）vs v1.4 spec D（渲染引擎 RenderEngine trait + DrawCommand enum）— 等用户确认开哪个 |
+| **上次完成** | v1.3.2 PR #16 → main 已合并（merge commit aa73ddb, mergedAt 2026-06-18T06:29:43Z）。11 commits / 24 文件 / +1445 -51。4 门禁：build ✓ / 311 tests ✓ / 0 clippy / 0 fmt。Python 8/8 ✓。**v1.3 阶段总览**：v1.3.0 spec A（LLM 抽象，26 tasks）+ v1.3.1 spec B1（Wizard + SlashCommand，12 tasks）+ v1.3.2 spec B2（CLI 契约，12 tasks）= **50 tasks** 全部完成。**v1.3 known gap**：v1.3.3 spec C（3 档工作流）+ v1.4 spec D（渲染引擎） |
+| **下次动作** | 等用户确认开哪个 spec：
+  1. **v1.3.3 spec C** —— 3 档工作流（Simple/Standard/Advanced，9 tasks / 5 milestones）—— 当前 v1.3.1 /level 是空壳（spec C 实施时填具体 WorkflowExecutor 逻辑）
+  2. **v1.4 spec D** —— 渲染引擎重构（RenderEngine trait + DrawCommand enum，留给 v1.4 解决 v1.3 known 偏差：WizardStep/SelectList/TuiBackend 直接调 ratatui API 违反"零硬编码"）
+  3. **暂不开发** — 维护模式 |
+
+**近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
+
+| 日期 | 动作 | 产出 |
+|------|------|------|
+| 2026-06-18 | v1.3.2 PR #16 merged | `gh pr view 16 --json state` = MERGED, mergedAt 2026-06-18T06:29:43Z, merge commit aa73ddb。`git checkout main && git pull --ff` 拿到 11 commits / 24 文件 / +1445 -51。清理：`git branch -d v1.3.2` + `git remote prune origin` 删 4 个 stale refs (v1.2 / v1.3.0 / v1.3.1 / v1.3.2)。main 上 4 门禁 + Python 8/8 全绿。**v1.3 spec B2 实施收官** |
+
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
