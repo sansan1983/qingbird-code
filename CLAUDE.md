@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **v1.3.2 spec B2 实施中（5/12 tasks done = M1-M5）**：M1+M2 CliOutput + exit_code / M3 session start 持续运行 / M4 stdin 协议 + 5 handlers / M5 init 委托 Wizard。**下一动作**：M6 T8 `Event::SystemReady` variant 加到 `src/infrastructure/event.rs`（start.rs 当前用 `Uuid::nil()` 占位） |
-| **上次完成** | v1.3.2 M1-M5（commit 327a85e）— 6 commits on v1.3.2 branch。**M5 关键产出**：cli/init.rs 搬 v1.3.1 main.rs::run_init_wizard 改 i32 exit code（0/1/2）；main.rs 删 30 行 wizard 代码 + init 路由调 cli::init::run() + 首次启动检测 fallback 也走 cli::init。**Plan deviation #12m**：plan 假设 init 需要 LlmRouter + EflowConfig::default() —— 实际 Wizard 走 stdin/stdout，**不**需要 router，零 router 代码。**测试**：309 pass（持平）。**累计 deviations #12a-m（13 个）**。**门禁**：build ✓ / 309 ✓ / 0 clippy / 0 fmt |
-| **下次动作** | 开工 v1.3.2 M6 T8：加 `Event::SystemReady` variant 到 src/infrastructure/event.rs（task_id + started_at: SystemTime）。**风险点**：v1.2 / v1.3.0 / v1.3.1 实施时所有 `match event` 可能没列全 6 变体（如果用 `_ =>` 兜底就 OK；如果用 match 列全会编译失败）。开工前先 grep `match.*Event` 全 match 点 |
+| **当前任务** | **v1.3.2 spec B2 实施中（6/12 tasks done = M1-M6）**：M1+M2 CliOutput + exit_code / M3 session start 持续运行 / M4 stdin 协议 + 5 handlers / M5 init 委托 Wizard / M6 Event::SystemReady variant。**下一动作**：M7 T9-T11 契约文档（docs/cli-contract.md）+ mock config fixture（tests/fixtures/mock_config.yaml）+ Python GUI 套壳集成测试（tests/gui_smoke_test.py） |
+| **上次完成** | v1.3.2 M1-M6（commit ff82026）— 7 commits on v1.3.2 branch。**M6 关键产出**：Event::SystemReady { task_id, started_at } variant + 2 个测试（构造+字段保留 + try_recv 流通）；tui.rs:293 match 加 _ => 兜底（SystemReady 是 CLI-only，TUI 不消费，spec B2 ADR-0016）；start.rs:193 match 加 SystemReady 分支（**当前未流通**——start.rs 仍 M3 手写 NDJSON，保留分支供未来复用）。**Plan deviation #12n**：plan 假设 start.rs 改用 publish(SystemReady)+listener 转发 —— 实际 M3 已手写 JSON 写到 stdout。本次只加 variant，**不**改 start.rs 路径（surgical）。**测试**：309 → 311 pass。**累计 deviations #12a-n（14 个）** |
+| **下次动作** | 开工 v1.3.2 M7 T9-T11：3 个交付物——（1）docs/cli-contract.md 完整契约文档（事件 schema / stdin action / exit code / SystemReady 字段 / 5 handler 行为）；（2）tests/fixtures/mock_config.yaml mock config fixture（不调真 LLM 跑 headless 集成测试）；（3）tests/gui_smoke_test.py 9 步 Python 套壳集成测试（start 子进程 → NDJSON stdout → stdin 注入 action → 验证 4 档 exit code） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-18 | v1.3.2 M6 commit ff82026 | Event::SystemReady { task_id, started_at: SystemTime } variant + 2 测试。tui.rs:293 match 加 _ => 兜底（SystemReady 是 CLI-only，TUI 不消费，spec ADR-0016 TUI 零改造）；start.rs:193 match 加 SystemReady 分支（**当前未流通**——start.rs 仍 M3 手写 NDJSON，保留分支供未来复用）。**#12n**：plan 假设 start.rs 改用 publish(SystemReady)+listener 转发 —— 实际 M3 已手写 JSON 写到 stdout，本次只加 variant，**不**改 start.rs 路径。**test 311 pass**（309 + 2 event） |
 | 2026-06-18 | v1.3.2 M5 commit 327a85e | cli/init.rs 搬 v1.3.1 main.rs::run_init_wizard 改 i32 exit code（0/1/2）；main.rs 删 30 行 wizard 代码 + init 路由调 cli::init::run() + 首次启动 fallback 也走 cli::init。**#12m**：plan 假设 init 需要 LlmRouter + EflowConfig::default() —— 实际 Wizard 走 stdin/stdout，**不**需要 router，零 router 代码。**test 309 pass**（持平） |
-| 2026-06-18 | v1.3.2 M4 commit 305b2a5 | StdinCommand 5 变体 enum + 7 serde round-trip 测试 + read_loop 持续读 stdin + 5 handlers 真 dispatch。**handler 策略**：send→handle_input（复用 TaskDispatch）/ end→stderr+返 0（spec §3.6 简化）/ level→dispatch_slash（保留 LevelCmd parse_args 校验）/ lang→locale::init（trusted caller 跳校验）/ help→registry.list()（避免重复 SlashCommand 链路）。**#12l**：Concierge::dispatch_slash 改 pub（1 行 surgical）。**test 309 pass**（302 + 7 stdin） |
-| 2026-06-18 | v1.3.2 M3 commit 2372fda | 4 commits on v1.3.2：起点空 + CLAUDE + M1+M2 (main.rs session 路由 + CliOutput + exit_code) + M3 (start.rs 持续运行 + SystemReady + tokio::select)。**M3 关键决策**：#12g Concierge::subscribe_events() 加 5 行 getter；#12h 复用 main.rs pool.shutdown + SystemShutdown 模式；#12i SystemReady task_id 用 Uuid::nil() 占位；#12j error::exit_code 改 i32（ExitCode 是 !，as u8 编译不过）；#12k tool types 在子模块 |
+| 2026-06-18 | v1.3.2 M4 commit 305b2a5 | StdinCommand 5 变体 enum + 7 serde round-trip 测试 + read_loop 持续读 stdin + 5 handlers 真 dispatch。**handler 策略**：send→handle_input / end→stderr+返 0 / level→dispatch_slash / lang→locale::init / help→registry.list()。**#12l**：Concierge::dispatch_slash 改 pub（1 行 surgical）。**test 309 pass**（302 + 7 stdin） |
 | 2026-06-17 | v1.3 writing-plans 收官 | 4 个 plan：spec A（5a7dfef 3135 行 / 26 tasks）/ B1（54a5515 3612 行 / 12 tasks）/ B2（4fba0a9 2141 行 / 12 tasks）/ C（31713b2 1478 行 / 9 tasks）。总 59 tasks 分 4 个小版本发布 v1.3.0/1.3.1/1.3.2/1.3.3。每个 plan 3 项自审（spec coverage / placeholder / type consistency）全过 |
 
 ## △ 收工仪式（每次结束前执行）

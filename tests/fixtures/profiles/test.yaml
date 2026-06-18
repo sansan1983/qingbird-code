@@ -1,0 +1,7 @@
+# eflow 测试用 mock profile（v1.3.2 GUI 套壳集成测试用）
+
+id: test
+display_name: "Test Profile"
+risk_threshold: L0
+skills: []
+allowed_paths: []

@@ -26,12 +26,14 @@ use rust_i18n::t;
 
 #[tokio::main]
 async fn main() {
-    // 初始化日志
+    // 初始化日志（走 stderr —— 契约冻结 v1.3.0 起：stdout 永远 JSON 契约，
+    // stderr 永远人类可读。spec B2 §3.5 ADR-0017）
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "eflow=info".into()),
         )
+        .with_writer(std::io::stderr)
         .init();
 
     // v1.3.2 T7: `eflow init` 子命令委托 cli::init（v1.3.1 main.rs 也有 init 路由——cli/init.rs 是 surgical 搬移）
