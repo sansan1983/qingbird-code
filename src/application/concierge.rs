@@ -152,7 +152,9 @@ impl Concierge {
     /// router 通过 `CommandContext.router: Arc<Mutex<LlmRouter>>` 共享——execute
     /// 内部需要时再 lock（plan deviation：原计划 `&mut LlmRouter` 借用冲突，
     /// v1.3.1 改成 `Arc<Mutex<>>`）。
-    async fn dispatch_slash(&mut self, cmd_str: &str) -> String {
+    /// v1.3.2 T6: 改 pub 让 cli::handlers::level 能复用 SlashCommand 链路
+    /// —— v1.3.1 是 async fn（private），surgical 改 visibility 而非复制逻辑
+    pub async fn dispatch_slash(&mut self, cmd_str: &str) -> String {
         use crate::interaction::slash::{CommandContext, SlashOutput};
 
         match self.command_registry.dispatch(cmd_str) {
