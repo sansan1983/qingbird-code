@@ -154,8 +154,8 @@ impl Concierge {
                 let cmd_arc = match self.command_registry.get(name) {
                     Some(c) => c.clone(), // clone Arc 释放 &self 借用
                     None => {
-                        // T11 之前用硬编码字符串,i18n key 已在 dispatch_slash 文档化待 T11 替换
-                        return format!("未知斜杠命令: /{name}（输入 /help 查看可用命令）");
+                        // v1.3.1 T11: 用 err_unknown_slash_cmd i18n key（fallback en-US）
+                        return t!("err_unknown_slash_cmd", name = name).to_string();
                     }
                 };
 
@@ -167,14 +167,21 @@ impl Concierge {
                     Ok(output) => match output {
                         SlashOutput::Text(s) => s,
                         SlashOutput::NoOp => String::new(),
-                        SlashOutput::ReloadRouter => "ReloadRouter 暂未实装（v1.3.1 阶段）".into(),
-                        SlashOutput::Shutdown => "正在退出...".into(),
-                        SlashOutput::OpenSubView(_) => "子视图暂未实装（v1.3.1 阶段）".into(),
+                        // v1.3.1 阶段: ReloadRouter/Shutdown/OpenSubView 3 个输出未实装，
+                        // 走 err_subview_render_failed / err_cmd_failed i18n key 兜底
+                        // —— v1.3.3 spec B 实施时由真调用方替换
+                        SlashOutput::ReloadRouter => {
+                            t!("err_cmd_failed", msg = "ReloadRouter").to_string()
+                        }
+                        SlashOutput::Shutdown => t!("err_cmd_failed", msg = "Shutdown").to_string(),
+                        SlashOutput::OpenSubView(_) => {
+                            t!("err_subview_render_failed", msg = "OpenSubView").to_string()
+                        }
                     },
-                    Err(e) => format!("命令执行失败: {e}"),
+                    Err(e) => t!("err_cmd_failed", msg = e.to_string()).to_string(),
                 }
             }
-            None => format!("未知斜杠命令: /{cmd_str}（输入 /help 查看可用命令）"),
+            None => t!("err_unknown_slash_cmd", name = cmd_str).to_string(),
         }
     }
 
