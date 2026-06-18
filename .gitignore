@@ -12,3 +12,4 @@ data/
 # Local dependency lock — per project convention, contributors regenerate on clone
 Cargo.lock
 .cc-connect/
+.claude/
