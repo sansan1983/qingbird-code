@@ -11,7 +11,6 @@
 
 use crate::cli::error::exit_code;
 use crate::cli::output::CliOutput;
-use crate::common::error::Result;
 
 /// 跑 init 向导，返回 i32 exit code（0/1/2）—— `std::process::exit()` 直接吃
 pub fn run() -> i32 {
@@ -45,10 +44,4 @@ pub fn run() -> i32 {
             exit_code(&e)
         }
     }
-}
-
-// 保留 Result<()> import 以便未来扩展（如写文件 + 处理 IO 错误）
-#[allow(dead_code)]
-fn _r() -> Result<()> {
-    Ok(())
 }

@@ -121,7 +121,7 @@ fn make_router_with_slow_provider() -> Arc<tokio::sync::Mutex<LlmRouter>> {
     }
     // 显式构造 config（保留 helper 给未来用例用，目前 placeholder router 不需要 config）
     let _cfg = make_test_config();
-    // 先用 from_config 创建（内部会创建 AnthropicProvider 走真实 HTTP——dummy key 会失败）
+    // 先用 from_config 创建（内部走真实 HTTP——dummy key 会失败）
     // ——改用 placeholder + inject_test_* 注入 mock provider
     let mut router = LlmRouter::placeholder();
     router.inject_test_provider("anthropic".into(), Arc::new(SlowProvider));
