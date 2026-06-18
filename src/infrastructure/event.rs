@@ -108,7 +108,10 @@ mod tests {
 
         // try_recv 是 sync（非 async 上下文）；publish 同步 push 到 channel
         match rx.try_recv() {
-            Ok(Event::SystemReady { task_id, started_at }) => {
+            Ok(Event::SystemReady {
+                task_id,
+                started_at,
+            }) => {
                 assert_eq!(task_id, Uuid::nil());
                 assert_eq!(started_at, UNIX_EPOCH);
             }
