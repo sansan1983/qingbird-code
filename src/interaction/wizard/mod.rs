@@ -1,3 +1,8 @@
+// TODO(v1.4 spec D): WizardStep::render() / SelectList::render() / TuiBackend
+// 渲染部分直接调 ratatui API，违反"零硬编码"原则。
+// v1.4 spec D 重构为 RenderEngine trait + DrawCommand enum。
+// 见 specs/2026-06-17-eflow-v1.3-b1-wizard-slash-design.md §12 已知偏差。
+
 //! v1.3.1 配置向导子系统
 //!
 //! 核心零硬编码步骤名：每个 step 1 个 `impl WizardStep`，
