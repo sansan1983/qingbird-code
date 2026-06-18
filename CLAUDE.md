@@ -10,13 +10,15 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **v1.3.2 spec B2 收官（8/8 milestones done = M1-M8）**。M1-M8 commit 5f4b5e1 在 v1.3.2 branch。**收尾 action**：开 PR v1.3.2 → main。**manual skip**：Step 2（eflow TUI 启动）和 Step 7-8（init 向导交互）需人参与 |
-| **上次完成** | v1.3.2 M1-M8 全部收官（commit 5f4b5e1）— 9 commits on v1.3.2 branch。**v1.3.2 完整产出**：cli/{mod, output, error, start, init, stdin, handlers/{send,end,level,lang,help}}.rs + Event::SystemReady + 契约文档 + mock fixture + Python 8/8 测试。**累计 22 个 plan deviations**（#12a-v）。**测试**：283 → 311 + Python 8/8。**门禁**：build ✓ / 311 ✓ / 0 clippy / 0 fmt |
-| **下次动作** | 收尾 PR v1.3.2 → main：（1）git push -u origin v1.3.2；（2）gh pr create --base main --head v1.3.2。**PR body**：9 commits / 12 tasks / 4 门禁 / 22 deviations / 10 步手工验证 / docs/cli-contract.md + tests/gui_smoke_test.py 链接。**Reviewer 待合并** |
+| **当前任务** | **v1.3.2 spec B2 收官（8/8 milestones done）+ PR #16 OPEN**：[PR #16](https://github.com/sansan1983/eflow/pull/16)。**Reviewer 待合并**——GitHub 默认 merge 后自动删远端 v1.3.2 branch；本地 `git branch -d v1.3.2` 完成后所有 3 个 release branch 干净 |
+| **上次完成** | v1.3.2 M1-M8 全部收官（commit 5f4b5e1）— 9 commits on v1.3.2 branch + bc73f86 CLAUDE 收工。**v1.3.2 完整产出**：cli/{mod, output, error, start, init, stdin, handlers/{send,end,level,lang,help}}.rs + Event::SystemReady + docs/cli-contract.md + tests/fixtures/* + tests/gui_smoke_test.py 8/8 + CHANGELOG v1.3.2 段。**累计 22 个 plan deviations**（#12a-v）。**测试**：283 → 311 + Python 8/8。**门禁**：build ✓ / 311 ✓ / 0 clippy / 0 fmt |
+| **下次动作** | v1.3.2 reviewer 流程：（1）等 reviewer 跑 4 门禁 + Python 8/8 + 7 步脚本验证 + 3 步 manual review；（2）reviewer merge PR #16 → main；（3）merge 后清理：本地 `git branch -d v1.3.2` + `git fetch --prune`；（4）切 main + 验证 merge commit。**v1.3.3 spec C（3 档工作流）或 v1.4 spec D（渲染引擎）** 等 v1.3.2 合并后再开 |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
+|------|------|------|
+| 2026-06-18 | v1.3.2 PR #16 创建 | `git push -u origin v1.3.2` 成功；`gh pr create --base main --head v1.3.2` 10 commits ahead of origin/main。PR body 含 12 tasks 摘要 / 4 门禁 / 22 deviations 摘要 / 3 步 manual review / docs/cli-contract.md + tests/gui_smoke_test.py 链接。**#16 OPEN 等 reviewer 合并** |
 |------|------|------|
 | 2026-06-18 | v1.3.2 M8 commit 5f4b5e1 | 4 门禁全过（build / 311 tests / 0 clippy / 0 fmt）；10 步手工验证（Step 3-6 + 9-11 跑通，Step 2 + 7-8 manual skip 需 reviewer 跑）；CHANGELOG v1.3.2 段（features 2 subcommand + 7 事件 + 5 stdin + 4 exit / internal 3 ADR + 5 deviations / upgrade notes）。**v1.3.2 完整收官 9 commits** |
 | 2026-06-18 | v1.3.2 M7 commit | docs/cli-contract.md 完整契约（7 事件 / 5 stdin / 4 exit / Python 示例 + 3 deviations）；tests/fixtures/{mock_config, providers/mock, profiles/test}.yaml；tests/gui_smoke_test.py 8 步全过。**#12v critical**：tracing 走 stdout 破坏 GUI 契约（stdout 必 JSON）—— main.rs 加 .with_writer(stderr) 修。**#12w** mock config 按 v1.3.1 真实 schema 写（不抄 plan）。**#12x** smoke test 不调 send（mock 不可达）。**#12y** run_eflow_session 默认加 --config flag。**Python 8/8 pass** |
