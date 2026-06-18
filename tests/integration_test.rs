@@ -127,7 +127,15 @@ fn make_concierge() -> (Concierge, EventChannel) {
     let orch = Arc::new(Mutex::new(orch));
     let mem = Arc::new(Mutex::new(CompositeMemory::in_memory(100).unwrap()));
     let profiles = Arc::new(RwLock::new(ProfileRegistry::new()));
-    let c = Concierge::new(events.clone(), mem, profiles, orch, "developer".into());
+    let llm = make_test_router(); // v1.3.1 增量
+    let c = Concierge::new(
+        events.clone(),
+        mem,
+        profiles,
+        orch,
+        llm, // v1.3.1 增量
+        "developer".into(),
+    );
     (c, events)
 }
 
@@ -137,7 +145,7 @@ fn make_concierge() -> (Concierge, EventChannel) {
 async fn e2e_concierge_dispatch_publishes_lifecycle_events() {
     // 派发 L0 短任务 → 规则分解 → 必发 TaskStarted 事件 + 终态事件 (Completed/Failed)
     // 不关心 task_id 精确值（Concierge 内部生成），只验证事件序列
-    let (c, events) = make_concierge();
+    let (mut c, events) = make_concierge();
     let mut rx = events.subscribe();
 
     let _ = c.handle_input("readme".into()).await;

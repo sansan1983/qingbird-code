@@ -10,17 +10,18 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **v1.3.0 实施完成**：26/26 tasks 全部 commit（v1.3.0 branch 18 commits ahead of origin/main）。**待用户决定下一步**：(a) **开 PR 把 v1.3.0 合回 main**（18 commits：M1-M7 全 7 个 milestone，2 处 plan 偏差 #6/#7 已文档化）；(b) **继续 v1.3.1 spec B1 实施**（12 tasks，向导+斜杠命令）；(c) **先做 v1.4 spec D 头脑风暴**（渲染引擎 + TUI 重构候选） |
-| **上次完成** | v1.3.0 LLM 抽象扩展实施收官。M1 公共 `expand_env_vars` + `ProviderConfig` 数据结构 / M2 `PresetLoader` 扫目录 / M3 `LlmProviderRegistry` 工厂 + 2 个 Generic adapter / M4 `LlmRouter::from_config` 重写（破坏性变更） / M5 main.rs + i18n + CHANGELOG + 迁移文档 / M6 4 门禁 + 测试覆盖（233 tests pass） / M7 稳定性约束（`LlmProvider` trait 冻结注释 + preset_loader glob 测试 + ADR 引用）。**破坏性变更**：`EflowConfig::llm.providers` 字段删除，改用 `~/.eflow/providers/*.yaml` |
-| **下次动作** | 等用户决定：(a) **开 PR 把 v1.3.0 合回 main**（18 commits：M1-M7 全 7 个 milestone）；(b) **继续 v1.3.1 spec B1 实施**（12 tasks：向导+斜杠命令）；(c) **先做 v1.4 spec D 头脑风暴**（渲染引擎候选） |
+| **当前任务** | **v1.3.1 PR #15 已开**：v1.3.1 branch 14 commits ahead of origin/main，**待 reviewer 合并**。PR: https://github.com/sansan1983/eflow/pull/15。**待用户决定下一步**：(a) **继续 v1.3.2 spec B2 实施**（CLI 契约，12 tasks，含 #11g SelectList TODO）；(b) **继续 v1.3.3 spec C 实施**（3 档工作流 Simple/Standard/Advanced，9 tasks，`/level` 从空壳变实装）；(c) **先做 v1.4 spec D 头脑风暴**（渲染引擎 + TUI 重构，承接 T24 TODO 锚点） |
+| **上次完成** | v1.3.1 PR 创建（#15 https://github.com/sansan1983/eflow/pull/15）。v1.3.1 branch 14 commits ahead of origin/main（12 task commits + 1 v1.3.0 merge + 1 status 收尾）。`git push -u origin v1.3.1` 成功；`gh pr create --base main --head v1.3.1 --title/--body` 避免交互 dialog。Body 含 12 tasks 摘要 + 4 门禁（283 tests / 0 clippy warn / 0 fmt diff / build ✓）+ 6 plan deviations (#11a-g) + T24 TODO 锚点说明 + 14 步手工验证 reviewer action 项 |
+| **下次动作** | 等用户决定：(a) **继续 v1.3.2 spec B2 实施**（CLI 契约 12 tasks）；(b) **继续 v1.3.3 spec C 实施**（3 档工作流 9 tasks）；(c) **先做 v1.4 spec D 头脑风暴**（渲染引擎 + TUI 重构） |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-17 | v1.3.1 PR #15 创建 | v1.3.1 branch → main。`git push -u origin v1.3.1` 成功；`gh pr create --base main --head v1.3.1 --title/--body` 14 commits ahead of origin/main。PR body 含 12 tasks 摘要 / 4 门禁（283 tests pass / 0 clippy warn / 0 fmt diff / build ✓）/ 6 plan deviations (#11a-g) / T24 TODO 锚点 / 14 步手工验证 reviewer action。**Reviewer 待合并** |
+| 2026-06-17 | v1.3.1 实施收官 | 12/12 tasks 全 commit（v1.3.1 branch 13 commits ahead of origin/v1.3.0）：M1 trait 抽象 / M2 6 builtin slash / M3 7 builtin wizard + 状态机 / M4 TUI 焦点感知 + Concierge 分发 + main.rs init / M5 21 i18n key + CHANGELOG + Cargo.toml 1.2.0→1.3.1 / M6 4 门禁 + T24 TODO + 14 步手工验证清单。**283 tests pass**（v1.3.0 234 + v1.3.1 +49）。**6 处 plan 偏差**全文档化（#11a-g）。**破坏性变更**：无（v1.3.0 已有破坏：`EflowConfig::llm.providers` 删除） |
 | 2026-06-17 | v1.3.0 实施收官 | 26/26 tasks 全 commit（v1.3.0 branch 18 commits ahead of origin/main）：M1 公共 + `ProviderConfig` / M2 `PresetLoader` / M3 `LlmProviderRegistry` + 2 Generic adapter / M4 `LlmRouter::from_config` 重写（**破坏性**：`EflowConfig::llm.providers` 字段删除） / M5 main.rs + i18n + CHANGELOG + 迁移文档 / M6 4 门禁 + 233 tests pass / M7 稳定性约束（trait 冻结 + glob 测试 + ADR 引用）。**2 处 plan 偏差**：#6 `anthropic.rs`/`openai.rs` 文件未删（deviation deferred）；#7 T23 跳过（forward-compat 是 serde_yaml 默认行为，TDD Iron Law 不可违反） |
 | 2026-06-17 | v1.3 writing-plans 收官 | 4 个 plan：spec A（5a7dfef 3135 行 / 26 tasks）/ B1（54a5515 3612 行 / 12 tasks）/ B2（4fba0a9 2141 行 / 12 tasks）/ C（31713b2 1478 行 / 9 tasks）。总 59 tasks 分 4 个小版本发布 v1.3.0/1.3.1/1.3.2/1.3.3。每个 plan 3 项自审（spec coverage / placeholder / type consistency）全过 |
-| 2026-06-17 | v1.3 design 收尾 | 4 个 spec：A（LLM 抽象扩展 21-27 tasks） / B1（向导+斜杠命令 12 tasks）/ B2（CLI 契约 13 tasks）/ C（3 档工作流 7-8 tasks）。总 53-60 tasks，分 3 个小版本 v1.3.0 / v1.3.1 / v1.3.2。3 commits 推 main，4 门禁待 plan 实施后跑 |
 
 ## △ 收工仪式（每次结束前执行）
 

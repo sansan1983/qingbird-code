@@ -12,6 +12,7 @@ use eflow::capability::tools::{
     file::{ReadFileTool, WriteFileTool},
     search::SearchCodeTool,
 };
+use eflow::common::error::Result;
 use eflow::common::types::ModelTier;
 use eflow::infrastructure::config;
 use eflow::infrastructure::event::{Event, EventChannel};
@@ -34,7 +35,41 @@ async fn main() {
         )
         .init();
 
+    // v1.3.1 T10: `eflow init` 子命令——强制进配置向导
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("init") {
+        if let Err(e) = run_init_wizard() {
+            eprintln!("init 失败: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
     let cli = Cli::parse_args();
+
+    // v1.3.1 T10: 首次启动检测——配置不存在时,提示是否进 init 向导
+    if !cli.show_config && !cli.list_profiles && cli.execute.is_none() {
+        // 只在交互式启动时检测(--show-config / --execute / --list-profiles 不挡 wizard)
+        if let Some(path) = config::find_config()
+            && !path.exists()
+        {
+            use std::io::BufRead;
+            eprintln!("未找到配置 ({})", path.display());
+            eprint!("是否进入初始化向导？[Y/n] ");
+            let mut line = String::new();
+            let _ = std::io::stdin().lock().read_line(&mut line);
+            let line = line.trim().to_lowercase();
+            if !line.starts_with('n') {
+                if let Err(e) = run_init_wizard() {
+                    eprintln!("init 失败: {e}");
+                    std::process::exit(1);
+                }
+                eprintln!("配置已写入。运行 eflow 启动 TUI。");
+                return;
+            }
+            // 用户选 N → 继续往下走,会因配置缺失而 exit
+        }
+    }
 
     // 加载配置
     let config_path = config::find_config().unwrap_or_else(|| {
@@ -116,13 +151,21 @@ async fn main() {
     let orchestrator = Arc::new(tokio::sync::Mutex::new(orchestrator));
 
     // 初始化 Concierge
-    let concierge = Concierge::new(
+    let mut concierge = Concierge::new(
         events.clone(),
         memory.clone(),
         profiles.clone(),
         orchestrator.clone(),
+        llm.clone(), // v1.3.1 增量
         cfg.profiles.default.clone(),
     );
+
+    // v1.3.1 T10: 注册 6 个斜杠命令 + required_register 校验
+    if let Err(e) = register_slash_commands(&mut concierge) {
+        eprintln!("斜杠命令注册失败: {e}");
+        std::process::exit(1);
+    }
+
     let concierge = std::sync::Arc::new(tokio::sync::Mutex::new(concierge));
 
     // 显示配置
@@ -187,4 +230,57 @@ async fn main() {
     // v1.1 M10.5 Task C6: 优雅关闭 SubagentPool（worker 退出）
     pool.shutdown().await;
     events.publish(Event::SystemShutdown);
+}
+
+/// v1.3.1 T10: 走配置向导（通过 stdin 简化实现，v1.4 spec D 改为 TUI）
+fn run_init_wizard() -> Result<()> {
+    use eflow::interaction::wizard::Wizard;
+    use eflow::interaction::wizard::builtin::{
+        apikey::ApikeyStep, confirm::ConfirmStep, language::LanguageStep, model::ModelStep,
+        protocol::ProtocolStep, provider::ProviderStep, welcome::WelcomeStep,
+    };
+
+    let steps: Vec<std::sync::Arc<dyn eflow::interaction::wizard::WizardStep>> = vec![
+        std::sync::Arc::new(WelcomeStep),
+        std::sync::Arc::new(LanguageStep),
+        std::sync::Arc::new(ProviderStep),
+        std::sync::Arc::new(ProtocolStep),
+        std::sync::Arc::new(ApikeyStep),
+        std::sync::Arc::new(ModelStep),
+        std::sync::Arc::new(ConfirmStep),
+    ];
+    let wizard = Wizard::new(steps);
+    match wizard.run() {
+        Ok(eflow::interaction::wizard::WizardOutcome::Completed(_state)) => {
+            eprintln!("配置完成。运行 eflow 启动 TUI。");
+            Ok(())
+        }
+        Ok(eflow::interaction::wizard::WizardOutcome::Cancelled) => {
+            eprintln!("已取消。");
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// v1.3.1 T10: 注册 6 个 builtin 斜杠命令到 Concierge
+fn register_slash_commands(
+    concierge: &mut Concierge,
+) -> std::result::Result<(), eflow::common::error::EflowError> {
+    use eflow::interaction::slash::CommandRegistry;
+    use eflow::interaction::slash::builtin::{
+        help::HelpCmd, lang::LangCmd, level::LevelCmd, model::ModelCmd, profile::ProfileCmd,
+        quit::QuitCmd,
+    };
+
+    let mut registry = CommandRegistry::new();
+    registry.register(std::sync::Arc::new(ModelCmd));
+    registry.register(std::sync::Arc::new(ProfileCmd));
+    registry.register(std::sync::Arc::new(LangCmd));
+    registry.register(std::sync::Arc::new(LevelCmd));
+    registry.register(std::sync::Arc::new(HelpCmd::new(&registry)));
+    registry.register(std::sync::Arc::new(QuitCmd));
+    registry.required_register(&["model", "profile", "lang", "level", "help", "quit"])?;
+    concierge.command_registry = registry;
+    Ok(())
 }

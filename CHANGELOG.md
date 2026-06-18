@@ -122,6 +122,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.1] (TBD)
+
+**Features**:
+
+- **6 个斜杠命令**：`/model` / `/profile` / `/lang` / `/level`（空壳，spec C 实施）/ `/help` / `/quit`
+- **首次配置向导**：`eflow init` 强制进；首次启动检测无配置时提示是否进
+- **SelectList widget**：多模交互（输入序号 / ↑↓ 键 / 鼠标滚轮 / 鼠标点击 / Enter / Esc）
+- **bare TUI 模式**：未配置时启动仍能看界面 + header 显 "⚠ 未配置"
+- **核心零硬编码命令名 / 步骤名 / 选项名**：SlashCommand / WizardStep / SelectItemSource trait + 注册表机制
+
+**Internal**:
+
+- ADR-0014 核心零硬编码斜杠命令
+- ADR-0015 核心零硬编码向导步骤
+- **已知偏差**（spec §12）：WizardStep::render() / SelectList::render() / TuiBackend 渲染部分直接调 ratatui API 违反"零硬编码"原则，留待 v1.4 spec D 重构
+
+**Upgrade Notes**:
+
+- v1.3.0 → v1.3.1 **不**破坏 eflow.yaml schema
+- 6 个新斜杠命令**不**影响现有 TUI 行为
+
+---
+
 [Unreleased]: https://github.com/sansan1983/eflow/compare/v1.0.0...HEAD
 [1.3.0]: https://github.com/sansan1983/eflow/compare/v1.2.0...v1.3.0
 [1.0.0]: https://github.com/sansan1983/eflow/releases/tag/v1.0.0

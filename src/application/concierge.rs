@@ -7,6 +7,7 @@ use crate::application::orchestrator::Orchestrator;
 use crate::common::types::Intent;
 use crate::common::types::{RiskLevel, TaskSpec};
 use crate::infrastructure::event::{Event, EventChannel};
+use crate::infrastructure::llm::LlmRouter;
 use crate::infrastructure::memory::CompositeMemory;
 use crate::infrastructure::profile::ProfileRegistry;
 use rust_i18n::t;
@@ -21,9 +22,17 @@ pub struct Concierge {
     #[allow(dead_code)]
     profiles: Arc<tokio::sync::RwLock<ProfileRegistry>>,
     orchestrator: Arc<Mutex<Orchestrator>>,
+    // v1.3.1 增量：LlmRouter 共享给 SlashCommand——通过 Arc<Mutex<>> 让
+    // CommandContext 借用期间不冲突（v1.3.0 Concierge **不**持 router 字段，
+    // 由 setter 注入）
+    llm_router: Arc<Mutex<LlmRouter>>,
     // v1.2 D3: 用 Mutex 包裹让 ProfileSwitch 意图能真改；通过 active_profile()
     // getter 和 handle_input 的 ProfileSwitch 分支都用到，不再 dead
     active_profile: Arc<Mutex<String>>,
+    // v1.3.1 增量：斜杠命令注册表——/model /profile /lang /level /help /quit
+    // 默认空（v1.2 调用点不传），main.rs 启动时填充
+    #[allow(dead_code)]
+    pub command_registry: crate::interaction::slash::CommandRegistry,
 }
 
 impl Concierge {
@@ -32,6 +41,7 @@ impl Concierge {
         memory: Arc<Mutex<CompositeMemory>>,
         profiles: Arc<tokio::sync::RwLock<ProfileRegistry>>,
         orchestrator: Arc<Mutex<Orchestrator>>,
+        llm_router: Arc<Mutex<LlmRouter>>, // v1.3.1 增量
         default_profile: String,
     ) -> Self {
         Self {
@@ -39,7 +49,9 @@ impl Concierge {
             memory,
             profiles,
             orchestrator,
+            llm_router, // v1.3.1 增量
             active_profile: Arc::new(Mutex::new(default_profile)),
+            command_registry: crate::interaction::slash::CommandRegistry::new(), // v1.3.1 增量
         }
     }
 
@@ -48,8 +60,22 @@ impl Concierge {
         self.active_profile.lock().await.clone()
     }
 
+    /// v1.3.1: 公开 setter 让 `/profile` 斜杠命令能真切换
+    pub async fn set_active_profile(&self, name: String) {
+        let mut p = self.active_profile.lock().await;
+        *p = name;
+    }
+
     /// 处理用户输入 — 永不阻塞：派发任务用 `tokio::spawn` 异步执行
-    pub async fn handle_input(&self, input: String) -> String {
+    ///
+    /// v1.3.1 增量：`/` 前缀的输入走 `command_registry` 斜杠命令分发；
+    /// 非斜杠输入走原 v1.2 意图分类路径。
+    pub async fn handle_input(&mut self, input: String) -> String {
+        // v1.3.1 增量：斜杠命令优先
+        if let Some(cmd_str) = input.strip_prefix('/') {
+            return self.dispatch_slash(cmd_str).await;
+        }
+
         let intent = self.classify_intent(&input);
 
         match intent {
@@ -111,6 +137,51 @@ impl Concierge {
                 *p = industry.clone();
                 t!("concierge_profile_switch", industry = industry).to_string()
             }
+        }
+    }
+
+    /// v1.3.1 增量：分发斜杠命令到 CommandRegistry
+    ///
+    /// 关键：`&mut self` 因为 `CommandContext` 持有 `&mut Concierge`。
+    /// router 通过 `CommandContext.router: Arc<Mutex<LlmRouter>>` 共享——execute
+    /// 内部需要时再 lock（plan deviation：原计划 `&mut LlmRouter` 借用冲突，
+    /// v1.3.1 改成 `Arc<Mutex<>>`）。
+    async fn dispatch_slash(&mut self, cmd_str: &str) -> String {
+        use crate::interaction::slash::{CommandContext, SlashOutput};
+
+        match self.command_registry.dispatch(cmd_str) {
+            Some((name, args)) => {
+                let cmd_arc = match self.command_registry.get(name) {
+                    Some(c) => c.clone(), // clone Arc 释放 &self 借用
+                    None => {
+                        // v1.3.1 T11: 用 err_unknown_slash_cmd i18n key（fallback en-US）
+                        return t!("err_unknown_slash_cmd", name = name).to_string();
+                    }
+                };
+
+                // router Arc<Mutex> clone 释放 self 借用
+                let router_arc = Arc::clone(&self.llm_router);
+                let mut ctx = CommandContext::new(self, router_arc);
+
+                match cmd_arc.execute(args, &mut ctx).await {
+                    Ok(output) => match output {
+                        SlashOutput::Text(s) => s,
+                        SlashOutput::NoOp => String::new(),
+                        // v1.3.1 阶段: ReloadRouter/Shutdown/OpenSubView 3 个输出未实装，
+                        // 走 err_subview_render_failed / err_cmd_failed i18n key 兜底
+                        // —— v1.3.3 spec B 实施时由真调用方替换
+                        SlashOutput::ReloadRouter => {
+                            t!("err_cmd_failed", msg = "ReloadRouter").to_string()
+                        }
+                        SlashOutput::Shutdown => t!("err_cmd_failed", msg = "Shutdown").to_string(),
+                        SlashOutput::OpenSubView(_) => {
+                            t!("err_subview_render_failed", msg = "OpenSubView").to_string()
+                        }
+                    },
+                    Err(e) => t!("err_cmd_failed", msg = e.to_string()).to_string(),
+                }
+            }
+            None => t!("err_unknown_slash_cmd", name = cmd_str).to_string(),
         }
     }
 
