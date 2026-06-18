@@ -46,4 +46,3 @@ serial_test = "3"
 
 [features]
 default = []
-local-llm = []  # v2.0: Ollama provider

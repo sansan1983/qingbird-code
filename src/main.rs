@@ -125,7 +125,7 @@ async fn main() {
     let llm = match LlmRouter::from_config(&cfg, &provider_dir) {
         Ok(l) => Arc::new(tokio::sync::Mutex::new(l)),
         Err(e) => {
-            eprintln!("Failed to init LLM: {e}");
+            eprintln!("{}: {}", t!("err_llm_init", msg = e.to_string()), e);
             return;
         }
     };
@@ -156,7 +156,7 @@ async fn main() {
     ) {
         Ok(m) => Arc::new(tokio::sync::Mutex::new(m)),
         Err(e) => {
-            eprintln!("Failed to init memory: {e}");
+            eprintln!("{}: {}", t!("err_memory_init", msg = e.to_string()), e);
             return;
         }
     };
@@ -186,7 +186,7 @@ async fn main() {
 
     // v1.3.1 T10: 注册 6 个斜杠命令 + required_register 校验
     if let Err(e) = register_slash_commands(&mut concierge) {
-        eprintln!("斜杠命令注册失败: {e}");
+        eprintln!("{}: {}", t!("err_slash_register", msg = e.to_string()), e);
         std::process::exit(1);
     }
 
