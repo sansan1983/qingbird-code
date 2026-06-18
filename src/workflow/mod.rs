@@ -11,6 +11,11 @@
 //! - `set_override(None)` 清除 override（`/level auto` 切回自动判定）
 //!
 //! v1.3.3 known deviation: 阶段实施时按 v1.3.2 现状调整 ——
+//! - deviation #13a: Concierge 字段是 `Arc<Mutex<>>`（不是 `RefCell`），
+//!   WorkflowContext 持 Arc clone（与 self 借用独立）
+//! - deviation #13h: AdvancedWorkflow 不真做"3 次反馈"——v1.2 Orchestrator.execute
+//!   是 1 次反馈默认行为 + Blackboard 不暴露外部 access。Advanced = execute
+//!   + 记忆检索 + summary 包装。**实质行为差异留 v1.4+ 完善**。
 #![allow(dead_code)] // 阶段实施前 AggregatedResult 字段未消费，模块化隔离
 
 use std::collections::HashMap;
@@ -23,7 +28,9 @@ use crate::application::concierge::Concierge;
 use crate::application::orchestrator::Orchestrator;
 use crate::common::error::{EflowError, Result};
 use crate::common::types::TaskSpec;
-use crate::infrastructure::memory::MemoryManager;
+use crate::infrastructure::memory::CompositeMemory;
+
+pub mod builtin;
 
 /// 档位枚举（`#[non_exhaustive]` 标注允许 v1.4+ 加新档位不破坏 match）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
@@ -80,11 +87,14 @@ pub trait WorkflowExecutor: Send + Sync {
 ///
 /// v1.3.3 deviation #13a: Concierge 字段是 `Arc<Mutex<>>` 不是 `RefCell`，
 /// WorkflowContext 持 Arc clone（与 self 借用独立，不冲突）。
+///
+/// memory 字段是 `Arc<Mutex<CompositeMemory>>`（具体类型，与 Concierge 字段
+/// 类型一致）—— v1.2 Concierge **不**用 trait object。
 pub struct WorkflowContext<'a> {
     pub task: &'a TaskSpec,
     pub concierge: &'a mut Concierge,
     pub orchestrator: Arc<tokio::sync::Mutex<Orchestrator>>,
-    pub memory: Arc<tokio::sync::Mutex<dyn MemoryManager>>,
+    pub memory: Arc<tokio::sync::Mutex<CompositeMemory>>,
 }
 
 /// 档位注册表

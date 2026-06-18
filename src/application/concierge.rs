@@ -66,6 +66,12 @@ impl Concierge {
         self.events.subscribe()
     }
 
+    /// v1.3.3: 暴露 llm_router Arc clone 给 WorkflowExecutor 借用
+    /// —— SimpleWorkflow 1 次 LLM 调用通过这个拿锁（与 self 借用独立）
+    pub fn llm_router_handle(&self) -> Arc<tokio::sync::Mutex<LlmRouter>> {
+        Arc::clone(&self.llm_router)
+    }
+
     /// v1.3.1: 公开 setter 让 `/profile` 斜杠命令能真切换
     pub async fn set_active_profile(&self, name: String) {
         let mut p = self.active_profile.lock().await;
