@@ -312,6 +312,9 @@ impl InteractionLayer for TuiBackend {
                         s.messages.push(format!("? {prompt}"));
                     }
                     Event::SystemShutdown => return Ok(()),
+                    // v1.3.2: SystemReady 是 CLI-only 启动信号（spec B2 ADR-0016
+                    // TUI 零改造），TUI 不消费——用 _ => 兜底忽略
+                    _ => {}
                 }
             }
         })();

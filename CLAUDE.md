@@ -10,17 +10,17 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **v1.3.2 spec B2 实施中（4/12 tasks done = M1+M2+M3+M4）**：M1 T1 main.rs session 路由 + M2 T2+T3 CliOutput/exit_code + M3 T4 eflow session start 持续运行 + M4 T5+T6 stdin 协议 + 5 handlers 真 dispatch。**下一动作**：M5 T7 `eflow init` 委托 Wizard（src/cli/init.rs）—— v1.3.1 main.rs 已有 init 路由，cli/init.rs 是把 `run_init_wizard` 从 main.rs 抽出 + 0/1/2 退出码 |
-| **上次完成** | v1.3.2 M1+M2+M3+M4（commit 305b2a5）— 5 commits on v1.3.2（起点 3d03950 + CLAUDE 28eefa0 + M1+M2 06d09fd + M3 2372fda + M4 305b2a5）。**M4 关键产出**：StdinCommand 5 变体 enum（#[serde(tag)]）+ 7 serde round-trip 测试 + read_loop 真持续读 stdin + 5 handlers 真 dispatch。**5 handler dispatch 策略**：send→handle_input / end→stderr+返 0 / level→dispatch_slash / lang→locale::init / help→registry.list()。**Plan deviation #12l**：Concierge::dispatch_slash 改 pub（1 行 surgical visibility）。**测试**：283 → 309 pass（+26 cli tests：output 4 + error 15 + stdin 7）。**门禁**：build ✓ / 309 tests ✓ / 0 clippy / 0 fmt diff |
-| **下次动作** | 开工 v1.3.2 M5 T7：`eflow init` 委托 Wizard（src/cli/init.rs）—— v1.3.1 main.rs 已有 init 路由，cli/init.rs 抽出 run_init_wizard + 0/1/2 exit code（`error::exit_code` 已有映射） |
+| **当前任务** | **v1.3.2 spec B2 实施中（5/12 tasks done = M1-M5）**：M1+M2 CliOutput + exit_code / M3 session start 持续运行 / M4 stdin 协议 + 5 handlers / M5 init 委托 Wizard。**下一动作**：M6 T8 `Event::SystemReady` variant 加到 `src/infrastructure/event.rs`（start.rs 当前用 `Uuid::nil()` 占位） |
+| **上次完成** | v1.3.2 M1-M5（commit 327a85e）— 6 commits on v1.3.2 branch。**M5 关键产出**：cli/init.rs 搬 v1.3.1 main.rs::run_init_wizard 改 i32 exit code（0/1/2）；main.rs 删 30 行 wizard 代码 + init 路由调 cli::init::run() + 首次启动检测 fallback 也走 cli::init。**Plan deviation #12m**：plan 假设 init 需要 LlmRouter + EflowConfig::default() —— 实际 Wizard 走 stdin/stdout，**不**需要 router，零 router 代码。**测试**：309 pass（持平）。**累计 deviations #12a-m（13 个）**。**门禁**：build ✓ / 309 ✓ / 0 clippy / 0 fmt |
+| **下次动作** | 开工 v1.3.2 M6 T8：加 `Event::SystemReady` variant 到 src/infrastructure/event.rs（task_id + started_at: SystemTime）。**风险点**：v1.2 / v1.3.0 / v1.3.1 实施时所有 `match event` 可能没列全 6 变体（如果用 `_ =>` 兜底就 OK；如果用 match 列全会编译失败）。开工前先 grep `match.*Event` 全 match 点 |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-18 | v1.3.2 M5 commit 327a85e | cli/init.rs 搬 v1.3.1 main.rs::run_init_wizard 改 i32 exit code（0/1/2）；main.rs 删 30 行 wizard 代码 + init 路由调 cli::init::run() + 首次启动 fallback 也走 cli::init。**#12m**：plan 假设 init 需要 LlmRouter + EflowConfig::default() —— 实际 Wizard 走 stdin/stdout，**不**需要 router，零 router 代码。**test 309 pass**（持平） |
 | 2026-06-18 | v1.3.2 M4 commit 305b2a5 | StdinCommand 5 变体 enum + 7 serde round-trip 测试 + read_loop 持续读 stdin + 5 handlers 真 dispatch。**handler 策略**：send→handle_input（复用 TaskDispatch）/ end→stderr+返 0（spec §3.6 简化）/ level→dispatch_slash（保留 LevelCmd parse_args 校验）/ lang→locale::init（trusted caller 跳校验）/ help→registry.list()（避免重复 SlashCommand 链路）。**#12l**：Concierge::dispatch_slash 改 pub（1 行 surgical）。**test 309 pass**（302 + 7 stdin） |
-| 2026-06-18 | v1.3.2 M3 commit 2372fda | 4 commits on v1.3.2：起点空 + CLAUDE + M1+M2 (main.rs session 路由 + CliOutput + exit_code) + M3 (start.rs 持续运行 + SystemReady + tokio::select)。**M3 关键决策**：#12g Concierge::subscribe_events() 加 5 行 getter；#12h 复用 main.rs pool.shutdown + SystemShutdown 模式；#12i SystemReady task_id 用 Uuid::nil() 占位；#12j error::exit_code 改 i32（ExitCode 是 !，as u8 编译不过）；#12k tool types 在子模块。**5 handler + stdin::read_loop** 当前是占位，M4 T5/T6 替换真实现 |
-| 2026-06-17 | v1.3.1 PR #15 → main 已合并 | merge commit 43aa4ec。远端 v1.3.1/v1.3.0/v1.2 branch 全部自动删（GitHub "Delete head branches when PRs are merged"）。本地 `git branch -d v1.3.1` 完成；main `git pull --ff` 拿到 14 commits / 2559 行净增 / 36 文件 |
+| 2026-06-18 | v1.3.2 M3 commit 2372fda | 4 commits on v1.3.2：起点空 + CLAUDE + M1+M2 (main.rs session 路由 + CliOutput + exit_code) + M3 (start.rs 持续运行 + SystemReady + tokio::select)。**M3 关键决策**：#12g Concierge::subscribe_events() 加 5 行 getter；#12h 复用 main.rs pool.shutdown + SystemShutdown 模式；#12i SystemReady task_id 用 Uuid::nil() 占位；#12j error::exit_code 改 i32（ExitCode 是 !，as u8 编译不过）；#12k tool types 在子模块 |
 | 2026-06-17 | v1.3 writing-plans 收官 | 4 个 plan：spec A（5a7dfef 3135 行 / 26 tasks）/ B1（54a5515 3612 行 / 12 tasks）/ B2（4fba0a9 2141 行 / 12 tasks）/ C（31713b2 1478 行 / 9 tasks）。总 59 tasks 分 4 个小版本发布 v1.3.0/1.3.1/1.3.2/1.3.3。每个 plan 3 项自审（spec coverage / placeholder / type consistency）全过 |
 
 ## △ 收工仪式（每次结束前执行）

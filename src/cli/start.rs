@@ -232,6 +232,9 @@ async fn task_a_listen_events(event_rx: &mut broadcast::Receiver<Event>) -> i32 
             Ok(Event::SystemShutdown) => {
                 return 0;
             }
+            // v1.3.2: SystemReady 当前未在 channel 流通（start.rs 手写 NDJSON），
+            // 保留分支以便将来按事件流分发时复用
+            Ok(Event::SystemReady { .. }) => continue,
             Err(broadcast::error::RecvError::Lagged(_)) => continue,
             Err(broadcast::error::RecvError::Closed) => return 0,
         }
