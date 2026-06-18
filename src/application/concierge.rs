@@ -33,6 +33,10 @@ pub struct Concierge {
     // 默认空（v1.2 调用点不传），main.rs 启动时填充
     #[allow(dead_code)]
     pub command_registry: crate::interaction::slash::CommandRegistry,
+    // v1.3.3 增量：工作流档位注册表——Simple/Standard/Advanced 3 个 impl
+    // 默认空（v1.2 调用点不传），main.rs 启动时通过 set_workflow_registry 注入
+    #[allow(dead_code)]
+    pub workflow_registry: crate::workflow::WorkflowRegistry,
 }
 
 impl Concierge {
@@ -52,6 +56,7 @@ impl Concierge {
             llm_router, // v1.3.1 增量
             active_profile: Arc::new(Mutex::new(default_profile)),
             command_registry: crate::interaction::slash::CommandRegistry::new(), // v1.3.1 增量
+            workflow_registry: crate::workflow::WorkflowRegistry::default(),     // v1.3.3 增量
         }
     }
 
@@ -237,4 +242,121 @@ impl Concierge {
         // v1.0 简化：不持锁扫描 profile.skill 列表
         t!("concierge_skill_query_placeholder").to_string()
     }
+
+    /// v1.3.3 增量：注入工作流档位注册表（main.rs 启动时调用）
+    pub fn set_workflow_registry(&mut self, registry: crate::workflow::WorkflowRegistry) {
+        self.workflow_registry = registry;
+    }
+
+    /// v1.3.3 增量：可变借用 workflow_registry（/level 命令用）
+    pub fn workflow_registry_mut(&mut self) -> &mut crate::workflow::WorkflowRegistry {
+        &mut self.workflow_registry
+    }
+
+    /// v1.3.3 增量：规则驱动的档位判定（5 条规则，按优先级匹配）
+    ///
+    /// **零 LLM 成本**——纯字符串匹配
+    /// **override 不在此处检查**——调用方负责：
+    ///   `override.unwrap_or(self.determine_workflow_level(task))`
+    pub fn determine_workflow_level(
+        &self,
+        task: &crate::common::types::TaskSpec,
+    ) -> crate::workflow::WorkflowLevel {
+        let desc = &task.description;
+        let len = desc.chars().count();
+
+        // 规则 1: 涉及多文件（≥ 3 个扩展名）→ Advanced
+        if count_file_extensions(desc) >= 3 {
+            return crate::workflow::WorkflowLevel::Advanced;
+        }
+
+        // 规则 2: 含关键词（中英）→ Advanced
+        if contains_workflow_keyword(desc) {
+            return crate::workflow::WorkflowLevel::Advanced;
+        }
+
+        // 规则 3: 短任务（< 30 字符）→ Simple
+        if len < 30 {
+            return crate::workflow::WorkflowLevel::Simple;
+        }
+
+        // 规则 4: 中等任务（30-100 字符）→ Standard
+        if len < 100 {
+            return crate::workflow::WorkflowLevel::Standard;
+        }
+
+        // 规则 5: 长任务（≥ 100 字符）→ Advanced
+        crate::workflow::WorkflowLevel::Advanced
+    }
+
+    /// v1.3.3 增量：派发任务到 workflow_registry（override 优先 + 调档位 execute）
+    ///
+    /// **借用模式说明**：ctx.concierge 是 `&mut self` 独占借用，期间不能访问
+    /// self.workflow_registry。解法：先 `override_level()` 算出 level（&self 借用
+    /// 立即释放），再用 `std::mem::take` 把 registry 移出到 owned 局部变量，
+    /// 调完 execute 后 `drop(ctx)` + 放回 self。`take` 用 `Default::default()`
+    /// 临时替换（空 registry），原内容在 `reg` 局部变量里保留，**不丢失**任何注册。
+    pub async fn dispatch_task_with_level(
+        &mut self,
+        task: crate::common::types::TaskSpec,
+    ) -> crate::common::error::Result<crate::workflow::AggregatedResult> {
+        // 1. 算 level（&self.workflow_registry 借用，结束于 ;）
+        let auto_level = self.determine_workflow_level(&task);
+        let level = self
+            .workflow_registry
+            .override_level()
+            .unwrap_or(auto_level);
+
+        // 2. take registry 出来 owned —— &mut self.workflow_registry 借用结束于 ;
+        let reg = std::mem::take(&mut self.workflow_registry);
+
+        // 3. 准备 Arc 字段（&self split borrow，OK）
+        let orch_arc = Arc::clone(&self.orchestrator);
+        let mem_arc = Arc::clone(&self.memory);
+
+        // 4. 构造 ctx —— &mut self 借用
+        let mut ctx = crate::workflow::WorkflowContext {
+            task: &task,
+            concierge: self,
+            orchestrator: orch_arc,
+            memory: mem_arc,
+        };
+
+        // 5. 调 execute（reg 是 owned 局部变量，与 ctx 独立）
+        let result = reg.execute(level, &mut ctx).await;
+
+        // 6. 释放 ctx 借用后，把 reg 放回 self
+        drop(ctx);
+        self.workflow_registry = reg;
+
+        result
+    }
+}
+
+/// 统计任务描述里的文件扩展名数量（≥ 3 → Advanced）
+fn count_file_extensions(s: &str) -> usize {
+    const EXTENSIONS: &[&str] = &[
+        "rs", "py", "js", "ts", "go", "java", "cpp", "c", "h", "toml", "yaml", "yml", "json", "md",
+    ];
+    EXTENSIONS
+        .iter()
+        .map(|ext| s.matches(&format!(".{ext}")).count())
+        .sum()
+}
+
+/// 检测任务描述是否含"重构/系统/全部/refactor..."关键词（→ Advanced）
+fn contains_workflow_keyword(s: &str) -> bool {
+    const KEYWORDS: &[&str] = &[
+        "重构",
+        "系统",
+        "全部",
+        "梳理",
+        "优化",
+        "refactor",
+        "refactoring",
+        "system",
+        "all",
+        "optimize",
+    ];
+    KEYWORDS.iter().any(|kw| s.contains(kw))
 }
