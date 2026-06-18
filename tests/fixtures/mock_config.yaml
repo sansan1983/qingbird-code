@@ -1,0 +1,42 @@
+# eflow 测试用 mock config（v1.3.2 GUI 套壳集成测试用）
+#
+# 关键设计：mock provider 不可达（localhost:9999）—— smoke test 只验证
+# CLI 契约（stdout NDJSON 事件流 + stdin 解析 + 4 档 exit code），
+# **不**验证 LLM 调用。send action 走真 LLM 会超时（5-30s），smoke test
+# 不调 send，只测 /level /lang /help /end 这 4 个不依赖 LLM 的 action。
+
+core:
+  language: en-US
+  timezone: UTC
+
+llm:
+  providers:
+    mock:
+      api_key: "test-mock-key-not-real"
+      default_model: "mock-model"
+      timeout_secs: 5
+      max_retries: 0
+      retry_backoff_ms: 100
+  routing:
+    strong: mock
+    medium: mock
+    light: mock
+  cache:
+    l1_enabled: true
+    l2_enabled: false
+    l2_ttl_days: 7
+
+memory:
+  working_memory_limit: 100
+  project_db_path: "./tests/fixtures/data/test_project.db"
+  user_db_path: "./tests/fixtures/data/test_user.db"
+  cleanup_interval_hours: 24
+
+security:
+  risk_threshold: L0
+  allowed_paths: []
+
+profiles:
+  default: test
+  available:
+    - test

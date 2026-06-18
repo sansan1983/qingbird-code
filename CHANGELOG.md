@@ -145,6 +145,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.2] (TBD)
+
+**Features**:
+
+- **2 个 headless subcommand**：
+  - `eflow session start [--config PATH] [--lang LANG]` —— 持续运行 + stdin 协议（GUI 套壳接口）
+  - `eflow init` —— 委托 Wizard，0/1/2 退出码
+- **7 个事件 schema 冻结**（6 原有 + `SystemReady`）—— 契约冻结 v1.3.0 起（spec B2 ADR-0017）
+- **5 个 stdin action**：`send` / `end` / `level` / `lang` / `help`（JSON 一行一指令，解析失败不退出）
+- **4 档 exit code**：`0`（ok）/ `1`（用户错误）/ `2`（系统错误）/ `130`（Ctrl+C）
+- **stdout 永远 JSON 契约**；**stderr 永远人类可读**（tracing 走 stderr 不污染 stdout）
+- **TUI 零改造**（spec B2 ADR-0016）—— TUI 仍走 spec B1 同进程 trait dispatch
+- **GUI 套壳契约文档**：`docs/cli-contract.md`（7 事件 / 5 stdin / 4 exit / Python 套壳示例）
+- **Python 集成测试**：`tests/gui_smoke_test.py` —— 8 步流程验证契约稳定（mock provider，不调真 LLM）
+
+**Internal**:
+
+- ADR-0016 TUI 零改造 + subcommand 是 headless 包装
+- ADR-0017 CLI 契约冻结 v1.3.0 起
+- ADR-0018 单 subcommand 模式（推翻早期"6 个独立 subcommand" 假设）
+- 5 个 plan deviations：#12a-v（22 个累计）—— 详 commit message
+
+**Upgrade Notes**:
+
+- v1.3.1 → v1.3.2 **不**破坏 eflow.yaml schema
+- 新增 `eflow session start` subcommand，**不**影响现有 TUI 行为
+- GUI 团队可基于契约文档（`docs/cli-contract.md`）实现任意技术栈客户端（Python / Electron / Tauri / Web）
+
+---
+
 [Unreleased]: https://github.com/sansan1983/eflow/compare/v1.0.0...HEAD
 [1.3.0]: https://github.com/sansan1983/eflow/compare/v1.2.0...v1.3.0
 [1.0.0]: https://github.com/sansan1983/eflow/releases/tag/v1.0.0

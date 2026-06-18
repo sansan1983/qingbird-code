@@ -6,6 +6,7 @@ rust_i18n::i18n!("locales", fallback = "en-US");
 
 pub mod application;
 pub mod capability;
+pub mod cli;
 pub mod common;
 pub mod infrastructure;
 pub mod interaction;

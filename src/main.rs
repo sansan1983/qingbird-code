@@ -12,7 +12,6 @@ use eflow::capability::tools::{
     file::{ReadFileTool, WriteFileTool},
     search::SearchCodeTool,
 };
-use eflow::common::error::Result;
 use eflow::common::types::ModelTier;
 use eflow::infrastructure::config;
 use eflow::infrastructure::event::{Event, EventChannel};
@@ -27,22 +26,48 @@ use rust_i18n::t;
 
 #[tokio::main]
 async fn main() {
-    // 初始化日志
+    // 初始化日志（走 stderr —— 契约冻结 v1.3.0 起：stdout 永远 JSON 契约，
+    // stderr 永远人类可读。spec B2 §3.5 ADR-0017）
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "eflow=info".into()),
         )
+        .with_writer(std::io::stderr)
         .init();
 
-    // v1.3.1 T10: `eflow init` 子命令——强制进配置向导
+    // v1.3.2 T7: `eflow init` 子命令委托 cli::init（v1.3.1 main.rs 也有 init 路由——cli/init.rs 是 surgical 搬移）
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).map(String::as_str) == Some("init") {
-        if let Err(e) = run_init_wizard() {
-            eprintln!("init 失败: {e}");
-            std::process::exit(1);
+        let exit_code = eflow::cli::init::run();
+        std::process::exit(exit_code);
+    }
+
+    // v1.3.2 T1: `eflow session start` 子命令——headless 持续运行（spec B2）
+    // plan deviation #12f：v1.3.1 main.rs 没有 clap SubCommand enum，
+    // 用 std::env::args() 手工切路由，匹配 v1.3.1 既有 init 子命令风格。
+    if args.get(1).map(String::as_str) == Some("session") {
+        // 用法：eflow session start [--config PATH] [--lang LANG]
+        match args.get(2).map(String::as_str) {
+            Some("start") => {
+                let config = parse_session_flag(&args, "--config").map(std::path::PathBuf::from);
+                let lang = parse_session_flag(&args, "--lang");
+                let exit_code = eflow::cli::start::run(config, lang).await;
+                std::process::exit(exit_code);
+            }
+            Some(other) => {
+                eprintln!(
+                    "未知 session 子命令: {other}。用法: eflow session start [--config PATH] [--lang LANG]"
+                );
+                std::process::exit(1);
+            }
+            None => {
+                eprintln!(
+                    "缺少 session 子命令。用法: eflow session start [--config PATH] [--lang LANG]"
+                );
+                std::process::exit(1);
+            }
         }
-        return;
     }
 
     let cli = Cli::parse_args();
@@ -60,9 +85,9 @@ async fn main() {
             let _ = std::io::stdin().lock().read_line(&mut line);
             let line = line.trim().to_lowercase();
             if !line.starts_with('n') {
-                if let Err(e) = run_init_wizard() {
-                    eprintln!("init 失败: {e}");
-                    std::process::exit(1);
+                let code = eflow::cli::init::run();
+                if code != 0 {
+                    std::process::exit(code);
                 }
                 eprintln!("配置已写入。运行 eflow 启动 TUI。");
                 return;
@@ -232,38 +257,7 @@ async fn main() {
     events.publish(Event::SystemShutdown);
 }
 
-/// v1.3.1 T10: 走配置向导（通过 stdin 简化实现，v1.4 spec D 改为 TUI）
-fn run_init_wizard() -> Result<()> {
-    use eflow::interaction::wizard::Wizard;
-    use eflow::interaction::wizard::builtin::{
-        apikey::ApikeyStep, confirm::ConfirmStep, language::LanguageStep, model::ModelStep,
-        protocol::ProtocolStep, provider::ProviderStep, welcome::WelcomeStep,
-    };
-
-    let steps: Vec<std::sync::Arc<dyn eflow::interaction::wizard::WizardStep>> = vec![
-        std::sync::Arc::new(WelcomeStep),
-        std::sync::Arc::new(LanguageStep),
-        std::sync::Arc::new(ProviderStep),
-        std::sync::Arc::new(ProtocolStep),
-        std::sync::Arc::new(ApikeyStep),
-        std::sync::Arc::new(ModelStep),
-        std::sync::Arc::new(ConfirmStep),
-    ];
-    let wizard = Wizard::new(steps);
-    match wizard.run() {
-        Ok(eflow::interaction::wizard::WizardOutcome::Completed(_state)) => {
-            eprintln!("配置完成。运行 eflow 启动 TUI。");
-            Ok(())
-        }
-        Ok(eflow::interaction::wizard::WizardOutcome::Cancelled) => {
-            eprintln!("已取消。");
-            Ok(())
-        }
-        Err(e) => Err(e),
-    }
-}
-
-/// v1.3.1 T10: 注册 6 个 builtin 斜杠命令到 Concierge
+/// v1.3.2 T7: 注册 6 个 builtin 斜杠命令到 Concierge
 fn register_slash_commands(
     concierge: &mut Concierge,
 ) -> std::result::Result<(), eflow::common::error::EflowError> {
@@ -283,4 +277,24 @@ fn register_slash_commands(
     registry.required_register(&["model", "profile", "lang", "level", "help", "quit"])?;
     concierge.command_registry = registry;
     Ok(())
+}
+
+/// v1.3.2 T1: 解析 `eflow session start --flag VALUE` 的 flag 值
+///
+/// # 行为
+/// - 从 args 找 `--flag`，下一个 arg 当 value
+/// - flag 存在但无 value → 视为 None（让 start.rs 用默认）
+/// - flag 不存在 → None
+///
+/// # 简单实现理由
+/// - v1.3.2 spec B2 阶段只用 `--config` / `--lang` 两个 flag
+/// - 等 v1.4 spec D 引入 clap derive 时替换
+fn parse_session_flag(args: &[String], flag: &str) -> Option<String> {
+    let mut iter = args.iter();
+    while let Some(a) = iter.next() {
+        if a == flag {
+            return iter.next().cloned();
+        }
+    }
+    None
 }
