@@ -71,7 +71,8 @@ PR 不带无关重构。不重排/重命名/"改进"无关文件。看到 dead c
 - **v1.3.0 改了 `eflow.yaml`**（见 `docs/migration-v1.2-to-v1.3.md`）。`llm.providers` 删了。Provider 改在 `~/.eflow/providers/<id>.yaml`；`routing.{strong,medium,light}` 现在引用 provider id，不再是 `"anthropic"` / `"openai"`。新代码**不要**加回老字段。
 - **`Cargo.lock` 在 `.gitignore`**。别 commit；贡献者 clone 后重新生成。
 - **默认 locale 是 `zh-CN`**。README 里 `eflow.yaml` 例子还是 v1.2 形态——`routing` 块还能用，但 `llm.providers` 块 v1.3.0+ 被静默忽略。文档示例用 v1.3 形态。
-- **v1.3.3 加了两个 registry**（`main.rs::register_*` 接线）：6 个斜杠命令（`model` / `profile` / `lang` / `level` / `help` / `quit`）和 3 个工作流档位（`Simple` / `Standard` / `Advanced`）。两个都用 `required_register` 校验——加新条目必须列在 required 集合里。
+- **v1.3.3 加了 slash command registry**（`main.rs::register_slash_commands` 接线）：6 个斜杠命令（`model` / `profile` / `lang` / `level` / `help` / `quit`）。用 `required_register` 校验——加新条目必须列在 required 集合里。
+- **v1.3.3 spec C 实施未接通**——`/level simple` 是 no-op（`/level` 命令改占位 stub，v1.4+ 重写）。`src/workflow/` 已删（PR #21），3 档抽象整套移除，承认回退。
 - **v1.3.1 有已知偏差**（`src/interaction/wizard/mod.rs` 和 `src/interaction/tui.rs` 有 `TODO(v1.4 spec D)` 标记）：wizard / SelectList / TUI 直接调 ratatui，没走 `RenderEngine` trait。v1.4 spec D 计划会修。**不要**顺手修这个。
 
 ## 文件地图（先看这些）
@@ -82,7 +83,7 @@ PR 不带无关重构。不重排/重命名/"改进"无关文件。看到 dead c
 | TUI 后端 | `src/interaction/tui.rs` |
 | 向导步骤 | `src/interaction/wizard/builtin/*.rs` |
 | 斜杠命令 | `src/interaction/slash/builtin/*.rs` |
-| 工作流档位 | `src/workflow/builtin/{simple,standard,advanced}.rs` |
+| ~~工作流档位~~ | ~~`src/workflow/builtin/{simple,standard,advanced}.rs`~~ （v1.3.3 spec C 实施未接通，PR #21 已删） |
 | Concierge（零阻塞派发） | `src/application/concierge.rs` |
 | Orchestrator（按层分解 + 并发） | `src/application/orchestrator.rs` |
 | D→E→F 管线 | `src/capability/{decisioner,executor,feedbacker}.rs` |
