@@ -10,12 +10,14 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **v1.3.2 spec B2 实施中（6/12 tasks done = M1-M6）**：M1+M2 CliOutput + exit_code / M3 session start 持续运行 / M4 stdin 协议 + 5 handlers / M5 init 委托 Wizard / M6 Event::SystemReady variant。**下一动作**：M7 T9-T11 契约文档（docs/cli-contract.md）+ mock config fixture（tests/fixtures/mock_config.yaml）+ Python GUI 套壳集成测试（tests/gui_smoke_test.py） |
-| **上次完成** | v1.3.2 M1-M6（commit ff82026）— 7 commits on v1.3.2 branch。**M6 关键产出**：Event::SystemReady { task_id, started_at } variant + 2 个测试（构造+字段保留 + try_recv 流通）；tui.rs:293 match 加 _ => 兜底（SystemReady 是 CLI-only，TUI 不消费，spec B2 ADR-0016）；start.rs:193 match 加 SystemReady 分支（**当前未流通**——start.rs 仍 M3 手写 NDJSON，保留分支供未来复用）。**Plan deviation #12n**：plan 假设 start.rs 改用 publish(SystemReady)+listener 转发 —— 实际 M3 已手写 JSON 写到 stdout。本次只加 variant，**不**改 start.rs 路径（surgical）。**测试**：309 → 311 pass。**累计 deviations #12a-n（14 个）** |
-| **下次动作** | 开工 v1.3.2 M7 T9-T11：3 个交付物——（1）docs/cli-contract.md 完整契约文档（事件 schema / stdin action / exit code / SystemReady 字段 / 5 handler 行为）；（2）tests/fixtures/mock_config.yaml mock config fixture（不调真 LLM 跑 headless 集成测试）；（3）tests/gui_smoke_test.py 9 步 Python 套壳集成测试（start 子进程 → NDJSON stdout → stdin 注入 action → 验证 4 档 exit code） |
+| **当前任务** | **v1.3.2 spec B2 实施中（7/12 tasks done = M1-M7）**：M1+M2 CliOutput + exit_code / M3 session start / M4 stdin 协议 + 5 handlers / M5 init Wizard / M6 Event::SystemReady / M7 契约文档 + mock fixture + Python 集成测试（8 步全过）。**下一动作**：M8 T12 4 门禁 + 10 步手工验证清单 + CHANGELOG.md v1.3.2 段 |
+| **上次完成** | v1.3.2 M1-M7（commit M7）— 8 commits on v1.3.2 branch。**M7 关键产出**：docs/cli-contract.md + tests/fixtures/* + gui_smoke_test.py 8/8 pass。**#12v critical**：tracing 走 stdout 破坏 GUI 契约（stdout 必 JSON），main.rs 加 `.with_writer(stderr)` 修。**累计 deviations #12a-v（22 个）**。**测试**：311 pass + Python 8/8 pass。**门禁**：build ✓ / 311 ✓ / 0 clippy / 0 fmt |
+
+| **下次动作** | 开工 v1.3.2 M8 T12：（1）4 门禁（build/test/clippy/fmt）；（2）10 步手工验证清单（plan T12 Step 2-11）；（3）CHANGELOG.md v1.3.2 段（features / internal / upgrade notes）。**手工验证需真跑 eflow 二进制**——可能需 mock provider install + 验证 stderr 行为 |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
+| 2026-06-18 | v1.3.2 M7 commit | docs/cli-contract.md 完整契约（7 事件 / 5 stdin / 4 exit / Python 示例 + 3 deviations）；tests/fixtures/{mock_config, providers/mock, profiles/test}.yaml；tests/gui_smoke_test.py 8 步全过。**#12v critical**：tracing 走 stdout 破坏 GUI 契约（stdout 必 JSON）—— main.rs 加 .with_writer(stderr) 修。**#12w** mock config 按 v1.3.1 真实 schema 写（不抄 plan）。**#12x** smoke test 不调 send（mock 不可达）。**#12y** run_eflow_session 默认加 --config flag。**Python 8/8 pass** |
 | 日期 | 动作 | 产出 |
 |------|------|------|
 | 2026-06-18 | v1.3.2 M6 commit ff82026 | Event::SystemReady { task_id, started_at: SystemTime } variant + 2 测试。tui.rs:293 match 加 _ => 兜底（SystemReady 是 CLI-only，TUI 不消费，spec ADR-0016 TUI 零改造）；start.rs:193 match 加 SystemReady 分支（**当前未流通**——start.rs 仍 M3 手写 NDJSON，保留分支供未来复用）。**#12n**：plan 假设 start.rs 改用 publish(SystemReady)+listener 转发 —— 实际 M3 已手写 JSON 写到 stdout，本次只加 variant，**不**改 start.rs 路径。**test 311 pass**（309 + 2 event） |
