@@ -37,7 +37,6 @@ use crate::infrastructure::event::Event;
 use crate::infrastructure::event::EventChannel;
 use crate::infrastructure::llm::LlmRouter;
 use crate::infrastructure::memory::CompositeMemory;
-use crate::infrastructure::profile::ProfileRegistry;
 use crate::interaction::slash::CommandRegistry;
 use crate::interaction::slash::builtin::{
     help::HelpCmd, lang::LangCmd, level::LevelCmd, model::ModelCmd, profile::ProfileCmd,
@@ -107,17 +106,10 @@ pub async fn run(config_path: Option<PathBuf>, lang: Option<String>) -> i32 {
         }
     };
 
-    // 6. 初始化 Profile
-    let mut profiles = ProfileRegistry::new();
-    if let Err(e) = profiles.load_profiles(std::path::Path::new("profiles")) {
-        tracing::warn!("Failed to load profiles: {}", e);
-    }
-    let profiles = Arc::new(tokio::sync::RwLock::new(profiles));
-
-    // 7. 启动 SubagentPool
+    // 6. 启动 SubagentPool
     let pool = Arc::new(SubagentPool::start(4));
 
-    // 8. 构造 Orchestrator
+    // 7. 构造 Orchestrator
     let orchestrator = Orchestrator::with_pool(
         llm_router.clone(),
         tools.clone(),
@@ -126,17 +118,16 @@ pub async fn run(config_path: Option<PathBuf>, lang: Option<String>) -> i32 {
     );
     let orchestrator = Arc::new(tokio::sync::Mutex::new(orchestrator));
 
-    // 9. 构造 Concierge
+    // 8. 构造 Concierge
     let mut concierge = Concierge::new(
         events.clone(),
         memory,
-        profiles,
         orchestrator,
         llm_router,
         eflow_config.profiles.default.clone(),
     );
 
-    // 10. 注册 6 个 builtin 斜杠命令（与 main.rs 一致）
+    // 9. 注册 6 个 builtin 斜杠命令（与 main.rs 一致）
     let mut registry = CommandRegistry::new();
     registry.register(Arc::new(ModelCmd));
     registry.register(Arc::new(ProfileCmd));
@@ -152,10 +143,10 @@ pub async fn run(config_path: Option<PathBuf>, lang: Option<String>) -> i32 {
     }
     concierge.command_registry = registry;
 
-    // 11. 订阅事件通道（Concierge 暴露 getter）
+    // 10. 订阅事件通道（Concierge 暴露 getter）
     let mut event_rx = concierge.subscribe_events();
 
-    // 12. 输出 SystemReady（**第一行** stdout）
+    // 11. 输出 SystemReady（**第一行** stdout）
     if let Err(e) = CliOutput::ndjson_event(&serde_json::json!({
         "event_type": "SystemReady",
         "task_id": Uuid::nil(),
@@ -166,10 +157,10 @@ pub async fn run(config_path: Option<PathBuf>, lang: Option<String>) -> i32 {
         ));
     }
 
-    // 13. tokio::select 跑 2 个 task
+    // 12. tokio::select 跑 2 个 task
     let code = run_two_tasks(&mut concierge, &mut event_rx, &pool, &events).await;
 
-    // 14. 优雅退出
+    // 13. 优雅退出
     pool.shutdown().await;
     events.publish(Event::SystemShutdown);
     code

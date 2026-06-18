@@ -38,9 +38,7 @@ use crate::infrastructure::event::{Event, EventChannel};
 /// v1.2 F3: `profile` / `cache_hit_rate` 需要明确初值（不能随便 ""），所以不 derive Default，
 /// 改用 `initial()` 显式构造。`std::sync::Mutex`（不是 tokio）因为 event loop 是 sync。
 ///
-/// v1.3.1 增量：
-/// - `configured`: router 非空 = true；false 时 header 显 ⚠ 警告
-/// - `wizard_active`: 向导运行时为 true（v1.3.1 阶段 TUI 不实装 wizard，保留字段待 v1.3.2）
+/// v1.3.1 增量：`configured` — router 非空 = true；false 时 header 显 ⚠ 警告
 struct TuiState {
     messages: Vec<String>,
     status: String,
@@ -49,9 +47,6 @@ struct TuiState {
     cache_hit_rate: String,
     /// v1.3.1 增量：是否已配置 LLM provider
     configured: bool,
-    /// v1.3.1 增量：向导是否在运行（v1.3.1 阶段保留字段，渲染层暂不消费）
-    #[allow(dead_code)]
-    wizard_active: bool,
 }
 
 impl TuiState {
@@ -64,7 +59,6 @@ impl TuiState {
             profile: String::new(), // run() 启动时同步 block_on 填充
             cache_hit_rate: "n/a".into(),
             configured: true, // 由 main.rs 启动时覆盖
-            wizard_active: false,
         }
     }
 }
@@ -429,10 +423,9 @@ mod tests {
     // ========== v1.3.1 T8: 焦点感知 + Up/Down 键 + bare 模式 ==========
 
     #[test]
-    fn tui_state_initial_has_configured_true_wizard_false() {
+    fn tui_state_initial_has_configured_true() {
         let s = TuiState::initial();
         assert!(s.configured, "默认已配置（v1.2 行为）");
-        assert!(!s.wizard_active, "默认未运行向导");
     }
 
     #[test]
