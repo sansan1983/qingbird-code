@@ -345,6 +345,9 @@ fn count_file_extensions(s: &str) -> usize {
 }
 
 /// 检测任务描述是否含"重构/系统/全部/refactor..."关键词（→ Advanced）
+///
+/// v1.3.3 #13k: case-insensitive（spec C §3.3 设计意图）—— 英文 keyword
+/// "refactor" 应同时匹配 "Refactor" / "REFACTOR"。
 fn contains_workflow_keyword(s: &str) -> bool {
     const KEYWORDS: &[&str] = &[
         "重构",
@@ -358,5 +361,138 @@ fn contains_workflow_keyword(s: &str) -> bool {
         "all",
         "optimize",
     ];
-    KEYWORDS.iter().any(|kw| s.contains(kw))
+    let s_lower = s.to_lowercase();
+    KEYWORDS.iter().any(|kw| s_lower.contains(kw))
+}
+
+/// 测试用 placeholder Concierge（v1.3.3 deviation #13d: v1.3.0 没加，
+/// v1.3.3 spec C 实施时补——参考 v1.3.1 LlmRouter::placeholder 模式）
+///
+/// **非测试代码不应调用**——用 `Concierge::new`。
+#[doc(hidden)]
+impl Concierge {
+    #[must_use]
+    pub fn placeholder() -> Self {
+        use crate::application::orchestrator::Orchestrator;
+        use crate::capability::tools::ToolRegistry;
+        use crate::infrastructure::event::EventChannel;
+        use crate::infrastructure::llm::LlmRouter;
+        use crate::infrastructure::memory::CompositeMemory;
+        use crate::infrastructure::profile::ProfileRegistry;
+
+        let llm = Arc::new(Mutex::new(LlmRouter::placeholder()));
+        let tools = Arc::new(ToolRegistry::new());
+        let events = EventChannel::new();
+        let memory = Arc::new(Mutex::new(CompositeMemory::in_memory(10).unwrap()));
+        let profiles = Arc::new(tokio::sync::RwLock::new(ProfileRegistry::default()));
+        let orchestrator = Arc::new(Mutex::new(Orchestrator::new(
+            llm.clone(),
+            tools,
+            events.clone(),
+        )));
+
+        Self::new(
+            events,
+            memory,
+            profiles,
+            orchestrator,
+            llm,
+            "default".into(),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::common::types::{RiskLevel, TaskSpec};
+    use crate::workflow::WorkflowLevel;
+
+    fn make_task(desc: &str) -> TaskSpec {
+        TaskSpec::new(desc.to_string(), RiskLevel::L0)
+    }
+
+    #[test]
+    fn short_task_under_30_chars_is_simple() {
+        let concierge = Concierge::placeholder();
+        let task = make_task("hi");
+        assert_eq!(
+            concierge.determine_workflow_level(&task),
+            WorkflowLevel::Simple
+        );
+    }
+
+    #[test]
+    fn medium_task_30_to_100_chars_is_standard() {
+        let concierge = Concierge::placeholder();
+        let task = make_task("帮我看看 main.rs 文件在做什么事情，简单的代码审查一下");
+        assert_eq!(
+            concierge.determine_workflow_level(&task),
+            WorkflowLevel::Standard
+        );
+    }
+
+    #[test]
+    fn long_task_over_100_chars_is_advanced() {
+        let concierge = Concierge::placeholder();
+        let task = make_task(
+            "请帮我对整个项目的代码进行一次系统性的梳理和优化，包括所有的源文件、\
+             测试文件、配置文件等等，需要全面地分析代码质量、性能瓶颈、安全漏洞，\
+             并给出详细的改进建议和实施计划",
+        );
+        assert_eq!(
+            concierge.determine_workflow_level(&task),
+            WorkflowLevel::Advanced
+        );
+    }
+
+    #[test]
+    fn task_with_refactor_keyword_is_advanced() {
+        let concierge = Concierge::placeholder();
+        let task = make_task("重构 auth 模块");
+        assert_eq!(
+            concierge.determine_workflow_level(&task),
+            WorkflowLevel::Advanced
+        );
+    }
+
+    #[test]
+    fn task_with_english_refactor_keyword_is_advanced() {
+        let concierge = Concierge::placeholder();
+        let task = make_task("Refactor the entire codebase");
+        assert_eq!(
+            concierge.determine_workflow_level(&task),
+            WorkflowLevel::Advanced
+        );
+    }
+
+    #[test]
+    fn task_with_3_rs_files_is_advanced() {
+        let concierge = Concierge::placeholder();
+        let task = make_task("改 main.rs lib.rs config.rs");
+        assert_eq!(
+            concierge.determine_workflow_level(&task),
+            WorkflowLevel::Advanced
+        );
+    }
+
+    #[test]
+    fn task_with_3_py_files_is_advanced() {
+        let concierge = Concierge::placeholder();
+        let task = make_task("fix app.py models.py tests.py");
+        assert_eq!(
+            concierge.determine_workflow_level(&task),
+            WorkflowLevel::Advanced
+        );
+    }
+
+    #[test]
+    fn task_with_3_different_extensions_is_advanced() {
+        let concierge = Concierge::placeholder();
+        let task = make_task("review Cargo.toml README.md src/main.rs");
+        assert_eq!(
+            concierge.determine_workflow_level(&task),
+            WorkflowLevel::Advanced
+        );
+    }
 }
