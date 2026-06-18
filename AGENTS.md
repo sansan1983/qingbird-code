@@ -1,149 +1,95 @@
 # AGENTS.md — eflow
 
-> Quick-reference for AI coding agents. For contributor/PR rules, see
-> [`CONTRIBUTING.md`](CONTRIBUTING.md). For session-to-session handoff,
-> see [`CLAUDE.md`](CLAUDE.md) (read its top "当前状态" table at session
-> start; update it at session end). For deep architecture, see
-> [`docs/superpowers/specs/2026-06-15-eflow-design.md`](docs/superpowers/specs/2026-06-15-eflow-design.md).
+> 给 AI 编程 agent 的快速参考。贡献者规则见 [`CONTRIBUTING.md`](CONTRIBUTING.md)；
+> 会话交接见 [`CLAUDE.md`](CLAUDE.md)（会话开始读顶部"当前状态"表，结束更新它）；
+> 深度架构见 [`docs/superpowers/specs/2026-06-15-eflow-design.md`](docs/superpowers/specs/2026-06-15-eflow-design.md)。
 
-## What this is
+## 这是什么
 
-Rust 2024 single-binary multi-layer Agent framework (`eflow` v1.3.3).
-Four layers, strictly downward dependencies:
+Rust 2024 单二进制多层 Agent 框架（`eflow` v1.3.3）。四层严格向下依赖：
 
 ```
 interaction → application → capability → infrastructure → common
 ```
 
-A lower layer **must not** import from a higher one. If you need to break
-this, call it out in the PR description (PR template enforces it).
+下层**禁止** import 上层。要破例就在 PR 描述里说（PR 模板会强制）。
 
-## The four gates (run before any commit / PR)
+## 四个门禁（commit / PR 前必跑）
 
-Every change must pass all four locally. CI does not run — there is no
-`.github/workflows/`. Reviewers run these by hand.
+每个改动本地全过这 4 个。**没有 CI**（项目无 `.github/workflows/`），reviewer 手跑：
 
 ```bash
-cargo build                                       # ~4s release, dev faster
-cargo clippy --all-targets -- -D warnings        # zero warnings required
-cargo fmt --check                                 # rustfmt defaults; no custom config
-cargo test                                        # 334 tests as of v1.3.3
+cargo build                                       # release 约 4s，dev 更快
+cargo clippy --all-targets -- -D warnings        # 零警告
+cargo fmt --check                                 # rustfmt 默认；无自定义配置
+cargo test                                        # v1.3.3 时 335 个测试
 ```
 
-Order matters for fast feedback: `fmt --check` → `clippy` → `test`. The
-`scripts/verify-v1.3.1.sh` block in `docs/manual-verification-v1.3.1.md`
-is a copy-pasteable version of this.
+顺序影响反馈速度：`fmt --check` → `clippy` → `test` → `build`。`docs/manual-verification-v1.3.1.md` 里有 `scripts/verify-v1.3.1.sh` 的复制粘贴版本。
 
-## Branch + PR workflow (strict)
+## 分支与 PR 流程（严格）
 
-- **`main` is protected.** Direct push forbidden since v1.1. GitHub
-  branch protection enforces this.
-- Feature work targets a milestone branch: `git checkout milestone/v1.3
-  && git checkout -b feature/<kebab>`.
-- Branch names: lowercase kebab-case, ≤ 50 chars, verb or noun-phrase
-  (not a number). Prefixes: `milestone/v<X>.<Y>`, `feature/*`, `fix/*`,
-  `hotfix/*`.
-- Squash-merge to the milestone branch. Milestone → main is a single
-  PR by the maintainer.
-- PR template `.github/PULL_REQUEST_TEMPLATE.md` is the contract; don't
-  ship a PR that fails any of its checkboxes.
+- **`main` 保护**。v1.1 起禁直推，GitHub 仓库设置里的 branch protection 强制。
+- 功能分支基于 milestone：`git checkout milestone/v1.4 && git checkout -b feature/<kebab>`。
+- 分支命名：小写 kebab-case，≤50 字符，动词或名词短语（不是数字）。
+  前缀：`milestone/v<X>.<Y>`、`feature/*`、`fix/*`、`hotfix/*`。
+- Squash-merge 到 milestone 分支。milestone → main 由 maintainer 单 PR 收尾。
+- PR 模板 `.github/PULL_REQUEST_TEMPLATE.md` 是契约，checkbox 没勾齐不要 ship。
 
-## Surgical changes
+## 精准改动（Surgical Changes）
 
-No unrelated refactors in a PR. Don't reformat, rename, or "improve"
-files you didn't need to touch. If you spot dead code, mention it — don't
-delete it. Match existing style; the project does not customize rustfmt.
+PR 不带无关重构。不重排/重命名/"改进"无关文件。看到 dead code 提出来——别删。匹配现有风格；项目不自定义 rustfmt。
 
-## i18n (strict)
+## i18n（严格）
 
-- All user-facing strings go through `rust_i18n::t!()`. Tracing logs
-  (developer-facing) stay in English and use `tracing::info!()` etc.
-- Code comments stay in English.
-- When adding a key, add it to **both** `locales/zh-CN.yml` (default)
-  and `locales/en-US.yml`. `tests/i18n_test.rs` enforces this.
-- `rust_i18n::i18n!("locales", fallback = "en-US");` must be called in
-  **both** `src/lib.rs` and `src/main.rs` (so `t!()` works in both).
-- Default locale is `zh-CN`; fallback is `en-US`.
-- Locale tests must be `#[serial_test::serial]` — `rust-i18n` uses
-  process-global state and `cargo test`'s parallel test runner will
-  poison it. This is the only quirk that needs `serial_test`.
+- 所有面向用户的字符串走 `rust_i18n::t!()`。`tracing` 日志（开发者向）保持英文，用 `tracing::info!()` 等。
+- 代码注释保持英文。
+- 加新 key 同时加到 **`locales/zh-CN.yml`**（默认）和 **`locales/en-US.yml`**。`tests/i18n_test.rs` 强制。
+- `rust_i18n::i18n!("locales", fallback = "en-US");` 必须在 **`src/lib.rs` 和 `src/main.rs` 都调用**（`main.rs` 里 `t!()` 才能用）。
+- 默认 locale `zh-CN`，回退 `en-US`。
+- locale 相关测试必须 `#[serial_test::serial]`——`rust-i18n` 用 process-global 状态，`cargo test` 并发跑会污染。这是项目里**唯一**需要 `serial_test` 的坑。
 
-## Stdio contract (frozen v1.3.0+)
+## stdio 契约（v1.3.0+ 冻结）
 
-- **stdout** = NDJSON events for `eflow session start` (GUI consumer).
-  See `docs/cli-contract.md`. Any change requires an ADR.
-- **stderr** = human-readable logs. `tracing-subscriber` is initialized
-  with `.with_writer(std::io::stderr)` in `main.rs` — keep it that way.
-- Exit codes: 0 / 1 / 2 / 130 (Ctrl+C).
+- **stdout** = NDJSON 事件，给 `eflow session start`（GUI 消费者）用。见 `docs/cli-contract.md`。任何改动要过 ADR。
+- **stderr** = 人类可读日志。`tracing-subscriber` 在 `main.rs` 用 `.with_writer(std::io::stderr)`——保持。
+- 退出码：`0` / `1` / `2` / `130`（Ctrl+C）。
 
-## Conventions
+## 约定
 
-- **Naming**: `snake_case` fns/vars, `PascalCase` types,
-  `SCREAMING_SNAKE_CASE` consts.
-- **Errors**: `thiserror` enums in `src/common/error.rs`. No `anyhow` in
-  library code.
-- **Commits**: Conventional Commits, scope = `M<n>` for milestone work
-  or module name (`llm`, `memory`, `tui`). Subject ≤ 72 chars,
-  imperative, no trailing period.
-- **Blackboard pattern** (`src/capability/blackboard.rs`): immutable
-  `with_*` updates. Don't add `&mut self` to blackboard methods.
-- **LLM test helpers** (`src/infrastructure/llm/router.rs`):
-  `placeholder()`, `inject_test_provider()`, `inject_test_routing()` are
-  `#[doc(hidden)]` and **only for tests**. Non-test code must use
-  `LlmRouter::from_config`.
-- **LLM-touching tests** must use a dummy key + 5s timeout. Pattern in
-  `tests/integration_test.rs` — copy it for any new end-to-end test.
+- **命名**：`snake_case` 函数/变量，`PascalCase` 类型，`SCREAMING_SNAKE_CASE` 常量。
+- **错误**：`thiserror` 枚举，集中在 `src/common/error.rs`。库代码禁用 `anyhow`。
+- **提交**：Conventional Commits，scope = `M<n>`（里程碑工作）或模块名（`llm` / `memory` / `tui`）。Subject ≤72 字符，祈使句，末尾无句号。
+- **Blackboard 模式**（`src/capability/blackboard.rs`）：不可变 `with_*` 更新。Blackboard 方法**不要**加 `&mut self`。
+- **LLM 测试 helper**（`src/infrastructure/llm/router.rs`）：`placeholder()` / `inject_test_provider()` / `inject_test_routing()` 是 `#[doc(hidden)]`，**只供测试**。非测试代码必须用 `LlmRouter::from_config`。
+- **涉及 LLM 的测试**必须 dummy key + 5s timeout。模式在 `tests/integration_test.rs`——新加端到端测试照抄。
 
-## Gotchas that bite agents
+## 容易踩的坑
 
-- **TUI requires a real TTY.** ratatui panics without one. Headless
-  CI / sandboxed environments cannot exercise the TUI; for those, use
-  `eflow session start` (NDJSON on stdout) or the 14-step manual
-  verification in `docs/manual-verification-v1.3.1.md`.
-- **No clap `SubCommand` enum yet.** `src/main.rs` routes
-  `init` / `session start` via `std::env::args()` and a hand-rolled
-  flag parser (`parse_session_flag`). The plan in
-  `docs/superpowers/plans/2026-06-18-eflow-v1.4-rendering-pipeline-plan.md`
-  is to introduce clap derive in v1.4 — don't refactor this in a
-  v1.3.x patch.
-- **v1.3.0 broke `eflow.yaml`** (see `docs/migration-v1.2-to-v1.3.md`).
-  `llm.providers` is gone. Providers live in
-  `~/.eflow/providers/<id>.yaml`; `routing.{strong,medium,light}` now
-  references those provider ids, not "anthropic"/"openai". New code
-  must not add the old field back.
-- **`Cargo.lock` is gitignored** by project convention. Don't commit
-  it; contributors regenerate on clone.
-- **Default locale is `zh-CN`.** The `eflow.yaml` example in README is
-  the v1.2 form — it still works for the `routing` block but the
-  `llm.providers` block is silently ignored post-v1.3.0. Use the
-  v1.3 form when documenting config.
-- **v1.3.3 added two registries** wired up in `main.rs::register_*`:
-  6 slash commands (`model` / `profile` / `lang` / `level` / `help` /
-  `quit`) and 3 workflow levels (`Simple` / `Standard` / `Advanced`).
-  Both use a `required_register` check — don't add a new entry to the
-  registry without listing it in the required set.
-- **v1.3.1 has a known deviation** (`TODO(v1.4 spec D)` markers in
-  `src/interaction/wizard/mod.rs` and `src/interaction/tui.rs`):
-  wizard/SelectList/TUI call ratatui directly instead of going through
-  a `RenderEngine` trait. The v1.4 spec D plan fixes this. Don't try
-  to fix it as a drive-by.
+- **TUI 要真 TTY**。ratatui 没 TTY 直接 panic。无头 CI / 沙箱环境跑不了 TUI；那种情况用 `eflow session start`（NDJSON 在 stdout）或 `docs/manual-verification-v1.3.1.md` 的 14 步手工验证。
+- **还没有 clap `SubCommand` enum**。`src/main.rs` 用 `std::env::args()` 路由 `init` / `session start`，外加手写 flag 解析器（`parse_session_flag`）。`docs/superpowers/plans/2026-06-18-eflow-v1.4-rendering-pipeline-plan.md` 计划 v1.4 引入 clap derive——v1.3.x patch 别重构这块。
+- **v1.3.0 改了 `eflow.yaml`**（见 `docs/migration-v1.2-to-v1.3.md`）。`llm.providers` 删了。Provider 改在 `~/.eflow/providers/<id>.yaml`；`routing.{strong,medium,light}` 现在引用 provider id，不再是 `"anthropic"` / `"openai"`。新代码**不要**加回老字段。
+- **`Cargo.lock` 在 `.gitignore`**。别 commit；贡献者 clone 后重新生成。
+- **默认 locale 是 `zh-CN`**。README 里 `eflow.yaml` 例子还是 v1.2 形态——`routing` 块还能用，但 `llm.providers` 块 v1.3.0+ 被静默忽略。文档示例用 v1.3 形态。
+- **v1.3.3 加了两个 registry**（`main.rs::register_*` 接线）：6 个斜杠命令（`model` / `profile` / `lang` / `level` / `help` / `quit`）和 3 个工作流档位（`Simple` / `Standard` / `Advanced`）。两个都用 `required_register` 校验——加新条目必须列在 required 集合里。
+- **v1.3.1 有已知偏差**（`src/interaction/wizard/mod.rs` 和 `src/interaction/tui.rs` 有 `TODO(v1.4 spec D)` 标记）：wizard / SelectList / TUI 直接调 ratatui，没走 `RenderEngine` trait。v1.4 spec D 计划会修。**不要**顺手修这个。
 
-## File map (where to look first)
+## 文件地图（先看这些）
 
-| Concern | Location |
+| 关注点 | 位置 |
 |---|---|
-| Entry point | `src/main.rs` (TUI default, `--execute`, `--show-config`, `--list-profiles`, `init`, `session start`) |
-| TUI backend | `src/interaction/tui.rs` |
-| Wizard steps | `src/interaction/wizard/builtin/*.rs` |
-| Slash commands | `src/interaction/slash/builtin/*.rs` |
-| Workflow levels | `src/workflow/builtin/{simple,standard,advanced}.rs` |
-| Concierge (zero-blocking dispatch) | `src/application/concierge.rs` |
-| Orchestrator (decompose + parallel by layer) | `src/application/orchestrator.rs` |
-| D→E→F pipeline | `src/capability/{decisioner,executor,feedbacker}.rs` |
-| Subagent pool | `src/capability/pool.rs`, `subagent.rs` |
-| LLM router | `src/infrastructure/llm/router.rs` |
-| Provider presets | `~/.eflow/providers/<id>.yaml` (user) / `docs/examples/providers/` (samples) |
-| i18n keys | `locales/zh-CN.yml`, `locales/en-US.yml` |
-| CLI / GUI stdio contract | `docs/cli-contract.md` |
-| Manual TUI verification | `docs/manual-verification-v1.3.1.md` |
-| Next milestone plan (v1.4) | `docs/superpowers/plans/2026-06-18-eflow-v1.4-rendering-pipeline-plan.md` |
+| 入口 | `src/main.rs`（TUI 默认、`--execute`、`--show-config`、`--list-profiles`、`init`、`session start`） |
+| TUI 后端 | `src/interaction/tui.rs` |
+| 向导步骤 | `src/interaction/wizard/builtin/*.rs` |
+| 斜杠命令 | `src/interaction/slash/builtin/*.rs` |
+| 工作流档位 | `src/workflow/builtin/{simple,standard,advanced}.rs` |
+| Concierge（零阻塞派发） | `src/application/concierge.rs` |
+| Orchestrator（按层分解 + 并发） | `src/application/orchestrator.rs` |
+| D→E→F 管线 | `src/capability/{decisioner,executor,feedbacker}.rs` |
+| Subagent 池 | `src/capability/pool.rs`、`subagent.rs` |
+| LLM 路由 | `src/infrastructure/llm/router.rs` |
+| Provider 预设 | `~/.eflow/providers/<id>.yaml`（用户） / `docs/examples/providers/`（样例） |
+| i18n key | `locales/zh-CN.yml`、`locales/en-US.yml` |
+| CLI / GUI stdio 契约 | `docs/cli-contract.md` |
+| 手工 TUI 验证 | `docs/manual-verification-v1.3.1.md` |
+| 下一里程碑计划（v1.4） | `docs/superpowers/plans/2026-06-18-eflow-v1.4-rendering-pipeline-plan.md` |
