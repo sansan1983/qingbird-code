@@ -40,3 +40,5 @@
 ---
 
 *日志始于 2026-06-15*
+
+| 2026-06-17 | v1.3 design 收尾 | 4 个 spec：A（LLM 抽象扩展 21-27 tasks） / B1（向导+斜杠命令 12 tasks）/ B2（CLI 契约 13 tasks）/ C（3 档工作流 7-8 tasks）。总 53-60 tasks，分 3 个小版本 v1.3.0 / v1.3.1 / v1.3.2。3 commits 推 main，4 门禁待 plan 实施后跑 |
