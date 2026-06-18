@@ -10,4 +10,7 @@
 //! - 4 档 exit code 不变
 
 pub mod error;
+pub mod handlers;
 pub mod output;
+pub mod start;
+pub mod stdin;

@@ -52,10 +52,10 @@ async fn main() {
         // 用法：eflow session start [--config PATH] [--lang LANG]
         match args.get(2).map(String::as_str) {
             Some("start") => {
-                let config = parse_session_flag(&args, "--config");
+                let config = parse_session_flag(&args, "--config").map(std::path::PathBuf::from);
                 let lang = parse_session_flag(&args, "--lang");
                 let exit_code = eflow::cli::start::run(config, lang).await;
-                std::process::exit(exit_code.into());
+                std::process::exit(exit_code);
             }
             Some(other) => {
                 eprintln!(

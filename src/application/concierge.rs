@@ -60,6 +60,12 @@ impl Concierge {
         self.active_profile.lock().await.clone()
     }
 
+    /// v1.3.2: 暴露 events 给 headless CLI（start.rs）订阅
+    /// —— Concierge 持有 EventChannel 所有权，外部只读订阅
+    pub fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<Event> {
+        self.events.subscribe()
+    }
+
     /// v1.3.1: 公开 setter 让 `/profile` 斜杠命令能真切换
     pub async fn set_active_profile(&self, name: String) {
         let mut p = self.active_profile.lock().await;
