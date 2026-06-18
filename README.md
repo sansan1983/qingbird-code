@@ -8,11 +8,7 @@
 [![Rust](https://img.shields.io/badge/rust-2024-orange)]()
 [![Tests](https://img.shields.io/badge/tests-312%20passed-blue)]()
 
-[English](#english) · [简体中文](#简体中文)
-
----
-
-## 简体中文
+**[English](README.en.md)**
 
 eflow 是一款以 Rust 为核心的多层 Agent 协作框架，以 **零阻塞对话** 为第一设计原则，通过
 **行业身份驱动的 SOP 调度**、**分层决策执行**、**智能上下文与记忆管理**，让 AI 真正像一支训练有素的
@@ -149,37 +145,3 @@ at your option.
 ### 致谢
 
 eflow 由 eflow contributors 共同维护。
-
----
-
-## English
-
-eflow is a multi-layer Agent collaboration framework written in Rust, with **zero-blocking dialogue** as its
-first design principle. Through **industry-identity-driven SOP dispatch**, **hierarchical decision execution**,
-and **intelligent context & memory management**, eflow makes AI work like a well-trained team.
-
-### Core Features
-
-- **Zero-blocking dialogue** — Concierge dispatches and returns immediately; tasks run async, progress via event channel
-- **Hierarchical decisions** — Decisioner → Executor → Feedbacker pipeline; rule + LLM dual-driven
-- **Multi-provider LLM** — Configure any OpenAI/Anthropic-compatible provider via `~/.eflow/providers/*.yaml`; tier routing + rate-limit degradation
-- **Three-tier memory** — Working (in-memory LRU) → Project (SQLite FTS5) → User (SQLite FTS5)
-- **i18n** — Built-in zh-CN / en-US, based on rust-i18n
-- **Zero-dep deploy** — Single Rust binary; Windows / Linux / macOS
-- **Headless mode** — `eflow session start` with NDJSON stdio contract (for v2.0 GUI frontends)
-
-### Quick Start
-
-```bash
-git clone https://github.com/sansan1983/eflow.git
-cd eflow
-cargo build --release
-export ANTHROPIC_API_KEY="sk-ant-..."
-./target/release/eflow --execute "Read Cargo.toml and summarize the project"
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and contribution rules.
-
-### License
-
-Dual-licensed under MIT or Apache 2.0 at your option.
