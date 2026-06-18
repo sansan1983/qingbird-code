@@ -47,3 +47,4 @@
 *日志始于 2026-06-15*
 
 | 2026-06-17 | v1.3 design 收尾 | 4 个 spec：A（LLM 抽象扩展 21-27 tasks） / B1（向导+斜杠命令 12 tasks）/ B2（CLI 契约 13 tasks）/ C（3 档工作流 7-8 tasks）。总 53-60 tasks，分 3 个小版本 v1.3.0 / v1.3.1 / v1.3.2。3 commits 推 main，4 门禁待 plan 实施后跑 |
+| 2026-06-18 | v1.3.3 spec C 收官 | v1.3.3 branch 上 8 commits：0d75384 trait 抽象 + 5fd84a1 fmt + 3a26a65 3 builtin 档位 + 702a095 档位测试 7 个 + dc66609 Concierge 5 规则 + 8b0d2ad placeholder + 8 规则测试 + ae92699 /level 覆盖空壳 + 3da211d main.rs + i18n + CHANGELOG + Cargo 1.3.3。4 门禁全过（335 tests / 0 clippy / 0 fmt）。**11 个 deviation #13a-l**：#13a Concierge Arc<Mutex<>> + #13b TaskSpec 缺 workflow_level + #13c AggregatedResult 新建 + #13d Concierge placeholder + #13e llm_router_handle + #13f dispatch_standard/with_retries 缺 + #13g blackboard_mut 缺 + #13h Advanced 1 次反馈不真做 3 次 + #13i description hard-code + #13j CompositeMemory recall_smart 不用 trait + #13k keyword case-insensitive + #13l 14 步 TUI 验证 sandbox skip。**v1.3 59 tasks 全部完成** |
