@@ -10,23 +10,20 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **v1.3.2 spec B2 实施中（7/12 tasks done = M1-M7）**：M1+M2 CliOutput + exit_code / M3 session start / M4 stdin 协议 + 5 handlers / M5 init Wizard / M6 Event::SystemReady / M7 契约文档 + mock fixture + Python 集成测试（8 步全过）。**下一动作**：M8 T12 4 门禁 + 10 步手工验证清单 + CHANGELOG.md v1.3.2 段 |
-| **上次完成** | v1.3.2 M1-M7（commit M7）— 8 commits on v1.3.2 branch。**M7 关键产出**：docs/cli-contract.md + tests/fixtures/* + gui_smoke_test.py 8/8 pass。**#12v critical**：tracing 走 stdout 破坏 GUI 契约（stdout 必 JSON），main.rs 加 `.with_writer(stderr)` 修。**累计 deviations #12a-v（22 个）**。**测试**：311 pass + Python 8/8 pass。**门禁**：build ✓ / 311 ✓ / 0 clippy / 0 fmt |
-
-| **下次动作** | 开工 v1.3.2 M8 T12：（1）4 门禁（build/test/clippy/fmt）；（2）10 步手工验证清单（plan T12 Step 2-11）；（3）CHANGELOG.md v1.3.2 段（features / internal / upgrade notes）。**手工验证需真跑 eflow 二进制**——可能需 mock provider install + 验证 stderr 行为 |
+| **当前任务** | **v1.3.2 spec B2 收官（8/8 milestones done = M1-M8）**。M1-M8 commit 5f4b5e1 在 v1.3.2 branch。**收尾 action**：开 PR v1.3.2 → main。**manual skip**：Step 2（eflow TUI 启动）和 Step 7-8（init 向导交互）需人参与 |
+| **上次完成** | v1.3.2 M1-M8 全部收官（commit 5f4b5e1）— 9 commits on v1.3.2 branch。**v1.3.2 完整产出**：cli/{mod, output, error, start, init, stdin, handlers/{send,end,level,lang,help}}.rs + Event::SystemReady + 契约文档 + mock fixture + Python 8/8 测试。**累计 22 个 plan deviations**（#12a-v）。**测试**：283 → 311 + Python 8/8。**门禁**：build ✓ / 311 ✓ / 0 clippy / 0 fmt |
+| **下次动作** | 收尾 PR v1.3.2 → main：（1）git push -u origin v1.3.2；（2）gh pr create --base main --head v1.3.2。**PR body**：9 commits / 12 tasks / 4 门禁 / 22 deviations / 10 步手工验证 / docs/cli-contract.md + tests/gui_smoke_test.py 链接。**Reviewer 待合并** |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
-| 2026-06-18 | v1.3.2 M7 commit | docs/cli-contract.md 完整契约（7 事件 / 5 stdin / 4 exit / Python 示例 + 3 deviations）；tests/fixtures/{mock_config, providers/mock, profiles/test}.yaml；tests/gui_smoke_test.py 8 步全过。**#12v critical**：tracing 走 stdout 破坏 GUI 契约（stdout 必 JSON）—— main.rs 加 .with_writer(stderr) 修。**#12w** mock config 按 v1.3.1 真实 schema 写（不抄 plan）。**#12x** smoke test 不调 send（mock 不可达）。**#12y** run_eflow_session 默认加 --config flag。**Python 8/8 pass** |
 | 日期 | 动作 | 产出 |
 |------|------|------|
+| 2026-06-18 | v1.3.2 M8 commit 5f4b5e1 | 4 门禁全过（build / 311 tests / 0 clippy / 0 fmt）；10 步手工验证（Step 3-6 + 9-11 跑通，Step 2 + 7-8 manual skip 需 reviewer 跑）；CHANGELOG v1.3.2 段（features 2 subcommand + 7 事件 + 5 stdin + 4 exit / internal 3 ADR + 5 deviations / upgrade notes）。**v1.3.2 完整收官 9 commits** |
+| 2026-06-18 | v1.3.2 M7 commit | docs/cli-contract.md 完整契约（7 事件 / 5 stdin / 4 exit / Python 示例 + 3 deviations）；tests/fixtures/{mock_config, providers/mock, profiles/test}.yaml；tests/gui_smoke_test.py 8 步全过。**#12v critical**：tracing 走 stdout 破坏 GUI 契约（stdout 必 JSON）—— main.rs 加 .with_writer(stderr) 修。**#12w** mock config 按 v1.3.1 真实 schema 写（不抄 plan）。**#12x** smoke test 不调 send（mock 不可达）。**#12y** run_eflow_session 默认加 --config flag。**Python 8/8 pass** |
 | 2026-06-18 | v1.3.2 M6 commit ff82026 | Event::SystemReady { task_id, started_at: SystemTime } variant + 2 测试。tui.rs:293 match 加 _ => 兜底（SystemReady 是 CLI-only，TUI 不消费，spec ADR-0016 TUI 零改造）；start.rs:193 match 加 SystemReady 分支（**当前未流通**——start.rs 仍 M3 手写 NDJSON，保留分支供未来复用）。**#12n**：plan 假设 start.rs 改用 publish(SystemReady)+listener 转发 —— 实际 M3 已手写 JSON 写到 stdout，本次只加 variant，**不**改 start.rs 路径。**test 311 pass**（309 + 2 event） |
-| 2026-06-18 | v1.3.2 M5 commit 327a85e | cli/init.rs 搬 v1.3.1 main.rs::run_init_wizard 改 i32 exit code（0/1/2）；main.rs 删 30 行 wizard 代码 + init 路由调 cli::init::run() + 首次启动 fallback 也走 cli::init。**#12m**：plan 假设 init 需要 LlmRouter + EflowConfig::default() —— 实际 Wizard 走 stdin/stdout，**不**需要 router，零 router 代码。**test 309 pass**（持平） |
-| 2026-06-18 | v1.3.2 M4 commit 305b2a5 | StdinCommand 5 变体 enum + 7 serde round-trip 测试 + read_loop 持续读 stdin + 5 handlers 真 dispatch。**handler 策略**：send→handle_input / end→stderr+返 0 / level→dispatch_slash / lang→locale::init / help→registry.list()。**#12l**：Concierge::dispatch_slash 改 pub（1 行 surgical）。**test 309 pass**（302 + 7 stdin） |
-| 2026-06-17 | v1.3 writing-plans 收官 | 4 个 plan：spec A（5a7dfef 3135 行 / 26 tasks）/ B1（54a5515 3612 行 / 12 tasks）/ B2（4fba0a9 2141 行 / 12 tasks）/ C（31713b2 1478 行 / 9 tasks）。总 59 tasks 分 4 个小版本发布 v1.3.0/1.3.1/1.3.2/1.3.3。每个 plan 3 项自审（spec coverage / placeholder / type consistency）全过 |
+
 
 ## △ 收工仪式（每次结束前执行）
-
 会话结束时，更新上面「当前状态」表格：
 1. 把「上次完成」改为刚才做了什么
 2. 把「下次动作」改为下一个 Task 是什么
