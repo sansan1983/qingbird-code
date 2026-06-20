@@ -3,30 +3,21 @@
 //! v1.3 起替代旧 `AnthropicProvider`。从 ProviderConfig 构造，不读 env var。
 
 use std::collections::HashMap;
-use std::time::Duration;
 
 use async_trait::async_trait;
-use reqwest::Client;
 use serde_json::Value;
 use tokio::sync::mpsc;
 
-use super::check_status;
+use super::http_client::{HttpClientConfig, HttpLlmClient, LlmProtocol};
 use super::pick_model;
-use super::types::{ChatChunk, ChatRequest, ChatResponse, LlmProvider, MessageRole, TokenUsage};
+use super::types::{ChatChunk, ChatRequest, ChatResponse, LlmProvider, MessageRole};
 use crate::common::error::{EflowError, Result};
 use rust_i18n::t;
 
 const MESSAGES_PATH: &str = "/v1/messages";
 
 pub struct GenericAnthropicProvider {
-    id: String,
-    api_key: String,
-    default_model: String,
-    base_url: String,
-    client: Client,
-    max_retries: u8,
-    retry_backoff_ms: u64,
-    model_endpoints: HashMap<String, String>,
+    client: HttpLlmClient<AnthropicProtocol>,
 }
 
 impl GenericAnthropicProvider {
@@ -40,43 +31,26 @@ impl GenericAnthropicProvider {
         max_retries: u8,
         retry_backoff_ms: u64,
         model_endpoints: HashMap<String, String>,
-    ) -> Self {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(timeout_secs))
-            .build()
-            .expect("reqwest client build");
-        Self {
+    ) -> Result<Self> {
+        let config = HttpClientConfig {
             id,
             api_key,
             default_model,
             base_url,
-            client,
+            timeout_secs,
             max_retries,
             retry_backoff_ms,
             model_endpoints,
-        }
+        };
+
+        let protocol = AnthropicProtocol;
+        let client = HttpLlmClient::new(config, protocol)?;
+
+        Ok(Self { client })
     }
 
     pub fn retry_params(&self) -> (u8, u64) {
-        (self.max_retries, self.retry_backoff_ms)
-    }
-
-    fn messages_url(&self, model: &str) -> String {
-        let path = self
-            .model_endpoints
-            .get(model)
-            .map(String::as_str)
-            .unwrap_or(MESSAGES_PATH);
-        format!("{}{}", self.base_url.trim_end_matches('/'), path)
-    }
-
-    fn build_post(&self, body: &Value) -> reqwest::RequestBuilder {
-        self.client
-            .post(self.messages_url(body["model"].as_str().unwrap_or("")))
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .json(body)
+        self.client.retry_params()
     }
 
     fn build_body(&self, request: &ChatRequest) -> Value {
@@ -124,44 +98,29 @@ impl GenericAnthropicProvider {
 #[async_trait]
 impl LlmProvider for GenericAnthropicProvider {
     async fn chat(&self, request: ChatRequest) -> Result<ChatResponse> {
-        let model = pick_model(&self.default_model, &request.model);
+        let model = pick_model(&self.client.config.default_model, &request.model);
         let body = self.build_body(&ChatRequest {
             model: model.clone(),
             ..request
         });
 
-        let response = self.build_post(&body).send().await.map_err(|e| {
+        let response = self.client.build_post(&body).send().await.map_err(|e| {
             EflowError::LlmProvider(t!("err_http", msg = e.to_string()).to_string())
         })?;
-        let response = check_status(response, "Anthropic").await?;
+        let response = super::http_client::check_status(response, &self.client.config.id).await?;
 
         let json: Value = response.json().await.map_err(|e| {
             EflowError::LlmProvider(t!("err_json_parse", msg = e.to_string()).to_string())
         })?;
 
-        let content = json["content"]
-            .as_array()
-            .map(|blocks| {
-                blocks
-                    .iter()
-                    .filter(|b| b["type"] == "text")
-                    .map(|b| b["text"].as_str().unwrap_or(""))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            })
-            .unwrap_or_default();
-
-        let input_tokens = json["usage"]["input_tokens"].as_u64().unwrap_or(0) as u32;
-        let output_tokens = json["usage"]["output_tokens"].as_u64().unwrap_or(0) as u32;
+        let (content, tool_calls, usage, finish_reason) =
+            self.client.parse_chat_response(&json).await?;
 
         Ok(ChatResponse {
             content,
-            tool_calls: None,
-            usage: TokenUsage {
-                input_tokens,
-                output_tokens,
-            },
-            finish_reason: json["stop_reason"].as_str().unwrap_or("unknown").into(),
+            tool_calls,
+            usage,
+            finish_reason,
         })
     }
 
@@ -179,69 +138,66 @@ impl LlmProvider for GenericAnthropicProvider {
     }
 
     fn name(&self) -> &str {
-        &self.id
+        &self.client.config.id
+    }
+}
+
+struct AnthropicProtocol;
+
+impl LlmProtocol for AnthropicProtocol {
+    fn get_default_path(&self) -> &'static str {
+        MESSAGES_PATH
+    }
+
+    fn build_auth_headers(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        request
+            .header("x-api-key", "PLACEHOLDER_API_KEY")
+            .header("anthropic-version", "2023-06-01")
+            .header("content-type", "application/json")
+    }
+
+    fn parse_chat_response(
+        &self,
+        json: &Value,
+    ) -> (
+        String,
+        Option<Vec<crate::infrastructure::llm::types::ToolCall>>,
+        crate::infrastructure::llm::types::TokenUsage,
+        String,
+    ) {
+        let content = json["content"]
+            .as_array()
+            .map(|blocks| {
+                blocks
+                    .iter()
+                    .filter(|b| b["type"] == "text")
+                    .map(|b| b["text"].as_str().unwrap_or(""))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .unwrap_or_default();
+
+        let tool_calls = None;
+
+        let input_tokens = json["usage"]["input_tokens"].as_u64().unwrap_or(0) as u32;
+        let output_tokens = json["usage"]["output_tokens"].as_u64().unwrap_or(0) as u32;
+        let usage = crate::infrastructure::llm::types::TokenUsage {
+            input_tokens,
+            output_tokens,
+        };
+
+        let finish_reason = json["stop_reason"]
+            .as_str()
+            .unwrap_or("unknown")
+            .to_string();
+
+        (content, tool_calls, usage, finish_reason)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn messages_url_uses_default_when_model_endpoints_empty() {
-        let p = GenericAnthropicProvider::new(
-            "anthropic".into(),
-            "k".into(),
-            "https://api.anthropic.com".into(),
-            "claude-sonnet-4-6".into(),
-            30,
-            3,
-            1000,
-            HashMap::new(),
-        );
-        assert_eq!(
-            p.messages_url("any"),
-            "https://api.anthropic.com/v1/messages"
-        );
-    }
-
-    #[test]
-    fn messages_url_trims_trailing_slash() {
-        let p = GenericAnthropicProvider::new(
-            "minimax".into(),
-            "k".into(),
-            "https://api.minimaxi.com/anthropic/".into(),
-            "MiniMax-M3".into(),
-            30,
-            3,
-            1000,
-            HashMap::new(),
-        );
-        assert_eq!(
-            p.messages_url("any"),
-            "https://api.minimaxi.com/anthropic/v1/messages"
-        );
-    }
-
-    #[test]
-    fn messages_url_uses_model_specific_endpoint() {
-        let mut endpoints = HashMap::new();
-        endpoints.insert("qwen3.7-max".to_string(), "/v1/messages".to_string());
-        let p = GenericAnthropicProvider::new(
-            "opencode-go".into(),
-            "k".into(),
-            "https://opencode.ai/zen/go/v1".into(),
-            "qwen3.7-max".into(),
-            30,
-            3,
-            1000,
-            endpoints,
-        );
-        assert_eq!(
-            p.messages_url("qwen3.7-max"),
-            "https://opencode.ai/zen/go/v1/v1/messages"
-        );
-    }
 
     #[test]
     fn name_returns_config_id() {
@@ -254,7 +210,8 @@ mod tests {
             3,
             1000,
             HashMap::new(),
-        );
+        )
+        .unwrap();
         assert_eq!(p.name(), "minimax");
     }
 
@@ -269,7 +226,8 @@ mod tests {
             5,
             2000,
             HashMap::new(),
-        );
+        )
+        .unwrap();
         assert_eq!(p.retry_params(), (5, 2000));
     }
 }

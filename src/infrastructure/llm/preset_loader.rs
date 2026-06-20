@@ -71,7 +71,7 @@ impl PresetLoader {
     pub fn load_one(path: &Path) -> Result<ProviderConfig> {
         let content =
             std::fs::read_to_string(path).map_err(crate::common::error::EflowError::Io)?;
-        let expanded = expand_env_vars(&content);
+        let expanded = expand_env_vars(&content)?;
         let cfg: ProviderConfig = serde_yaml::from_str(&expanded).map_err(|e| {
             crate::common::error::EflowError::Config(format!(
                 "解析 provider YAML {} 失败: {}",
@@ -79,6 +79,7 @@ impl PresetLoader {
                 e
             ))
         })?;
+
         Ok(cfg)
     }
 }

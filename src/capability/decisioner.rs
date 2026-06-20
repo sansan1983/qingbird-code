@@ -18,10 +18,11 @@ impl Decisioner {
 
     /// 评估步骤风险并生成执行计划
     pub async fn decide(&self, blackboard: &Blackboard) -> Result<Blackboard> {
-        let step = blackboard
-            .current_step
-            .as_ref()
-            .expect("Decisioner called without current_step");
+        let step = blackboard.current_step.as_ref().ok_or_else(|| {
+            crate::common::error::EflowError::Internal(
+                "Decisioner called without current_step".to_string(),
+            )
+        })?;
 
         // 规则先行：已知风险等级直接路由，不额外调 LLM
         let risk = blackboard.risk_level;

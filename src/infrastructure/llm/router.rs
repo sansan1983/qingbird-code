@@ -135,11 +135,10 @@ impl LlmRouter {
                 3,
                 1000,
                 HashMap::new(),
-            );
-            providers.insert(
-                "anthropic".into(),
-                Arc::new(provider) as Arc<dyn LlmProvider>,
-            );
+            )
+            .map(Arc::new)
+            .unwrap();
+            providers.insert("anthropic".into(), provider as Arc<dyn LlmProvider>);
         }
 
         if let Ok(api_key) = std::env::var("OPENAI_API_KEY")
@@ -157,8 +156,10 @@ impl LlmRouter {
                 3,
                 1000,
                 HashMap::new(),
-            );
-            providers.insert("openai".into(), Arc::new(provider) as Arc<dyn LlmProvider>);
+            )
+            .map(Arc::new)
+            .unwrap();
+            providers.insert("openai".into(), provider as Arc<dyn LlmProvider>);
         }
 
         Ok(providers)

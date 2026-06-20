@@ -32,12 +32,17 @@ impl Executor {
         let model_tier = bb
             .execution_plan
             .as_ref()
-            .expect("Executor called without execution_plan")
+            .ok_or_else(|| {
+                crate::common::error::EflowError::Internal(
+                    "Executor called without execution_plan".to_string(),
+                )
+            })?
             .model_tier;
-        let plan = bb
-            .execution_plan
-            .take()
-            .expect("Executor called without execution_plan");
+        let plan = bb.execution_plan.take().ok_or_else(|| {
+            crate::common::error::EflowError::Internal(
+                "Executor called without execution_plan".to_string(),
+            )
+        })?;
 
         for sub_step in &plan.sub_steps {
             // 检查是否需要 LLM 推理
