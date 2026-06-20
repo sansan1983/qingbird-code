@@ -43,6 +43,7 @@ use crate::interaction::render::view_model::*;
 /// 改用 `initial()` 显式构造。`std::sync::Mutex`（不是 tokio）因为 event loop 是 sync。
 ///
 /// v1.3.1 增量：`configured` — router 非空 = true；false 时 header 显 ⚠ 警告
+/// v1.4 增量：`modal` — 弹窗 SelectList
 struct TuiState {
     messages: Vec<String>,
     status: String,
@@ -51,6 +52,8 @@ struct TuiState {
     cache_hit_rate: String,
     /// v1.3.1 增量：是否已配置 LLM provider
     configured: bool,
+    /// v1.4: 当前 modal 弹窗（None = 无弹窗）
+    modal: Option<crate::interaction::widgets::select_list::SelectList>,
 }
 
 impl TuiState {
@@ -63,6 +66,7 @@ impl TuiState {
             profile: String::new(), // run() 启动时同步 block_on 填充
             cache_hit_rate: "n/a".into(),
             configured: true, // 由 main.rs 启动时覆盖
+            modal: None,
         }
     }
 }
@@ -164,7 +168,18 @@ impl TuiBackend {
             status: state.status.clone(),
             prompt: state.prompt_buffer.clone(),
         };
-        FrameViewModel::FullScreen(ScreenViewModel::Main(main))
+
+        match &state.modal {
+            Some(select_list) => {
+                // v1.4: /model 弹 SelectList 走 FrameViewModel::Modal
+                let popup = ScreenViewModel::SelectList(select_list.view_model());
+                FrameViewModel::Modal {
+                    background: ScreenViewModel::Main(main),
+                    popup,
+                }
+            }
+            None => FrameViewModel::FullScreen(ScreenViewModel::Main(main)),
+        }
     }
 }
 
