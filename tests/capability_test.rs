@@ -213,6 +213,20 @@ async fn decisioner_preserves_step_fields_in_execution_plan() {
     assert_eq!(plan.step.tool, "read_file");
 }
 
+// ========== Decisioner 错误路径测试（PR D expect→Result）==========
+
+#[tokio::test]
+async fn decisioner_missing_current_step_returns_error() {
+    let router = make_test_router();
+    let d = Decisioner::new(router);
+
+    let bb = Blackboard::new(make_task("t", RiskLevel::L0));
+    let result = d.decide(&bb).await;
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains("current_step"), "got: {}", err);
+}
+
 // ========== Executor 集成测试（工具执行路径，不调 LLM）==========
 
 #[tokio::test]
@@ -336,6 +350,21 @@ async fn executor_empty_sub_steps_records_nothing() {
     let bb = Blackboard::new(make_task("t", RiskLevel::L0)).with_execution_plan(plan);
     let bb2 = e.execute(bb).await.unwrap();
     assert!(bb2.action_log.is_empty());
+}
+
+// ========== Executor 错误路径测试（PR D expect→Result）==========
+
+#[tokio::test]
+async fn executor_missing_execution_plan_returns_error() {
+    let router = make_test_router();
+    let tools = make_tool_registry();
+    let e = Executor::new(router, tools);
+
+    let bb = Blackboard::new(make_task("t", RiskLevel::L0));
+    let result = e.execute(bb).await;
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains("execution_plan"), "got: {}", err);
 }
 
 // ========== Feedbacker 集成测试（规则路径，不调 LLM）==========
