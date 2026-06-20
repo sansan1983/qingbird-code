@@ -1,8 +1,7 @@
 //! TUI 交互层实现（设计 §14.3）
 //!
-//! **v1.3.1 已知偏差**（spec B1 §12）：`render()` 直接调 ratatui API（`Paragraph::new` / `Color::Cyan`），
-//! 违反"零硬编码"原则。v1.4 spec D 接手时**重构为 RenderEngine trait + DrawCommand**。
-//! 详见 specs/2026-06-17-eflow-v1.3-b1-wizard-slash-design.md §12。
+//! v1.4 spec D 已重构：render() 改为 state_to_vm() + RenderEngine → DrawCommand → execute_draw_commands。
+//! 详见 specs/2026-06-18-eflow-v1.4-rendering-pipeline-design.md §12。
 //!
 //! 布局（ratatui 4 段：1 行 header + main 区 + 1 行 status + 1 行 prompt）：
 //! ┌─────────────────────────────────────────┐
