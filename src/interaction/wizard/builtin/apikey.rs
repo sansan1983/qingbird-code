@@ -5,12 +5,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossterm::event::KeyEvent;
-use ratatui::layout::Rect;
-use ratatui::prelude::{Buffer, Widget};
-use ratatui::text::Line;
-use ratatui::widgets::Paragraph;
 use rust_i18n::t;
 
+use crate::interaction::render::view_model::*;
 use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 
 pub struct ApikeyStep;
@@ -30,16 +27,43 @@ impl WizardStep for ApikeyStep {
     fn title(&self) -> &'static str {
         "请输入 API KEY"
     }
-    fn render(&self, area: Rect, buf: &mut Buffer, _state: &WizardState) {
-        // 临时硬编码
-        let text = vec![
-            Line::from(t!("wizard_step_title_apikey").to_string()),
-            Line::from(""),
-            Line::from("（v1.3.1 阶段：从 stdin 输入 KEY）"),
-            Line::from(""),
-            Line::from("API KEY: "),
-        ];
-        Paragraph::new(text).render(area, buf);
+    fn view_model(&self, state: &WizardState) -> StepViewModel {
+        StepViewModel {
+            title: t!("wizard_step_title_apikey").to_string(),
+            lines: vec![
+                LineVM { text: "".into() },
+                LineVM {
+                    text: "（v1.3.1 阶段：从 stdin 输入 KEY）".into(),
+                },
+                LineVM { text: "".into() },
+                LineVM {
+                    text: format!(
+                        "API KEY: {}",
+                        state.provider_api_key.as_deref().unwrap_or("")
+                    ),
+                },
+            ],
+            input: Some(InputFieldVM {
+                label: "api_key".into(),
+                value: state.provider_api_key.clone().unwrap_or_default(),
+                cursor_pos: state
+                    .provider_api_key
+                    .as_ref()
+                    .map(|s| s.len())
+                    .unwrap_or(0),
+            }),
+            hints: vec![
+                KeyHint {
+                    key: "Enter".into(),
+                    description: "下一步".into(),
+                },
+                KeyHint {
+                    key: "Esc".into(),
+                    description: "取消".into(),
+                },
+            ],
+            focused_field: 0,
+        }
     }
     fn on_key(&self, _key: KeyEvent, state: &mut WizardState) -> StepAction {
         // 简化：直接读 stdin 一行

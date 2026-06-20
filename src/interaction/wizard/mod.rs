@@ -1,8 +1,3 @@
-// TODO(v1.4 spec D): WizardStep::render() / SelectList::render() / TuiBackend
-// 渲染部分直接调 ratatui API，违反"零硬编码"原则。
-// v1.4 spec D 重构为 RenderEngine trait + DrawCommand enum。
-// 见 specs/2026-06-17-eflow-v1.3-b1-wizard-slash-design.md §12 已知偏差。
-
 //! v1.3.1 配置向导子系统
 //!
 //! 核心零硬编码步骤名：每个 step 1 个 `impl WizardStep`，
@@ -18,12 +13,16 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossterm::event::KeyEvent;
-use ratatui::layout::Rect;
-use ratatui::prelude::Buffer;
+use ratatui::backend::CrosstermBackend;
 
 use crate::common::error::Result;
 use crate::infrastructure::config::EflowConfig;
 use crate::infrastructure::llm::types::ProtocolKind;
+use crate::interaction::render::FrameViewModel;
+use crate::interaction::render::ScreenViewModel;
+use crate::interaction::render::render_engine::{DefaultRenderEngine, RenderEngine};
+use crate::interaction::render::view_model::*;
+use crate::interaction::tui::execute_draw_commands;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StepAction {
@@ -37,8 +36,8 @@ pub enum StepAction {
 pub trait WizardStep: Send + Sync {
     fn id(&self) -> &'static str;
     fn title(&self) -> &'static str;
-    /// 渲染（**临时硬编码**——v1.4 spec D 重构）
-    fn render(&self, area: Rect, buf: &mut Buffer, state: &WizardState);
+    /// 输出 ViewModel（v1.4 spec D：零 ratatui 硬编码）
+    fn view_model(&self, state: &WizardState) -> StepViewModel;
     fn on_key(&self, key: KeyEvent, state: &mut WizardState) -> StepAction;
     fn is_complete(&self, state: &WizardState) -> bool;
     fn next_step(&self) -> Option<Arc<dyn WizardStep>>;
@@ -69,56 +68,79 @@ impl Wizard {
         Self { steps }
     }
 
-    /// 同步执行向导（spec B1 阶段：纯键盘交互 + ratatui 渲染）
-    ///
-    /// **临时硬编码**——v1.4 spec D 重构
+    /// 同步执行向导（v1.4: 完整 ratatui 主循环 + ViewModel + RenderEngine 路径）
     pub fn run(&self) -> Result<WizardOutcome> {
         let mut state = WizardState::default();
         let mut current = 0;
 
-        loop {
+        let backend = CrosstermBackend::new(std::io::stdout());
+        let mut terminal = ratatui::Terminal::new(backend).expect("terminal init");
+        let _ = crossterm::terminal::enable_raw_mode();
+
+        let engine = DefaultRenderEngine::new();
+
+        let outcome = loop {
             if current >= self.steps.len() {
-                // 向导完成
-                return Ok(WizardOutcome::Completed(Box::new(state)));
+                break WizardOutcome::Completed(Box::new(state));
             }
             let step = self.steps[current].clone();
             step.on_enter(&mut state);
 
             // 单步循环：渲染 + 等待用户输入
-            // v1.3.1 阶段：每个 step 一次性 on_key 决定 Next/Cancel
-            // v1.4 spec D 重构：完整 ratatui 主循环
-            let outcome = self.run_single_step(&step, &mut state);
+            let step_outcome = self.run_single_step(&step, &mut state, &engine, &mut terminal);
             step.on_exit(&mut state);
-            match outcome {
+
+            match step_outcome {
                 StepOutcome::Next => current += 1,
                 StepOutcome::Prev => {
                     current = current.saturating_sub(1);
                 }
-                StepOutcome::Cancel => return Ok(WizardOutcome::Cancelled),
+                StepOutcome::Cancel => break WizardOutcome::Cancelled,
             }
-        }
+        };
+
+        let _ = crossterm::terminal::disable_raw_mode();
+        Ok(outcome)
     }
 
-    fn run_single_step(&self, _step: &Arc<dyn WizardStep>, state: &mut WizardState) -> StepOutcome {
-        // v1.3.1 简化实现：每个 step 通过 stdin 读一行 + parse
-        // 真实实现留待 spec D（v1.4）——spec B1 文档 §12 已知偏差
-        use std::io::BufRead;
-        let stdin = std::io::stdin();
-        let mut line = String::new();
-        if stdin.lock().read_line(&mut line).is_err() {
-            return StepOutcome::Cancel;
-        }
-        let line = line.trim();
-        match line {
-            "" => StepOutcome::Next,
-            "esc" | "Esc" | "ESC" => StepOutcome::Cancel,
-            "prev" | "Prev" | "PREV" | "back" => StepOutcome::Prev,
-            _ => {
-                // 把输入存到 state（具体 step 实现自己 parse）
-                // 简化：直接把 line 写到 state.config.core.language（各 step 覆盖）
-                // 实际实施时各 step 重写这个方法
-                let _ = state;
-                StepOutcome::Next
+    fn run_single_step(
+        &self,
+        step: &Arc<dyn WizardStep>,
+        state: &mut WizardState,
+        engine: &DefaultRenderEngine,
+        terminal: &mut ratatui::Terminal<CrosstermBackend<std::io::Stdout>>,
+    ) -> StepOutcome {
+        use crossterm::event::{Event, KeyCode as CtKeyCode, KeyEventKind};
+        use std::time::Duration;
+
+        loop {
+            // 渲染：step.view_model → engine.render → execute_draw_commands
+            let vm = step.view_model(state);
+            let frame_vm = FrameViewModel::FullScreen(ScreenViewModel::Wizard(vm));
+            let cmds = engine.render(&frame_vm);
+
+            let _ = terminal.draw(|f| {
+                execute_draw_commands(&cmds, f.area(), f.buffer_mut());
+            });
+
+            // 阻塞等键盘事件（100ms timeout 让外部能打断）
+            if crossterm::event::poll(Duration::from_millis(100)).unwrap_or(false)
+                && let Ok(Event::Key(key)) = crossterm::event::read()
+                && key.kind == KeyEventKind::Press
+            {
+                match key.code {
+                    CtKeyCode::Enter => return StepOutcome::Next,
+                    CtKeyCode::Esc => return StepOutcome::Cancel,
+                    _ => {
+                        let action = step.on_key(key, state);
+                        match action {
+                            StepAction::Next => return StepOutcome::Next,
+                            StepAction::Prev => return StepOutcome::Prev,
+                            StepAction::Cancel => return StepOutcome::Cancel,
+                            StepAction::Stay => continue,
+                        }
+                    }
+                }
             }
         }
     }
