@@ -3,18 +3,16 @@
 //! 多模交互：输入序号 / ↑↓ 键 / PageUp-Down / 鼠标滚轮 / 鼠标点击 / Enter / Esc。
 //! 焦点感知：widget 不知道自己焦点位置，**TUI 主循环**根据事件类型分发。
 //!
-//! **v1.3.1 已知偏差（spec B1 §12）**：本文件 `render()` 直接调 ratatui API
-//!（`Paragraph::new` / `List::new` / `Style::default().fg(Color::Cyan)`），
-//! 违反"零硬编码"原则。v1.4 spec D 接手时**重构为 RenderEngine trait + DrawCommand**。
+//! v1.4 spec D: `render()` 已重构为 `view_model()`，输出纯数据 ViewModel。
+//! 渲染由 RenderEngine + execute_draw_commands 完成。
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
-use ratatui::prelude::{Buffer, Rect, Style, Widget};
-use ratatui::widgets::{Block, Borders, List, ListItem as RatListItem, Paragraph};
 
 use crate::common::error::Result;
+use crate::interaction::render::view_model::*;
 
 /// 选择项数据源 trait
 ///
@@ -124,62 +122,24 @@ impl SelectList {
         &self.items
     }
 
-    /// 渲染到 ratatui Buffer（**临时硬编码**——v1.4 spec D 重构）
-    pub fn render(&self, area: Rect, buf: &mut Buffer) {
-        let visible: Vec<RatListItem> = self
-            .items
-            .iter()
-            .skip(self.scroll_offset)
-            .take(self.viewport_height)
-            .enumerate()
-            .map(|(idx, item)| {
-                let actual_idx = idx + self.scroll_offset;
-                let style = if actual_idx == self.selected {
-                    Style::default().fg(ratatui::style::Color::Cyan)
-                } else if item.disabled {
-                    Style::default().fg(ratatui::style::Color::DarkGray)
-                } else {
-                    Style::default()
-                };
-                let prefix = if actual_idx == self.selected {
-                    "▶ "
-                } else {
-                    "  "
-                };
-                let text = format!("{prefix}{}. {}", actual_idx + 1, item.label);
-                RatListItem::new(text).style(style)
-            })
-            .collect();
-
-        let list = List::new(visible).block(Block::default().borders(Borders::ALL).title("Select"));
-        // ratatui 0.x 列表状态：stateful widget 需要 ListState
-        // 为简化这里用 Paragraph 渲染多行（spec B1 范围内可接受）
-        let _ = list; // 暂时不用，避免编译警告
-        let joined: Vec<ratatui::text::Line> = self
-            .items
-            .iter()
-            .skip(self.scroll_offset)
-            .take(self.viewport_height)
-            .enumerate()
-            .map(|(idx, item)| {
-                let actual_idx = idx + self.scroll_offset;
-                let style = if actual_idx == self.selected {
-                    Style::default().fg(ratatui::style::Color::Cyan)
-                } else if item.disabled {
-                    Style::default().fg(ratatui::style::Color::DarkGray)
-                } else {
-                    Style::default()
-                };
-                let prefix = if actual_idx == self.selected {
-                    "▶ "
-                } else {
-                    "  "
-                };
-                let text = format!("{prefix}{}. {}", actual_idx + 1, item.label);
-                ratatui::text::Line::from(text).style(style)
-            })
-            .collect();
-        Paragraph::new(joined).render(area, buf);
+    /// 构造 SelectListViewModel（核心层职责）
+    pub fn view_model(&self) -> SelectListViewModel {
+        SelectListViewModel {
+            title: "Select".into(),
+            items: self
+                .items
+                .iter()
+                .enumerate()
+                .map(|(idx, item)| ListItemVM {
+                    label: item.label.clone(),
+                    hint: item.hint.clone(),
+                    disabled: item.disabled,
+                    is_selected: idx == self.selected,
+                })
+                .collect(),
+            selected: self.selected,
+            scroll_offset: self.scroll_offset,
+        }
     }
 
     pub fn on_key(&mut self, key: KeyEvent) -> SelectAction {
@@ -482,16 +442,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn selectlist_render_does_not_panic() {
-        // 临时硬编码 ratatui 调用——验证 TestBackend 渲染不 panic
-        let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    async fn selectlist_view_model_does_not_panic() {
+        // v1.4: view_model() replaces direct ratatui render
         let mut list = SelectList::new(Arc::new(MockSource { items: items5() }));
         list.load().await.unwrap();
-        terminal
-            .draw(|f| {
-                list.render(f.area(), f.buffer_mut());
-            })
-            .unwrap();
+        let vm = list.view_model();
+        assert_eq!(vm.items.len(), 5);
+        assert_eq!(vm.selected, 0);
+        assert!(vm.items[0].is_selected);
+        assert!(!vm.items[1].is_selected);
     }
 }
