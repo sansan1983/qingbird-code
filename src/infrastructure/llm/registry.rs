@@ -41,7 +41,7 @@ impl LlmProviderRegistry {
                     model_endpoints,
                 )
                 .map(Arc::new)
-                .unwrap(),
+                .map_err(|e| crate::common::error::EflowError::Config(e.to_string()))?,
                 ProtocolKind::AnthropicCompatible => GenericAnthropicProvider::new(
                     cfg.id.clone(),
                     cfg.api_key,
@@ -53,7 +53,7 @@ impl LlmProviderRegistry {
                     model_endpoints,
                 )
                 .map(Arc::new)
-                .unwrap(),
+                .map_err(|e| crate::common::error::EflowError::Config(e.to_string()))?,
             };
 
             providers.insert(cfg.id, provider);

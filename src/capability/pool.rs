@@ -30,6 +30,9 @@ pub enum PoolRequest {
 pub struct SubagentPool {
     tx: mpsc::Sender<PoolRequest>,
     /// 池中活跃 agent
+    /// ponytail: std::sync::Mutex — 当前所有访问路径（list_active / take_handle / cleanup_idle）
+    /// 都在同步闭包内，不跨 .await 持有。如果未来有人在此锁和 .unlock() 之间加 .await，
+    /// 会死锁。届时改为 tokio::sync::Mutex 并将方法改为 async。
     active: Arc<std::sync::Mutex<HashMap<Uuid, Subagent>>>,
     /// v1.2 E5: idle 超时（None = 不超时，v1.1 行为兼容）
     idle_timeout: Option<std::time::Duration>,

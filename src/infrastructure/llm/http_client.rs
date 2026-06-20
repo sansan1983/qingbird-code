@@ -134,7 +134,7 @@ pub async fn check_status(
         }
         _ if status.is_success() => Ok(response),
         _ => {
-            let body = response.text().await.unwrap_or_default();
+            let body = response.text().await.unwrap_or_else(|_| "[unreadable error body]".into());
             Err(EflowError::LlmProvider(
                 t!(
                     "err_http",

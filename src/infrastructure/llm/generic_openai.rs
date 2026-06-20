@@ -143,7 +143,10 @@ impl LlmProtocol for OpenAiProtocol {
         crate::infrastructure::llm::types::TokenUsage,
         String,
     ) {
-        let choice = &json["choices"][0];
+        let choice = match json.get("choices").and_then(|c| c.get(0)) {
+            Some(c) => c,
+            None => return (String::new(), None, Default::default(), "empty_choices".into()),
+        };
         let msg = &choice["message"];
         let content = msg["content"].as_str().unwrap_or("").to_string();
 
@@ -157,8 +160,14 @@ impl LlmProtocol for OpenAiProtocol {
                 .collect()
         });
 
-        let input_tokens = json["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32;
-        let output_tokens = json["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32;
+        let input_tokens = json["usage"]["prompt_tokens"]
+            .as_u64()
+            .or_else(|| json["usage"]["input_tokens"].as_u64())
+            .unwrap_or(0) as u32;
+        let output_tokens = json["usage"]["completion_tokens"]
+            .as_u64()
+            .or_else(|| json["usage"]["output_tokens"].as_u64())
+            .unwrap_or(0) as u32;
         let usage = crate::infrastructure::llm::types::TokenUsage {
             input_tokens,
             output_tokens,
