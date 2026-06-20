@@ -10,14 +10,9 @@
 
 | 项目 | 内容 |
 |------|------|
-| **当前任务** | **PR #22 merged 收工 + 准备 README 拆分 PR + 等远程服务器实施 v1.4 spec D PR1**。local: milestone/v1.4 (up to date with origin/milestone/v1.4 d15a4ad)。remote: origin/main + origin/milestone/v1.4 双分支。**PR #22 状态**：MERGED, squash merge → milestone/v1.4 mergeCommit `d15a4ad`，1 commit (PR #22 squash)，2 commits 含 (a0a0c1a followup + c781702 docs+flag)，+44 -25，7 files (CLAUDE.md / WORKLOG.md / Cargo.toml / README.md / locales×2 / concierge / main)。**v1.4 阶段**：milestone/v1.4 = d15a4ad = 1be88b8 (PR #21) + 43f3728 (PR #22 followup cherry-pick) + c781702 (docs+flag)。**代码体检 4 PR 全部完成**：PR #19 ✅ / #20 ✅ / #21 ✅ / #22 ✅。**下一轮 PR**：README 拆分（中/英两份）。**v1.4 spec D 实施 PR1** 仍待远程服务器。**4 门禁状态**：build ✓ / test ✓ (312 passed) / clippy ✓ / fmt ✓ |
-| **上次完成** | PR #22 收工仪式：PR #22 user merged → `git checkout milestone/v1.4 && git pull --ff` 拿到 d15a4ad (7 files / +44 -25) → 删本地 3 个分支（chore/docs-and-misc-pr-b / chore/dead-code-cleanup-pr-a / chore/dead-code-cleanup-pr-a-followup + 中途 chore/misc-cleanup-and-docs-pr-b）→ `git push origin --delete chore/dead-code-cleanup-pr-a` 删远程 stale ref → `git remote prune origin` 删 3 个 stale ref (origin/docs-and-misc-pr-b / origin/feature/docs-agents-md / origin/fix/docs-session-handoff) → 跑 4 门禁（4/4 全过）→ 开 fix/docs-session-handoff-pr22 分支准备 CLAUDE.md 收工更新 + README 拆分 PR |
-| **下次动作** | **在远程服务器上实施 v1.4 spec D PR1 (v1.4.0-abstract)** + **README 拆分 PR (docs/split-readme-zh-en)**： |
-  1. **远程服务器**：拉 main（拿到 v1.4 spec + plan 文档）→ `git checkout -b v1.4.0-abstract` → 读 plan 文档 tasks 1-4 + 11a → 实施（5 新文件 + 测试基础设施，6 commits）→ `rustup component add rustfmt` 装 fmt 组件 → 4 门禁全过 → push + `gh pr create --base milestone/v1.4 --head v1.4.0-abstract` 开 PR1（**注意 base 改 milestone/v1.4，不是 main**——AGENTS.md 严格 PR 规则要求所有改动走 milestone PR 流程）
-  2. **本地 review PR1** → 批准 / 反馈
-  3. **merge PR1 → PR2 (v1.4.0-apply) 实施应用层重构**（tasks 5-10 + 11b，9-10 commits）
-  4. **fmt 状态**：本地已过，远程服务器实施 PR1 时确认 rustfmt 已装
-  5. **README 拆分**：`README.md`（中文，默认）+ `README.en.md`（英文）两份，README.md 顶部加 `[English](README.en.md)` 链接，README.en.md 顶部加 `[简体中文](README.md)` 链接。**按用户偏好**（README 当前中文为主，英文为辅）拆 |
+| **当前任务** | **代码体检 PR #26 merged**：audit 10,245 行代码 → 发现 14 项（P0×2 / P1×4 / P2×4 / P3×4）→ 实施 #1-#6（P0+P1 共 6 项低难度修复，5 files +26/-8）→ PR #26 merged → milestone/v1.4 = 最新。**4 门禁状态**：build ✓ / test ✓ (155 passed) / clippy ✓ / fmt ✓（本地未装 rustfmt 组件）|
+| **上次完成** | PR #26 merged (code audit #1-#6 fixes) → `git push origin chore/code-audit-fixes-pr` → `gh pr create --base milestone/v1.4` → PR #26 https://github.com/sansan1983/eflow/pull/26 merged。**修复 6 项**：registry unwrap → map_err / token field fallback / choices bounds / mutex annotation / error body / cache lock fallback |
+| **下次动作** | **等用户决定下一步**：(1) README 拆分 PR / (2) P2 优化（router routing 合并、env var fallback 去重）/ (3) v1.4 spec D 实施 PR1（远程服务器）。**本地分支**：milestone/v1.4 (up to date with origin/milestone/v1.4) |
 
 **近期日志**（最近 3 条，完整历史见 `WORKLOG.md`）：
 
