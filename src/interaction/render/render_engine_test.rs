@@ -94,19 +94,17 @@ fn engine_renders_modal_with_clear_area() {
 fn engine_renders_disabled_item_with_disabled_style() {
     use ratatui::style::Color;
     let engine = DefaultRenderEngine::new();
-    let frame = FrameViewModel::FullScreen(ScreenViewModel::SelectList(
-        SelectListViewModel {
-            title: "test".into(),
-            items: vec![ListItemVM {
-                label: "x".into(),
-                hint: None,
-                disabled: true,
-                is_selected: false,
-            }],
-            selected: 0,
-            scroll_offset: 0,
-        },
-    ));
+    let frame = FrameViewModel::FullScreen(ScreenViewModel::SelectList(SelectListViewModel {
+        title: "test".into(),
+        items: vec![ListItemVM {
+            label: "x".into(),
+            hint: None,
+            disabled: true,
+            is_selected: false,
+        }],
+        selected: 0,
+        scroll_offset: 0,
+    }));
     let cmds = engine.render(&frame);
     let has_disabled = cmds.iter().any(|c| {
         matches!(c, DrawCommand::Span { style, .. } if matches!(style.fg, Some(Color::DarkGray)))
@@ -146,5 +144,8 @@ fn engine_renders_unconfigured_warning_in_header() {
         }
         false
     }
-    assert!(contains_warning(&cmds), "unconfigured header must emit red ⚠ warning");
+    assert!(
+        contains_warning(&cmds),
+        "unconfigured header must emit red ⚠ warning"
+    );
 }

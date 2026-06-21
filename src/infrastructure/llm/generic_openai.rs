@@ -145,7 +145,14 @@ impl LlmProtocol for OpenAiProtocol {
     ) {
         let choice = match json.get("choices").and_then(|c| c.get(0)) {
             Some(c) => c,
-            None => return (String::new(), None, Default::default(), "empty_choices".into()),
+            None => {
+                return (
+                    String::new(),
+                    None,
+                    Default::default(),
+                    "empty_choices".into(),
+                );
+            }
         };
         let msg = &choice["message"];
         let content = msg["content"].as_str().unwrap_or("").to_string();

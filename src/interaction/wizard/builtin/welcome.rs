@@ -102,7 +102,10 @@ mod tests {
         let state = WizardState::default();
         let vm = step.view_model(&state);
         assert!(vm.title.contains("eflow"));
-        assert!(vm.lines.len() >= 5, "welcome step should have multiple lines");
+        assert!(
+            vm.lines.len() >= 5,
+            "welcome step should have multiple lines"
+        );
         assert!(vm.input.is_none(), "welcome has no input field");
     }
 
