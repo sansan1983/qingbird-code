@@ -78,3 +78,35 @@ fn step_view_model_constructs_with_input_field() {
     assert!(vm.input.is_some());
     assert_eq!(vm.focused_field, 0);
 }
+
+#[test]
+fn step_view_model_with_multiple_input_fields() {
+    let vm = StepViewModel {
+        title: "多字段".into(),
+        lines: vec![],
+        input: Some(InputFieldVM {
+            label: "field1".into(),
+            value: "v1".into(),
+            cursor_pos: 2,
+        }),
+        hints: vec![],
+        focused_field: 1,
+    };
+    assert_eq!(vm.focused_field, 1);
+}
+
+#[test]
+fn main_view_model_empty_collections() {
+    let vm = MainViewModel {
+        header: HeaderVM {
+            profile: "".into(),
+            cache_hit_rate: "n/a".into(),
+            configured: false,
+        },
+        messages: vec![],
+        status: "".into(),
+        prompt: "".into(),
+    };
+    assert!(!vm.header.configured);
+    assert!(vm.messages.is_empty());
+}
