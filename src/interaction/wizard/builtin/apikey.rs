@@ -102,4 +102,29 @@ mod tests {
         };
         assert!(step.is_complete(&state));
     }
+
+    #[test]
+    fn view_model_has_input_field() {
+        let step = ApikeyStep;
+        let state = WizardState {
+            provider_api_key: Some("sk-abc".into()),
+            ..WizardState::default()
+        };
+        let vm = step.view_model(&state);
+        assert!(vm.input.is_some(), "apikey step should have input field");
+        let input = vm.input.unwrap();
+        assert_eq!(input.value, "sk-abc");
+        assert_eq!(input.cursor_pos, 6);
+        assert_eq!(input.label, "api_key");
+    }
+
+    #[test]
+    fn view_model_empty_input_when_no_key() {
+        let step = ApikeyStep;
+        let state = WizardState::default();
+        let vm = step.view_model(&state);
+        let input = vm.input.expect("should have input");
+        assert!(input.value.is_empty());
+        assert_eq!(input.cursor_pos, 0);
+    }
 }

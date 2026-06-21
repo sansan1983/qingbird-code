@@ -95,4 +95,24 @@ mod tests {
         assert!(matches!(step.on_key(enter, &mut state), StepAction::Next));
         assert!(matches!(step.on_key(esc, &mut state), StepAction::Cancel));
     }
+
+    #[test]
+    fn view_model_contains_title_and_instructions() {
+        let step = WelcomeStep;
+        let state = WizardState::default();
+        let vm = step.view_model(&state);
+        assert!(vm.title.contains("eflow"));
+        assert!(vm.lines.len() >= 5, "welcome step should have multiple lines");
+        assert!(vm.input.is_none(), "welcome has no input field");
+    }
+
+    #[test]
+    fn view_model_lines_include_enter_hint() {
+        let step = WelcomeStep;
+        let state = WizardState::default();
+        let vm = step.view_model(&state);
+        let text: String = vm.lines.iter().map(|l| l.text.as_str()).collect();
+        assert!(text.contains("Enter"), "should mention Enter key");
+        assert!(text.contains("Esc"), "should mention Esc key");
+    }
 }

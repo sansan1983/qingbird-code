@@ -531,4 +531,60 @@ mod tests {
             })
             .unwrap();
     }
+
+    // ========== v1.4 T11b: Modal state machine tests ==========
+
+    #[test]
+    fn state_to_vm_without_modal_is_fullscreen() {
+        let state = TuiState::initial();
+        let vm = TuiBackend::state_to_vm(&state);
+        match vm {
+            FrameViewModel::FullScreen(ScreenViewModel::Main(m)) => {
+                assert_eq!(m.status, "Ready");
+            }
+            _ => panic!("expected FullScreen without modal"),
+        }
+    }
+
+    #[test]
+    fn state_to_vm_with_modal_is_modal_frame() {
+        use crate::interaction::widgets::select_list::{SelectItem, SelectList};
+        let mut state = TuiState::initial();
+        state.messages.clear();
+        // 构造一个空的 SelectList
+        struct EmptySource;
+        #[async_trait::async_trait]
+        impl crate::interaction::widgets::select_list::SelectItemSource for EmptySource {
+            async fn items(&self) -> crate::common::error::Result<Vec<SelectItem>> {
+                Ok(vec![])
+            }
+        }
+        let mut sl = SelectList::new(Arc::new(EmptySource));
+        // 加载空列表（同步包装）
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    let _ = sl.load().await;
+                });
+            })
+            .join()
+            .unwrap();
+        });
+        state.modal = Some(sl);
+        let vm = TuiBackend::state_to_vm(&state);
+        match vm {
+            FrameViewModel::Modal { background, popup } => {
+                match background {
+                    ScreenViewModel::Main(m) => assert_eq!(m.status, "Ready"),
+                    _ => panic!("background should be Main"),
+                }
+                match popup {
+                    ScreenViewModel::SelectList(sv) => assert_eq!(sv.items.len(), 0),
+                    _ => panic!("popup should be SelectList"),
+                }
+            }
+            _ => panic!("expected Modal with background + popup"),
+        }
+    }
 }

@@ -187,4 +187,41 @@ mod tests {
         assert!(matches!(step.on_key(enter, &mut state), StepAction::Next));
         assert!(matches!(step.on_key(esc, &mut state), StepAction::Cancel));
     }
+
+    #[test]
+    fn view_model_masks_api_key() {
+        let step = ConfirmStep;
+        let state = WizardState {
+            provider_api_key: Some("sk-1234567890abcdef".into()),
+            ..WizardState::default()
+        };
+        let vm = step.view_model(&state);
+        let text: String = vm.lines.iter().map(|l| l.text.as_str()).collect();
+        // mask: k[..4]="sk-1", k[len-4..]="cdef" → "sk-1***cdef"
+        assert!(text.contains("sk-1"), "should show first 4 chars");
+        assert!(text.contains("***"), "should have *** in middle");
+        assert!(text.contains("cdef"), "should show last 4 chars");
+        assert!(!text.contains("1234567890ab"), "should not show full key");
+    }
+
+    #[test]
+    fn view_model_shows_protocol_display() {
+        let step = ConfirmStep;
+        let state = WizardState {
+            provider_protocol: Some(ProtocolKind::OpenaiCompatible),
+            ..WizardState::default()
+        };
+        let vm = step.view_model(&state);
+        let text: String = vm.lines.iter().map(|l| l.text.as_str()).collect();
+        assert!(text.contains("openai_compatible"));
+    }
+
+    #[test]
+    fn view_model_no_input_field() {
+        let step = ConfirmStep;
+        let state = WizardState::default();
+        let vm = step.view_model(&state);
+        assert!(vm.input.is_none(), "confirm step has no input field");
+        assert!(!vm.hints.is_empty(), "should have Enter/Esc hints");
+    }
 }
