@@ -30,7 +30,7 @@ impl LlmProviderRegistry {
                 .collect();
 
             let provider: Arc<dyn LlmProvider> = match cfg.protocol {
-                ProtocolKind::OpenaiCompatible => Arc::new(GenericOpenAiProvider::new(
+                ProtocolKind::OpenaiCompatible => GenericOpenAiProvider::new(
                     cfg.id.clone(),
                     cfg.api_key,
                     cfg.base_url,
@@ -39,8 +39,10 @@ impl LlmProviderRegistry {
                     cfg.max_retries,
                     cfg.retry_backoff_ms,
                     model_endpoints,
-                )),
-                ProtocolKind::AnthropicCompatible => Arc::new(GenericAnthropicProvider::new(
+                )
+                .map(Arc::new)
+                .map_err(|e| crate::common::error::EflowError::Config(e.to_string()))?,
+                ProtocolKind::AnthropicCompatible => GenericAnthropicProvider::new(
                     cfg.id.clone(),
                     cfg.api_key,
                     cfg.base_url,
@@ -49,7 +51,9 @@ impl LlmProviderRegistry {
                     cfg.max_retries,
                     cfg.retry_backoff_ms,
                     model_endpoints,
-                )),
+                )
+                .map(Arc::new)
+                .map_err(|e| crate::common::error::EflowError::Config(e.to_string()))?,
             };
 
             providers.insert(cfg.id, provider);

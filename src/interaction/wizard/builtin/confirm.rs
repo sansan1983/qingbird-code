@@ -4,13 +4,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::layout::Rect;
-use ratatui::prelude::{Buffer, Widget};
-use ratatui::text::Line;
-use ratatui::widgets::Paragraph;
 
 use crate::common::error::{EflowError, Result};
 use crate::infrastructure::llm::types::{ProtocolKind, ProviderConfig};
+use crate::interaction::render::view_model::*;
 use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 
 pub struct ConfirmStep;
@@ -23,8 +20,7 @@ impl WizardStep for ConfirmStep {
     fn title(&self) -> &'static str {
         "确认配置"
     }
-    fn render(&self, area: Rect, buf: &mut Buffer, state: &WizardState) {
-        // 临时硬编码
+    fn view_model(&self, state: &WizardState) -> StepViewModel {
         let masked_key = state
             .provider_api_key
             .as_ref()
@@ -37,31 +33,58 @@ impl WizardStep for ConfirmStep {
             })
             .unwrap_or_else(|| "(未填)".to_string());
 
-        let text = vec![
-            Line::from("配置确认："),
-            Line::from(""),
-            Line::from(format!("  语言: {}", state.config.core.language)),
-            Line::from(format!(
-                "  厂商: {}",
-                state.provider_display_name.as_deref().unwrap_or("(未选)")
-            )),
-            Line::from(format!(
-                "  协议: {}",
-                match state.provider_protocol {
-                    Some(ProtocolKind::OpenaiCompatible) => "openai_compatible",
-                    Some(ProtocolKind::AnthropicCompatible) => "anthropic_compatible",
-                    None => "(preset 跳过)",
-                }
-            )),
-            Line::from(format!("  API KEY: {}", masked_key)),
-            Line::from(format!(
-                "  模型: {}",
-                state.default_model.as_deref().unwrap_or("(未选)")
-            )),
-            Line::from(""),
-            Line::from("Enter 确认 / Esc 取消（不写文件）"),
-        ];
-        Paragraph::new(text).render(area, buf);
+        let protocol_display = match state.provider_protocol {
+            Some(ProtocolKind::OpenaiCompatible) => "openai_compatible",
+            Some(ProtocolKind::AnthropicCompatible) => "anthropic_compatible",
+            None => "(preset 跳过)",
+        };
+
+        StepViewModel {
+            title: "确认配置".into(),
+            lines: vec![
+                LineVM {
+                    text: "配置确认：".into(),
+                },
+                LineVM { text: "".into() },
+                LineVM {
+                    text: format!("  语言: {}", state.config.core.language),
+                },
+                LineVM {
+                    text: format!(
+                        "  厂商: {}",
+                        state.provider_display_name.as_deref().unwrap_or("(未选)")
+                    ),
+                },
+                LineVM {
+                    text: format!("  协议: {}", protocol_display),
+                },
+                LineVM {
+                    text: format!("  API KEY: {}", masked_key),
+                },
+                LineVM {
+                    text: format!(
+                        "  模型: {}",
+                        state.default_model.as_deref().unwrap_or("(未选)")
+                    ),
+                },
+                LineVM { text: "".into() },
+                LineVM {
+                    text: "Enter 确认 / Esc 取消（不写文件）".into(),
+                },
+            ],
+            input: None,
+            hints: vec![
+                KeyHint {
+                    key: "Enter".into(),
+                    description: "确认".into(),
+                },
+                KeyHint {
+                    key: "Esc".into(),
+                    description: "取消".into(),
+                },
+            ],
+            focused_field: 0,
+        }
     }
     fn on_key(&self, key: KeyEvent, _state: &mut WizardState) -> StepAction {
         match key.code {
@@ -163,5 +186,42 @@ mod tests {
         let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
         assert!(matches!(step.on_key(enter, &mut state), StepAction::Next));
         assert!(matches!(step.on_key(esc, &mut state), StepAction::Cancel));
+    }
+
+    #[test]
+    fn view_model_masks_api_key() {
+        let step = ConfirmStep;
+        let state = WizardState {
+            provider_api_key: Some("sk-1234567890abcdef".into()),
+            ..WizardState::default()
+        };
+        let vm = step.view_model(&state);
+        let text: String = vm.lines.iter().map(|l| l.text.as_str()).collect();
+        // mask: k[..4]="sk-1", k[len-4..]="cdef" → "sk-1***cdef"
+        assert!(text.contains("sk-1"), "should show first 4 chars");
+        assert!(text.contains("***"), "should have *** in middle");
+        assert!(text.contains("cdef"), "should show last 4 chars");
+        assert!(!text.contains("1234567890ab"), "should not show full key");
+    }
+
+    #[test]
+    fn view_model_shows_protocol_display() {
+        let step = ConfirmStep;
+        let state = WizardState {
+            provider_protocol: Some(ProtocolKind::OpenaiCompatible),
+            ..WizardState::default()
+        };
+        let vm = step.view_model(&state);
+        let text: String = vm.lines.iter().map(|l| l.text.as_str()).collect();
+        assert!(text.contains("openai_compatible"));
+    }
+
+    #[test]
+    fn view_model_no_input_field() {
+        let step = ConfirmStep;
+        let state = WizardState::default();
+        let vm = step.view_model(&state);
+        assert!(vm.input.is_none(), "confirm step has no input field");
+        assert!(!vm.hints.is_empty(), "should have Enter/Esc hints");
     }
 }

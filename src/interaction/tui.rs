@@ -1,8 +1,7 @@
 //! TUI 交互层实现（设计 §14.3）
 //!
-//! **v1.3.1 已知偏差**（spec B1 §12）：`render()` 直接调 ratatui API（`Paragraph::new` / `Color::Cyan`），
-//! 违反"零硬编码"原则。v1.4 spec D 接手时**重构为 RenderEngine trait + DrawCommand**。
-//! 详见 specs/2026-06-17-eflow-v1.3-b1-wizard-slash-design.md §12。
+//! v1.4 spec D 已重构：render() 改为 state_to_vm() + RenderEngine → DrawCommand → execute_draw_commands。
+//! 详见 specs/2026-06-18-eflow-v1.4-rendering-pipeline-design.md §12。
 //!
 //! 布局（ratatui 4 段：1 行 header + main 区 + 1 行 status + 1 行 prompt）：
 //! ┌─────────────────────────────────────────┐
@@ -22,25 +21,29 @@ use std::time::Duration;
 use crossterm::event::{Event as CtEvent, KeyCode, KeyEventKind};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::layout::Rect;
+use ratatui::prelude::Buffer;
+use ratatui::style::{Modifier, Style};
+use ratatui::widgets::Widget;
+use ratatui::widgets::{Block, Borders, Paragraph};
 use tokio::sync::Mutex;
 use tokio::sync::broadcast;
 
 use super::layer::InteractionLayer;
 use crate::application::concierge::Concierge;
 use crate::infrastructure::event::{Event, EventChannel};
+use crate::interaction::render::FrameViewModel;
+use crate::interaction::render::draw_command::{BorderToken, DrawCommand, TextStyle};
+use crate::interaction::render::render_engine::{DefaultRenderEngine, RenderEngine};
+use crate::interaction::render::view_model::*;
 
 /// TUI 状态
 ///
 /// v1.2 F3: `profile` / `cache_hit_rate` 需要明确初值（不能随便 ""），所以不 derive Default，
 /// 改用 `initial()` 显式构造。`std::sync::Mutex`（不是 tokio）因为 event loop 是 sync。
 ///
-/// v1.3.1 增量：
-/// - `configured`: router 非空 = true；false 时 header 显 ⚠ 警告
-/// - `wizard_active`: 向导运行时为 true（v1.3.1 阶段 TUI 不实装 wizard，保留字段待 v1.3.2）
+/// v1.3.1 增量：`configured` — router 非空 = true；false 时 header 显 ⚠ 警告
+/// v1.4 增量：`modal` — 弹窗 SelectList
 struct TuiState {
     messages: Vec<String>,
     status: String,
@@ -49,9 +52,8 @@ struct TuiState {
     cache_hit_rate: String,
     /// v1.3.1 增量：是否已配置 LLM provider
     configured: bool,
-    /// v1.3.1 增量：向导是否在运行（v1.3.1 阶段保留字段，渲染层暂不消费）
-    #[allow(dead_code)]
-    wizard_active: bool,
+    /// v1.4: 当前 modal 弹窗（None = 无弹窗）
+    modal: Option<crate::interaction::widgets::select_list::SelectList>,
 }
 
 impl TuiState {
@@ -64,7 +66,7 @@ impl TuiState {
             profile: String::new(), // run() 启动时同步 block_on 填充
             cache_hit_rate: "n/a".into(),
             configured: true, // 由 main.rs 启动时覆盖
-            wizard_active: false,
+            modal: None,
         }
     }
 }
@@ -150,59 +152,34 @@ impl TuiBackend {
         }
     }
 
-    /// 渲染当前 state 到 frame
-    fn render(state: &TuiState, f: &mut ratatui::Frame) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // header
-                Constraint::Min(3),    // messages
-                Constraint::Length(1), // status
-                Constraint::Length(1), // prompt
-            ])
-            .split(f.area());
+    /// 把 TuiState 翻译为 FrameViewModel（核心层职责）
+    fn state_to_vm(state: &TuiState) -> FrameViewModel {
+        let main = MainViewModel {
+            header: HeaderVM {
+                profile: state.profile.clone(),
+                cache_hit_rate: state.cache_hit_rate.clone(),
+                configured: state.configured,
+            },
+            messages: state
+                .messages
+                .iter()
+                .map(|m| MessageVM { text: m.clone() })
+                .collect(),
+            status: state.status.clone(),
+            prompt: state.prompt_buffer.clone(),
+        };
 
-        // Header
-        // v1.3.1 增量：未配置时末尾追加红色 "⚠ 未配置 LLM provider" 警告 Span
-        let mut header_spans = vec![
-            Span::raw("eflow | "),
-            Span::styled(
-                format!("profile: {}", state.profile),
-                Style::default().fg(Color::Cyan),
-            ),
-            Span::raw(" | "),
-            Span::styled(
-                format!("L2 cache: {}", state.cache_hit_rate),
-                Style::default().fg(Color::Yellow),
-            ),
-        ];
-        if !state.configured {
-            header_spans.push(Span::raw(" | "));
-            header_spans.push(Span::styled(
-                "⚠ 未配置 LLM provider",
-                Style::default().fg(Color::Red),
-            ));
+        match &state.modal {
+            Some(select_list) => {
+                // v1.4: /model 弹 SelectList 走 FrameViewModel::Modal
+                let popup = ScreenViewModel::SelectList(select_list.view_model());
+                FrameViewModel::Modal {
+                    background: ScreenViewModel::Main(main),
+                    popup,
+                }
+            }
+            None => FrameViewModel::FullScreen(ScreenViewModel::Main(main)),
         }
-        let header = Paragraph::new(Line::from(header_spans));
-        f.render_widget(header, chunks[0]);
-
-        // Messages
-        let items: Vec<ListItem> = state
-            .messages
-            .iter()
-            .map(|m| ListItem::new(m.as_str()))
-            .collect();
-        let messages = List::new(items).block(Block::default().borders(Borders::NONE));
-        f.render_widget(messages, chunks[1]);
-
-        // Status
-        let status = Paragraph::new(state.status.as_str())
-            .style(Style::default().add_modifier(Modifier::ITALIC));
-        f.render_widget(status, chunks[2]);
-
-        // Prompt
-        let prompt = Paragraph::new(format!("> {}", state.prompt_buffer));
-        f.render_widget(prompt, chunks[3]);
     }
 }
 
@@ -244,10 +221,15 @@ impl InteractionLayer for TuiBackend {
 
         // 主循环：同步 poll 键盘 + 异步 select 任务事件
         let result: std::io::Result<()> = (|| loop {
-            // 渲染
+            // 渲染：state → VM → engine → DrawCommand → execute_draw_commands
             {
                 let state_lock = state.lock().unwrap();
-                terminal.draw(|f| Self::render(&state_lock, f))?;
+                let vm = TuiBackend::state_to_vm(&state_lock);
+                let engine = DefaultRenderEngine::new();
+                let cmds = engine.render(&vm);
+                terminal.draw(|f| {
+                    execute_draw_commands(&cmds, f.area(), f.buffer_mut());
+                })?;
             }
 
             // 阻塞等 crossterm 事件（带 timeout 让 task 事件有处理机会）
@@ -334,6 +316,72 @@ impl InteractionLayer for TuiBackend {
     }
 }
 
+// ── DrawCommand → ratatui 转换器（仅在此文件使用） ──
+
+/// 机械执行 DrawCommand 画到 screen buffer
+pub(crate) fn execute_draw_commands(commands: &[DrawCommand], area: Rect, buf: &mut Buffer) {
+    for cmd in commands {
+        match cmd {
+            DrawCommand::Text { content, style } => {
+                let p = Paragraph::new(content.as_str()).style(to_ratatui_style(*style));
+                p.render(area, buf);
+            }
+            DrawCommand::Block { border, title } => {
+                let b = Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(to_ratatui_border(*border))
+                    .title(title.as_str());
+                b.render(area, buf);
+            }
+            DrawCommand::Span {
+                prefix,
+                content,
+                style,
+            } => {
+                let p =
+                    Paragraph::new(format!("{prefix}{content}")).style(to_ratatui_style(*style));
+                p.render(area, buf);
+            }
+            DrawCommand::Line {
+                commands: span_cmds,
+            } => {
+                execute_draw_commands(span_cmds, area, buf);
+            }
+            DrawCommand::ClearArea => {
+                buf.set_style(area, Style::default());
+            }
+        }
+    }
+}
+
+/// TextStyle → ratatui Style
+fn to_ratatui_style(s: TextStyle) -> Style {
+    let mut style = Style::default();
+    if let Some(fg) = s.fg {
+        style = style.fg(fg);
+    }
+    if let Some(bg) = s.bg {
+        style = style.bg(bg);
+    }
+    if s.bold {
+        style = style.add_modifier(Modifier::BOLD);
+    }
+    if s.italic {
+        style = style.add_modifier(Modifier::ITALIC);
+    }
+    style
+}
+
+/// BorderToken → ratatui BorderType
+fn to_ratatui_border(t: BorderToken) -> ratatui::widgets::BorderType {
+    match t {
+        BorderToken::Rounded => ratatui::widgets::BorderType::Rounded,
+        BorderToken::Square => ratatui::widgets::BorderType::Plain,
+        BorderToken::Double => ratatui::widgets::BorderType::Double,
+        BorderToken::None => ratatui::widgets::BorderType::Plain,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,13 +401,16 @@ mod tests {
 
     #[test]
     fn tui_backend_renders_initial_frame_via_test_backend() {
-        // 验证：ratatui TestBackend + render 不 panic
+        // v1.4: 用 RenderEngine 路径（state_to_vm → engine → execute_draw_commands）
         let backend = ratatui::backend::TestBackend::new(80, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         let state = TuiState::initial();
+        let vm = TuiBackend::state_to_vm(&state);
+        let engine = DefaultRenderEngine::new();
+        let cmds = engine.render(&vm);
         terminal
             .draw(|f| {
-                TuiBackend::render(&state, f);
+                execute_draw_commands(&cmds, f.area(), f.buffer_mut());
             })
             .unwrap();
         // 不 panic 即通过
@@ -429,10 +480,9 @@ mod tests {
     // ========== v1.3.1 T8: 焦点感知 + Up/Down 键 + bare 模式 ==========
 
     #[test]
-    fn tui_state_initial_has_configured_true_wizard_false() {
+    fn tui_state_initial_has_configured_true() {
         let s = TuiState::initial();
         assert!(s.configured, "默认已配置（v1.2 行为）");
-        assert!(!s.wizard_active, "默认未运行向导");
     }
 
     #[test]
@@ -467,15 +517,74 @@ mod tests {
 
     #[test]
     fn render_with_bare_mode_does_not_panic() {
-        // v1.3.1 T8: 验证 render 在 configured=false 时不 panic
+        // v1.4: 用 RenderEngine 路径验证 bare 模式不 panic
         let backend = ratatui::backend::TestBackend::new(80, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         let mut state = TuiState::initial();
         state.configured = false; // bare 模式
+        let vm = TuiBackend::state_to_vm(&state);
+        let engine = DefaultRenderEngine::new();
+        let cmds = engine.render(&vm);
         terminal
             .draw(|f| {
-                TuiBackend::render(&state, f);
+                execute_draw_commands(&cmds, f.area(), f.buffer_mut());
             })
             .unwrap();
+    }
+
+    // ========== v1.4 T11b: Modal state machine tests ==========
+
+    #[test]
+    fn state_to_vm_without_modal_is_fullscreen() {
+        let state = TuiState::initial();
+        let vm = TuiBackend::state_to_vm(&state);
+        match vm {
+            FrameViewModel::FullScreen(ScreenViewModel::Main(m)) => {
+                assert_eq!(m.status, "Ready");
+            }
+            _ => panic!("expected FullScreen without modal"),
+        }
+    }
+
+    #[test]
+    fn state_to_vm_with_modal_is_modal_frame() {
+        use crate::interaction::widgets::select_list::{SelectItem, SelectList};
+        let mut state = TuiState::initial();
+        state.messages.clear();
+        // 构造一个空的 SelectList
+        struct EmptySource;
+        #[async_trait::async_trait]
+        impl crate::interaction::widgets::select_list::SelectItemSource for EmptySource {
+            async fn items(&self) -> crate::common::error::Result<Vec<SelectItem>> {
+                Ok(vec![])
+            }
+        }
+        let mut sl = SelectList::new(Arc::new(EmptySource));
+        // 加载空列表（同步包装）
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    let _ = sl.load().await;
+                });
+            })
+            .join()
+            .unwrap();
+        });
+        state.modal = Some(sl);
+        let vm = TuiBackend::state_to_vm(&state);
+        match vm {
+            FrameViewModel::Modal { background, popup } => {
+                match background {
+                    ScreenViewModel::Main(m) => assert_eq!(m.status, "Ready"),
+                    _ => panic!("background should be Main"),
+                }
+                match popup {
+                    ScreenViewModel::SelectList(sv) => assert_eq!(sv.items.len(), 0),
+                    _ => panic!("popup should be SelectList"),
+                }
+            }
+            _ => panic!("expected Modal with background + popup"),
+        }
     }
 }

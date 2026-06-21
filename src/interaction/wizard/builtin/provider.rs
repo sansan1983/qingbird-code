@@ -4,12 +4,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::layout::Rect;
-use ratatui::prelude::{Buffer, Widget};
-use ratatui::text::Line;
-use ratatui::widgets::Paragraph;
 use rust_i18n::t;
 
+use crate::interaction::render::view_model::*;
 use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 
 pub struct ProviderStep;
@@ -33,23 +30,35 @@ impl WizardStep for ProviderStep {
     fn title(&self) -> &'static str {
         "选择 LLM 厂商"
     }
-    fn render(&self, area: Rect, buf: &mut Buffer, _state: &WizardState) {
-        // 临时硬编码
-        let mut text = vec![
-            Line::from(t!("wizard_step_title_provider").to_string()),
-            Line::from(""),
-        ];
+    fn view_model(&self, _state: &WizardState) -> StepViewModel {
+        let mut lines: Vec<String> = vec!["".into()];
         for (i, (id, name)) in list_providers().iter().enumerate() {
             let hint = if *id == "custom" {
                 t!("wizard_provider_hint_custom").to_string()
             } else {
                 t!("wizard_provider_hint_preset").to_string()
             };
-            text.push(Line::from(format!("  {}. {} {}", i + 1, name, hint)));
+            lines.push(format!("  {}. {} {}", i + 1, name, hint));
         }
-        text.push(Line::from(""));
-        text.push(Line::from("输入序号选择 / Esc 取消"));
-        Paragraph::new(text).render(area, buf);
+        lines.push("".into());
+        lines.push("输入序号选择 / Esc 取消".into());
+
+        StepViewModel {
+            title: t!("wizard_step_title_provider").to_string(),
+            lines: lines.into_iter().map(|s| LineVM { text: s }).collect(),
+            input: None,
+            hints: vec![
+                KeyHint {
+                    key: "1-5".into(),
+                    description: "选择".into(),
+                },
+                KeyHint {
+                    key: "Esc".into(),
+                    description: "取消".into(),
+                },
+            ],
+            focused_field: 0,
+        }
     }
     fn on_key(&self, key: KeyEvent, state: &mut WizardState) -> StepAction {
         let n = match key.code {

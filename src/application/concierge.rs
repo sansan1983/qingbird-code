@@ -9,7 +9,6 @@ use crate::common::types::{RiskLevel, TaskSpec};
 use crate::infrastructure::event::{Event, EventChannel};
 use crate::infrastructure::llm::LlmRouter;
 use crate::infrastructure::memory::CompositeMemory;
-use crate::infrastructure::profile::ProfileRegistry;
 use rust_i18n::t;
 
 /// Concierge — 零阻塞对话入口
@@ -17,10 +16,6 @@ pub struct Concierge {
     events: EventChannel,
     // v1.2 D4: 删 dead_code 注解——handle_input 的 TaskDispatch 分支调 memory.recall_smart
     memory: Arc<Mutex<CompositeMemory>>,
-    // v1.2 D3: 仍 dead（D3/D4 都不直接读 profiles，只用 active_profile 字符串）
-    // ——Phase D 收尾时若仍无读取点，应考虑移除该字段；v1.2 阶段先保留
-    #[allow(dead_code)]
-    profiles: Arc<tokio::sync::RwLock<ProfileRegistry>>,
     orchestrator: Arc<Mutex<Orchestrator>>,
     // v1.3.1 增量：LlmRouter 共享给 SlashCommand——通过 Arc<Mutex<>> 让
     // CommandContext 借用期间不冲突（v1.3.0 Concierge **不**持 router 字段，
@@ -31,19 +26,13 @@ pub struct Concierge {
     active_profile: Arc<Mutex<String>>,
     // v1.3.1 增量：斜杠命令注册表——/model /profile /lang /level /help /quit
     // 默认空（v1.2 调用点不传），main.rs 启动时填充
-    #[allow(dead_code)]
     pub command_registry: crate::interaction::slash::CommandRegistry,
-    // v1.3.3 增量：工作流档位注册表——Simple/Standard/Advanced 3 个 impl
-    // 默认空（v1.2 调用点不传），main.rs 启动时通过 set_workflow_registry 注入
-    #[allow(dead_code)]
-    pub workflow_registry: crate::workflow::WorkflowRegistry,
 }
 
 impl Concierge {
     pub fn new(
         events: EventChannel,
         memory: Arc<Mutex<CompositeMemory>>,
-        profiles: Arc<tokio::sync::RwLock<ProfileRegistry>>,
         orchestrator: Arc<Mutex<Orchestrator>>,
         llm_router: Arc<Mutex<LlmRouter>>, // v1.3.1 增量
         default_profile: String,
@@ -51,12 +40,10 @@ impl Concierge {
         Self {
             events,
             memory,
-            profiles,
             orchestrator,
             llm_router, // v1.3.1 增量
             active_profile: Arc::new(Mutex::new(default_profile)),
             command_registry: crate::interaction::slash::CommandRegistry::new(), // v1.3.1 增量
-            workflow_registry: crate::workflow::WorkflowRegistry::default(),     // v1.3.3 增量
         }
     }
 
@@ -69,12 +56,6 @@ impl Concierge {
     /// —— Concierge 持有 EventChannel 所有权，外部只读订阅
     pub fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<Event> {
         self.events.subscribe()
-    }
-
-    /// v1.3.3: 暴露 llm_router Arc clone 给 WorkflowExecutor 借用
-    /// —— SimpleWorkflow 1 次 LLM 调用通过这个拿锁（与 self 借用独立）
-    pub fn llm_router_handle(&self) -> Arc<tokio::sync::Mutex<LlmRouter>> {
-        Arc::clone(&self.llm_router)
     }
 
     /// v1.3.1: 公开 setter 让 `/profile` 斜杠命令能真切换
@@ -242,127 +223,6 @@ impl Concierge {
         // v1.0 简化：不持锁扫描 profile.skill 列表
         t!("concierge_skill_query_placeholder").to_string()
     }
-
-    /// v1.3.3 增量：注入工作流档位注册表（main.rs 启动时调用）
-    pub fn set_workflow_registry(&mut self, registry: crate::workflow::WorkflowRegistry) {
-        self.workflow_registry = registry;
-    }
-
-    /// v1.3.3 增量：可变借用 workflow_registry（/level 命令用）
-    pub fn workflow_registry_mut(&mut self) -> &mut crate::workflow::WorkflowRegistry {
-        &mut self.workflow_registry
-    }
-
-    /// v1.3.3 增量：规则驱动的档位判定（5 条规则，按优先级匹配）
-    ///
-    /// **零 LLM 成本**——纯字符串匹配
-    /// **override 不在此处检查**——调用方负责：
-    ///   `override.unwrap_or(self.determine_workflow_level(task))`
-    pub fn determine_workflow_level(
-        &self,
-        task: &crate::common::types::TaskSpec,
-    ) -> crate::workflow::WorkflowLevel {
-        let desc = &task.description;
-        let len = desc.chars().count();
-
-        // 规则 1: 涉及多文件（≥ 3 个扩展名）→ Advanced
-        if count_file_extensions(desc) >= 3 {
-            return crate::workflow::WorkflowLevel::Advanced;
-        }
-
-        // 规则 2: 含关键词（中英）→ Advanced
-        if contains_workflow_keyword(desc) {
-            return crate::workflow::WorkflowLevel::Advanced;
-        }
-
-        // 规则 3: 短任务（< 30 字符）→ Simple
-        if len < 30 {
-            return crate::workflow::WorkflowLevel::Simple;
-        }
-
-        // 规则 4: 中等任务（30-100 字符）→ Standard
-        if len < 100 {
-            return crate::workflow::WorkflowLevel::Standard;
-        }
-
-        // 规则 5: 长任务（≥ 100 字符）→ Advanced
-        crate::workflow::WorkflowLevel::Advanced
-    }
-
-    /// v1.3.3 增量：派发任务到 workflow_registry（override 优先 + 调档位 execute）
-    ///
-    /// **借用模式说明**：ctx.concierge 是 `&mut self` 独占借用，期间不能访问
-    /// self.workflow_registry。解法：先 `override_level()` 算出 level（&self 借用
-    /// 立即释放），再用 `std::mem::take` 把 registry 移出到 owned 局部变量，
-    /// 调完 execute 后 `drop(ctx)` + 放回 self。`take` 用 `Default::default()`
-    /// 临时替换（空 registry），原内容在 `reg` 局部变量里保留，**不丢失**任何注册。
-    pub async fn dispatch_task_with_level(
-        &mut self,
-        task: crate::common::types::TaskSpec,
-    ) -> crate::common::error::Result<crate::workflow::AggregatedResult> {
-        // 1. 算 level（&self.workflow_registry 借用，结束于 ;）
-        let auto_level = self.determine_workflow_level(&task);
-        let level = self
-            .workflow_registry
-            .override_level()
-            .unwrap_or(auto_level);
-
-        // 2. take registry 出来 owned —— &mut self.workflow_registry 借用结束于 ;
-        let reg = std::mem::take(&mut self.workflow_registry);
-
-        // 3. 准备 Arc 字段（&self split borrow，OK）
-        let orch_arc = Arc::clone(&self.orchestrator);
-        let mem_arc = Arc::clone(&self.memory);
-
-        // 4. 构造 ctx —— &mut self 借用
-        let mut ctx = crate::workflow::WorkflowContext {
-            task: &task,
-            concierge: self,
-            orchestrator: orch_arc,
-            memory: mem_arc,
-        };
-
-        // 5. 调 execute（reg 是 owned 局部变量，与 ctx 独立）
-        let result = reg.execute(level, &mut ctx).await;
-
-        // 6. 释放 ctx 借用后，把 reg 放回 self
-        drop(ctx);
-        self.workflow_registry = reg;
-
-        result
-    }
-}
-
-/// 统计任务描述里的文件扩展名数量（≥ 3 → Advanced）
-fn count_file_extensions(s: &str) -> usize {
-    const EXTENSIONS: &[&str] = &[
-        "rs", "py", "js", "ts", "go", "java", "cpp", "c", "h", "toml", "yaml", "yml", "json", "md",
-    ];
-    EXTENSIONS
-        .iter()
-        .map(|ext| s.matches(&format!(".{ext}")).count())
-        .sum()
-}
-
-/// 检测任务描述是否含"重构/系统/全部/refactor..."关键词（→ Advanced）
-///
-/// v1.3.3 #13k: case-insensitive（spec C §3.3 设计意图）—— 英文 keyword
-/// "refactor" 应同时匹配 "Refactor" / "REFACTOR"。
-fn contains_workflow_keyword(s: &str) -> bool {
-    const KEYWORDS: &[&str] = &[
-        "重构",
-        "系统",
-        "全部",
-        "梳理",
-        "优化",
-        "refactor",
-        "refactoring",
-        "system",
-        "all",
-        "optimize",
-    ];
-    let s_lower = s.to_lowercase();
-    KEYWORDS.iter().any(|kw| s_lower.contains(kw))
 }
 
 /// 测试用 placeholder Concierge（v1.3.3 deviation #13d: v1.3.0 没加，
@@ -378,121 +238,105 @@ impl Concierge {
         use crate::infrastructure::event::EventChannel;
         use crate::infrastructure::llm::LlmRouter;
         use crate::infrastructure::memory::CompositeMemory;
-        use crate::infrastructure::profile::ProfileRegistry;
 
         let llm = Arc::new(Mutex::new(LlmRouter::placeholder()));
         let tools = Arc::new(ToolRegistry::new());
         let events = EventChannel::new();
         let memory = Arc::new(Mutex::new(CompositeMemory::in_memory(10).unwrap()));
-        let profiles = Arc::new(tokio::sync::RwLock::new(ProfileRegistry::default()));
         let orchestrator = Arc::new(Mutex::new(Orchestrator::new(
             llm.clone(),
             tools,
             events.clone(),
         )));
 
-        Self::new(
-            events,
-            memory,
-            profiles,
-            orchestrator,
-            llm,
-            "default".into(),
-        )
+        Self::new(events, memory, orchestrator, llm, "default".into())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::types::{RiskLevel, TaskSpec};
-    use crate::workflow::WorkflowLevel;
+    use crate::common::types::Intent;
 
-    fn make_task(desc: &str) -> TaskSpec {
-        TaskSpec::new(desc.to_string(), RiskLevel::L0)
+    #[test]
+    fn classify_default_goes_to_task_dispatch() {
+        let concierge = Concierge::placeholder();
+        // 不含任何关键词的 input → 默认 TaskDispatch
+        let intent = concierge.classify_intent("review the auth module");
+        assert!(matches!(intent, Intent::TaskDispatch { .. }));
     }
 
     #[test]
-    fn short_task_under_30_chars_is_simple() {
+    fn classify_chinese_long_input_goes_to_task_dispatch() {
         let concierge = Concierge::placeholder();
-        let task = make_task("hi");
-        assert_eq!(
-            concierge.determine_workflow_level(&task),
-            WorkflowLevel::Simple
-        );
+        let intent =
+            concierge.classify_intent("请帮我处理一个长任务描述，超过 30 字符以触发标准派发路径");
+        assert!(matches!(intent, Intent::TaskDispatch { .. }));
     }
 
     #[test]
-    fn medium_task_30_to_100_chars_is_standard() {
+    fn classify_profile_switch_intent_zh() {
         let concierge = Concierge::placeholder();
-        let task = make_task("帮我看看 main.rs 文件在做什么事情，简单的代码审查一下");
-        assert_eq!(
-            concierge.determine_workflow_level(&task),
-            WorkflowLevel::Standard
-        );
+        let intent = concierge.classify_intent("切换到 backend profile");
+        assert!(matches!(intent, Intent::ProfileSwitch { .. }));
     }
 
     #[test]
-    fn long_task_over_100_chars_is_advanced() {
+    fn classify_task_cancel_intent_zh() {
         let concierge = Concierge::placeholder();
-        let task = make_task(
-            "请帮我对整个项目的代码进行一次系统性的梳理和优化，包括所有的源文件、\
-             测试文件、配置文件等等，需要全面地分析代码质量、性能瓶颈、安全漏洞，\
-             并给出详细的改进建议和实施计划",
-        );
-        assert_eq!(
-            concierge.determine_workflow_level(&task),
-            WorkflowLevel::Advanced
-        );
+        let intent = concierge.classify_intent("取消 任务 abc");
+        assert!(matches!(intent, Intent::TaskCancel { .. }));
     }
 
     #[test]
-    fn task_with_refactor_keyword_is_advanced() {
+    fn classify_task_interrupt_intent_zh() {
         let concierge = Concierge::placeholder();
-        let task = make_task("重构 auth 模块");
-        assert_eq!(
-            concierge.determine_workflow_level(&task),
-            WorkflowLevel::Advanced
-        );
+        let intent = concierge.classify_intent("中断当前任务");
+        assert!(matches!(intent, Intent::TaskInterrupt { .. }));
     }
 
     #[test]
-    fn task_with_english_refactor_keyword_is_advanced() {
+    fn classify_skill_query_intent_en() {
         let concierge = Concierge::placeholder();
-        let task = make_task("Refactor the entire codebase");
-        assert_eq!(
-            concierge.determine_workflow_level(&task),
-            WorkflowLevel::Advanced
-        );
+        let intent = concierge.classify_intent("query skill xyz");
+        assert!(matches!(intent, Intent::SkillQuery { .. }));
     }
 
     #[test]
-    fn task_with_3_rs_files_is_advanced() {
-        let concierge = Concierge::placeholder();
-        let task = make_task("改 main.rs lib.rs config.rs");
-        assert_eq!(
-            concierge.determine_workflow_level(&task),
-            WorkflowLevel::Advanced
+    fn handle_input_default_returns_dispatched_ack() {
+        // TaskDispatch 分支内部 tokio::spawn 异步派发 — 需要真 runtime
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("rt build");
+        let mut concierge = Concierge::placeholder();
+        let ack = rt.block_on(
+            concierge.handle_input("some long input that goes to task dispatch path".into()),
         );
+        // TaskDispatch 分支返回 t!("concierge_task_dispatched", ...) 文本
+        assert!(!ack.is_empty());
     }
 
     #[test]
-    fn task_with_3_py_files_is_advanced() {
+    fn active_profile_initially_default() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("rt build");
         let concierge = Concierge::placeholder();
-        let task = make_task("fix app.py models.py tests.py");
-        assert_eq!(
-            concierge.determine_workflow_level(&task),
-            WorkflowLevel::Advanced
-        );
+        let p = rt.block_on(concierge.active_profile());
+        assert_eq!(p, "default");
     }
 
     #[test]
-    fn task_with_3_different_extensions_is_advanced() {
+    fn subscribe_events_returns_receiver() {
         let concierge = Concierge::placeholder();
-        let task = make_task("review Cargo.toml README.md src/main.rs");
-        assert_eq!(
-            concierge.determine_workflow_level(&task),
-            WorkflowLevel::Advanced
-        );
+        let mut rx = concierge.subscribe_events();
+        // 空 broadcast channel：try_recv 立即返 Empty（sender 还活着）
+        let r = rx.try_recv();
+        assert!(matches!(
+            r,
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+        ));
     }
 }

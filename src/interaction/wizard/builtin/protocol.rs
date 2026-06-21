@@ -4,13 +4,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::layout::Rect;
-use ratatui::prelude::{Buffer, Widget};
-use ratatui::text::Line;
-use ratatui::widgets::Paragraph;
 use rust_i18n::t;
 
 use crate::infrastructure::llm::types::ProtocolKind;
+use crate::interaction::render::view_model::*;
 use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 
 pub struct ProtocolStep;
@@ -23,21 +20,45 @@ impl WizardStep for ProtocolStep {
     fn title(&self) -> &'static str {
         "选择兼容接口协议"
     }
-    fn render(&self, area: Rect, buf: &mut Buffer, state: &WizardState) {
-        // 临时硬编码
+    fn view_model(&self, state: &WizardState) -> StepViewModel {
         if state.skip_protocol_step {
-            let text = vec![Line::from("(预设厂商已自动选择协议，已跳过)")];
-            Paragraph::new(text).render(area, buf);
-        } else {
-            let text = vec![
-                Line::from(t!("wizard_step_title_protocol").to_string()),
-                Line::from(""),
-                Line::from("  1. openai_compatible (OpenAI 兼容)".to_string()),
-                Line::from("  2. anthropic_compatible (Anthropic 兼容)".to_string()),
-                Line::from(""),
-                Line::from("输入序号选择 / Esc 取消"),
-            ];
-            Paragraph::new(text).render(area, buf);
+            return StepViewModel {
+                title: "协议".into(),
+                lines: vec![LineVM {
+                    text: "(预设厂商已自动选择协议，已跳过)".into(),
+                }],
+                input: None,
+                hints: vec![],
+                focused_field: 0,
+            };
+        }
+        StepViewModel {
+            title: t!("wizard_step_title_protocol").to_string(),
+            lines: vec![
+                LineVM { text: "".into() },
+                LineVM {
+                    text: "  1. openai_compatible (OpenAI 兼容)".into(),
+                },
+                LineVM {
+                    text: "  2. anthropic_compatible (Anthropic 兼容)".into(),
+                },
+                LineVM { text: "".into() },
+                LineVM {
+                    text: "输入序号选择 / Esc 取消".into(),
+                },
+            ],
+            input: None,
+            hints: vec![
+                KeyHint {
+                    key: "1/2".into(),
+                    description: "选择".into(),
+                },
+                KeyHint {
+                    key: "Esc".into(),
+                    description: "取消".into(),
+                },
+            ],
+            focused_field: 0,
         }
     }
     fn on_key(&self, key: KeyEvent, state: &mut WizardState) -> StepAction {

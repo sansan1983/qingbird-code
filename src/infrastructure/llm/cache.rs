@@ -145,7 +145,10 @@ impl SqliteCacheBackend {
         let blob = serde_json::to_vec(value)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
         let now = unix_now();
-        let conn = self.conn.lock().unwrap();
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(_) => return Ok(()), // ponytail: 锁失败 = 放弃缓存写入（best-effort）
+        };
         conn.execute(
             "INSERT OR REPLACE INTO llm_cache (hash, value, created_at) VALUES (?1, ?2, ?3)",
             params![hash as i64, blob, now],
@@ -154,7 +157,10 @@ impl SqliteCacheBackend {
     }
 
     pub fn cleanup_expired(&self) -> Result<usize, rusqlite::Error> {
-        let conn = self.conn.lock().unwrap();
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(_) => return Ok(0), // ponytail: 锁失败 = 放弃清理
+        };
         let now = unix_now();
         let cutoff = now - self.ttl_secs as i64;
         let n = conn.execute(

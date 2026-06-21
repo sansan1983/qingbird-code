@@ -37,11 +37,9 @@ impl Feedbacker {
 
         // 提取所需字段（避免后续 blackboard 借用冲突）
         let all_succeeded = blackboard.action_log.iter().all(|a| a.success);
-        let last_action = blackboard
-            .action_log
-            .last()
-            .cloned()
-            .expect("checked is_empty above");
+        let last_action = blackboard.action_log.last().cloned().ok_or_else(|| {
+            crate::common::error::EflowError::Internal("checked is_empty above".to_string())
+        })?;
         let risk = blackboard.risk_level;
         let count = blackboard.action_log.len();
         let retry_count = blackboard.retry_count;

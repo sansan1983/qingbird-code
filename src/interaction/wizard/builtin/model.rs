@@ -5,12 +5,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossterm::event::KeyEvent;
-use ratatui::layout::Rect;
-use ratatui::prelude::{Buffer, Widget};
-use ratatui::text::Line;
-use ratatui::widgets::Paragraph;
 use rust_i18n::t;
 
+use crate::interaction::render::view_model::*;
 use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 
 pub struct ModelStep;
@@ -30,28 +27,50 @@ impl WizardStep for ModelStep {
     fn title(&self) -> &'static str {
         "选择模型"
     }
-    fn render(&self, area: Rect, buf: &mut Buffer, state: &WizardState) {
-        // 临时硬编码
-        let mut text = vec![
-            Line::from(if state.fetch_failed {
-                t!("wizard_step_title_model_fallback").to_string()
-            } else {
-                t!("wizard_step_title_model_fetching").to_string()
-            }),
-            Line::from(""),
-        ];
+    fn view_model(&self, state: &WizardState) -> StepViewModel {
+        let title = if state.fetch_failed {
+            t!("wizard_step_title_model_fallback").to_string()
+        } else {
+            t!("wizard_step_title_model_fetching").to_string()
+        };
+
+        let mut lines: Vec<LineVM> = vec![LineVM { text: "".into() }];
         if !state.preset_models.is_empty() {
             for (i, m) in state.preset_models.iter().enumerate() {
-                text.push(Line::from(format!("  {}. {}", i + 1, m)));
+                lines.push(LineVM {
+                    text: format!("  {}. {}", i + 1, m),
+                });
             }
-            text.push(Line::from(""));
-            text.push(Line::from("输入序号或手填模型 ID / Esc 取消"));
+            lines.push(LineVM { text: "".into() });
+            lines.push(LineVM {
+                text: "输入序号或手填模型 ID / Esc 取消".into(),
+            });
         } else {
-            text.push(Line::from("(无预设模型列表)"));
-            text.push(Line::from(""));
-            text.push(Line::from("手填模型 ID: "));
+            lines.push(LineVM {
+                text: "(无预设模型列表)".into(),
+            });
+            lines.push(LineVM { text: "".into() });
+            lines.push(LineVM {
+                text: "手填模型 ID: ".into(),
+            });
         }
-        Paragraph::new(text).render(area, buf);
+
+        StepViewModel {
+            title,
+            lines,
+            input: None,
+            hints: vec![
+                KeyHint {
+                    key: "Enter".into(),
+                    description: "下一步".into(),
+                },
+                KeyHint {
+                    key: "Esc".into(),
+                    description: "取消".into(),
+                },
+            ],
+            focused_field: 0,
+        }
     }
     fn on_key(&self, _key: KeyEvent, state: &mut WizardState) -> StepAction {
         let input = match read_line_from_stdin() {

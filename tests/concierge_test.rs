@@ -15,8 +15,8 @@ use eflow::infrastructure::config::{
 use eflow::infrastructure::event::{Event, EventChannel};
 use eflow::infrastructure::llm::LlmRouter;
 use eflow::infrastructure::memory::CompositeMemory;
-use eflow::infrastructure::profile::ProfileRegistry;
-use tokio::sync::{Mutex, RwLock};
+// (ProfileRegistry 已被 Concierge 删，测试不再需要)
+use tokio::sync::Mutex;
 
 // 默认中文 locale
 // locale setup moved into individual tests
@@ -119,20 +119,14 @@ fn make_memory() -> Arc<Mutex<CompositeMemory>> {
     Arc::new(Mutex::new(mem))
 }
 
-fn make_profiles() -> Arc<RwLock<ProfileRegistry>> {
-    Arc::new(RwLock::new(ProfileRegistry::new()))
-}
-
 fn make_concierge() -> (Concierge, EventChannel) {
     let (orch, events) = make_orchestrator();
     let orch = Arc::new(Mutex::new(orch));
     let mem = make_memory();
-    let profiles = make_profiles();
     let llm = make_test_router(); // v1.3.1 增量
     let c = Concierge::new(
         events.clone(),
         mem,
-        profiles,
         orch,
         llm, // v1.3.1 增量
         "developer".into(),
@@ -360,14 +354,13 @@ async fn concierge_recalls_memory_before_dispatching_task() {
     // 测试策略（v1.2 plan deviation: 计划测试用 load_profiles + 手搓 router + 占位
     // LlmRouter，但 concierge_test.rs 已有 make_concierge helper；并且 plan 写的
     // resp.contains("review") 断言不通过——D4 响应是中文 i18n 不含 "review" 字面）：
-    // - 复用 make_orchestrator + make_profiles + make_memory
+    // - 复用 make_orchestrator + make_memory
     // - 把 make_memory 的 Arc 多 clone 一份用于预置条目
     // - 断言响应走 with_memory 分支（中文"召回"字面）
     use eflow::infrastructure::memory::MemoryEntry;
     let (orch, events) = make_orchestrator();
     let orch = Arc::new(Mutex::new(orch));
     let mem = make_memory();
-    let profiles = make_profiles();
     // 预置一条含"review"关键词的记忆（spec description = "review src/main.rs"，
     // 前 32 字符 = "review src/main.rs" 整串，recall_smart 会命中此条）
     mem.lock()
@@ -381,7 +374,6 @@ async fn concierge_recalls_memory_before_dispatching_task() {
     let mut c = Concierge::new(
         events.clone(),
         mem.clone(),
-        profiles,
         orch,
         make_test_router(), // v1.3.1 增量
         "developer".into(),

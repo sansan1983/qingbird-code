@@ -80,7 +80,7 @@ async fn main() {
         {
             use std::io::BufRead;
             eprintln!("未找到配置 ({})", path.display());
-            eprint!("是否进入初始化向导？[Y/n] ");
+            eprint!("{}", t!("wizard_prompt_init"));
             let mut line = String::new();
             let _ = std::io::stdin().lock().read_line(&mut line);
             let line = line.trim().to_lowercase();
@@ -125,7 +125,7 @@ async fn main() {
     let llm = match LlmRouter::from_config(&cfg, &provider_dir) {
         Ok(l) => Arc::new(tokio::sync::Mutex::new(l)),
         Err(e) => {
-            eprintln!("Failed to init LLM: {e}");
+            eprintln!("{}: {}", t!("err_llm_init", msg = e.to_string()), e);
             return;
         }
     };
@@ -156,7 +156,7 @@ async fn main() {
     ) {
         Ok(m) => Arc::new(tokio::sync::Mutex::new(m)),
         Err(e) => {
-            eprintln!("Failed to init memory: {e}");
+            eprintln!("{}: {}", t!("err_memory_init", msg = e.to_string()), e);
             return;
         }
     };
@@ -179,7 +179,6 @@ async fn main() {
     let mut concierge = Concierge::new(
         events.clone(),
         memory.clone(),
-        profiles.clone(),
         orchestrator.clone(),
         llm.clone(), // v1.3.1 增量
         cfg.profiles.default.clone(),
@@ -187,12 +186,9 @@ async fn main() {
 
     // v1.3.1 T10: 注册 6 个斜杠命令 + required_register 校验
     if let Err(e) = register_slash_commands(&mut concierge) {
-        eprintln!("斜杠命令注册失败: {e}");
+        eprintln!("{}: {}", t!("err_slash_register", msg = e.to_string()), e);
         std::process::exit(1);
     }
-
-    // v1.3.3 增量：注册 3 个工作流档位 + required_register 校验
-    register_workflows(&mut concierge);
 
     let concierge = std::sync::Arc::new(tokio::sync::Mutex::new(concierge));
 
@@ -280,31 +276,6 @@ fn register_slash_commands(
     registry.required_register(&["model", "profile", "lang", "level", "help", "quit"])?;
     concierge.command_registry = registry;
     Ok(())
-}
-
-/// v1.3.3 增量：注册 3 个工作流档位（Simple/Standard/Advanced）到 Concierge
-///
-/// **加新档位零改 core**：写 1 个 `impl` + 1 行 `register()`，**核心零修改**。
-/// v1.3.3 ADR-0019 —— 加 "Turbo" / "Debug" 档留 v1.4+。
-fn register_workflows(concierge: &mut Concierge) {
-    use eflow::workflow::builtin::{
-        advanced::AdvancedWorkflow, simple::SimpleWorkflow, standard::StandardWorkflow,
-    };
-    use eflow::workflow::{WorkflowLevel, WorkflowRegistry};
-
-    let mut registry = WorkflowRegistry::new();
-    registry.register(std::sync::Arc::new(SimpleWorkflow));
-    registry.register(std::sync::Arc::new(StandardWorkflow));
-    registry.register(std::sync::Arc::new(AdvancedWorkflow));
-    if let Err(e) = registry.required_register(&[
-        WorkflowLevel::Simple,
-        WorkflowLevel::Standard,
-        WorkflowLevel::Advanced,
-    ]) {
-        eprintln!("工作流档位注册失败: {e}");
-        std::process::exit(1);
-    }
-    concierge.set_workflow_registry(registry);
 }
 
 /// v1.3.2 T1: 解析 `eflow session start --flag VALUE` 的 flag 值

@@ -31,8 +31,8 @@ use eflow::infrastructure::llm::LlmRouter;
 use eflow::infrastructure::memory::{
     CompositeMemory, MemoryEntry, MemoryManager, RecallScope, WorkingMemory,
 };
-use eflow::infrastructure::profile::ProfileRegistry;
-use tokio::sync::{Mutex, RwLock};
+// (ProfileRegistry 已被 Concierge 删，测试不再需要)
+use tokio::sync::Mutex;
 
 // locale setup moved into individual tests
 
@@ -126,12 +126,10 @@ fn make_concierge() -> (Concierge, EventChannel) {
     let (orch, events) = make_orchestrator();
     let orch = Arc::new(Mutex::new(orch));
     let mem = Arc::new(Mutex::new(CompositeMemory::in_memory(100).unwrap()));
-    let profiles = Arc::new(RwLock::new(ProfileRegistry::new()));
     let llm = make_test_router(); // v1.3.1 增量
     let c = Concierge::new(
         events.clone(),
         mem,
-        profiles,
         orch,
         llm, // v1.3.1 增量
         "developer".into(),

@@ -83,7 +83,7 @@ pub fn load_config(path: &Path) -> crate::common::error::Result<EflowConfig> {
         )
     })?;
 
-    let expanded = crate::common::env::expand_env_vars(&content);
+    let expanded = crate::common::env::expand_env_vars(&content)?;
 
     let config: EflowConfig = serde_yaml::from_str(&expanded).map_err(|e| {
         crate::common::error::EflowError::Config(

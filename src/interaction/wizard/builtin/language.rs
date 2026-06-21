@@ -4,13 +4,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::layout::Rect;
-use ratatui::prelude::{Buffer, Widget};
-use ratatui::text::Line;
-use ratatui::widgets::Paragraph;
 use rust_i18n::t;
 
 use crate::infrastructure::locale;
+use crate::interaction::render::view_model::*;
 use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 
 pub struct LanguageStep;
@@ -23,17 +20,35 @@ impl WizardStep for LanguageStep {
     fn title(&self) -> &'static str {
         "选择语言"
     }
-    fn render(&self, area: Rect, buf: &mut Buffer, _state: &WizardState) {
-        // 临时硬编码——v1.4 spec D 重构
-        let text = vec![
-            Line::from(t!("wizard_step_title_language").to_string()),
-            Line::from(""),
-            Line::from("  1. zh-CN (默认)".to_string()),
-            Line::from("  2. en-US".to_string()),
-            Line::from(""),
-            Line::from("输入序号选择 / Esc 取消"),
-        ];
-        Paragraph::new(text).render(area, buf);
+    fn view_model(&self, _state: &WizardState) -> StepViewModel {
+        StepViewModel {
+            title: t!("wizard_step_title_language").to_string(),
+            lines: vec![
+                LineVM { text: "".into() },
+                LineVM {
+                    text: "  1. zh-CN (默认)".into(),
+                },
+                LineVM {
+                    text: "  2. en-US".into(),
+                },
+                LineVM { text: "".into() },
+                LineVM {
+                    text: "输入序号选择 / Esc 取消".into(),
+                },
+            ],
+            input: None,
+            hints: vec![
+                KeyHint {
+                    key: "1/2".into(),
+                    description: "切换".into(),
+                },
+                KeyHint {
+                    key: "Esc".into(),
+                    description: "取消".into(),
+                },
+            ],
+            focused_field: 0,
+        }
     }
     fn on_key(&self, key: KeyEvent, state: &mut WizardState) -> StepAction {
         let lang = match key.code {
