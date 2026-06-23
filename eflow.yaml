@@ -3,23 +3,11 @@ core:
   timezone: Asia/Shanghai
 
 llm:
-  providers:
-    anthropic:
-      api_key: ${ANTHROPIC_API_KEY}
-      default_model: claude-sonnet-4-6
-      timeout_secs: 30
-      max_retries: 3
-      retry_backoff_ms: 1000
-    openai:
-      api_key: ${OPENAI_API_KEY}
-      default_model: gpt-4o
-      timeout_secs: 30
-      max_retries: 3
-      retry_backoff_ms: 1000
+  # v1.3+ provider 配置在 ~/.eflow/providers/<id>.yaml
   routing:
-    strong: anthropic
-    medium: anthropic
-    light: openai
+    strong: deepseek
+    medium: deepseek
+    light: deepseek
   cache:
     l1_enabled: true
     l2_enabled: false

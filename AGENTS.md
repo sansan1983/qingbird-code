@@ -6,7 +6,7 @@
 
 ## 这是什么
 
-Rust 2024 单二进制多层 Agent 框架（`eflow` v1.3.3）。四层严格向下依赖：
+Rust 2024 单二进制多层 Agent 框架（`eflow` v1.4.0）。四层严格向下依赖：
 
 ```
 interaction → application → capability → infrastructure → common
@@ -22,7 +22,7 @@ interaction → application → capability → infrastructure → common
 cargo build                                       # release 约 4s，dev 更快
 cargo clippy --all-targets -- -D warnings        # 零警告
 cargo fmt --check                                 # rustfmt 默认；无自定义配置
-cargo test                                        # v1.3.3 时 335 个测试
+cargo test                                        # v1.4.0 时 328 个测试
 ```
 
 顺序影响反馈速度：`fmt --check` → `clippy` → `test` → `build`。`docs/manual-verification-v1.3.1.md` 里有 `scripts/verify-v1.3.1.sh` 的复制粘贴版本。
@@ -67,13 +67,12 @@ PR 不带无关重构。不重排/重命名/"改进"无关文件。看到 dead c
 ## 容易踩的坑
 
 - **TUI 要真 TTY**。ratatui 没 TTY 直接 panic。无头 CI / 沙箱环境跑不了 TUI；那种情况用 `eflow session start`（NDJSON 在 stdout）或 `docs/manual-verification-v1.3.1.md` 的 14 步手工验证。
-- **还没有 clap `SubCommand` enum**。`src/main.rs` 用 `std::env::args()` 路由 `init` / `session start`，外加手写 flag 解析器（`parse_session_flag`）。`docs/superpowers/plans/2026-06-18-eflow-v1.4-rendering-pipeline-plan.md` 计划 v1.4 引入 clap derive——v1.3.x patch 别重构这块。
+- **还没有 clap `SubCommand` enum**。`src/main.rs` 用 `std::env::args()` 路由 `init` / `session start`，外加手写 flag 解析器（`parse_session_flag`）。`docs/superpowers/plans/2026-06-18-eflow-v1.4-rendering-pipeline-plan.md` 曾计划 v1.4 引入 clap derive——未实施（spec D 改为渲染管线）。v1.5+ 可能补。
 - **v1.3.0 改了 `eflow.yaml`**（见 `docs/migration-v1.2-to-v1.3.md`）。`llm.providers` 删了。Provider 改在 `~/.eflow/providers/<id>.yaml`；`routing.{strong,medium,light}` 现在引用 provider id，不再是 `"anthropic"` / `"openai"`。新代码**不要**加回老字段。
 - **`Cargo.lock` 在 `.gitignore`**。别 commit；贡献者 clone 后重新生成。
 - **默认 locale 是 `zh-CN`**。README 里 `eflow.yaml` 例子还是 v1.2 形态——`routing` 块还能用，但 `llm.providers` 块 v1.3.0+ 被静默忽略。文档示例用 v1.3 形态。
 - **v1.3.3 加了 slash command registry**（`main.rs::register_slash_commands` 接线）：6 个斜杠命令（`model` / `profile` / `lang` / `level` / `help` / `quit`）。用 `required_register` 校验——加新条目必须列在 required 集合里。
 - **v1.3.3 spec C 实施未接通**——`/level simple` 是 no-op（`/level` 命令改占位 stub，v1.4+ 重写）。`src/workflow/` 已删（PR #21），3 档抽象整套移除，承认回退。
-- **v1.3.1 有已知偏差**（`src/interaction/wizard/mod.rs` 和 `src/interaction/tui.rs` 有 `TODO(v1.4 spec D)` 标记）：wizard / SelectList / TUI 直接调 ratatui，没走 `RenderEngine` trait。v1.4 spec D 计划会修。**不要**顺手修这个。
 
 ## 文件地图（先看这些）
 
@@ -93,4 +92,4 @@ PR 不带无关重构。不重排/重命名/"改进"无关文件。看到 dead c
 | i18n key | `locales/zh-CN.yml`、`locales/en-US.yml` |
 | CLI / GUI stdio 契约 | `docs/cli-contract.md` |
 | 手工 TUI 验证 | `docs/manual-verification-v1.3.1.md` |
-| 下一里程碑计划（v1.4） | `docs/superpowers/plans/2026-06-18-eflow-v1.4-rendering-pipeline-plan.md` |
+| 下一里程碑计划（v1.5 待定） | `docs/superpowers/plans/2026-06-18-eflow-v1.4-rendering-pipeline-plan.md` |
