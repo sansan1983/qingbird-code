@@ -13,3 +13,4 @@ data/
 Cargo.lock
 .cc-connect/
 .claude/
+.reasonix/
