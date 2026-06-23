@@ -33,7 +33,11 @@ pub trait LlmProtocol: Send + Sync {
     fn get_default_path(&self) -> &'static str;
 
     /// 构建认证头
-    fn build_auth_headers(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder;
+    fn build_auth_headers(
+        &self,
+        request: reqwest::RequestBuilder,
+        api_key: &str,
+    ) -> reqwest::RequestBuilder;
 
     /// 解析聊天响应
     fn parse_chat_response(
@@ -92,7 +96,7 @@ impl<P: LlmProtocol> HttpLlmClient<P> {
     pub fn build_post(&self, body: &Value) -> reqwest::RequestBuilder {
         let url = self.build_url(body["model"].as_str().unwrap_or(""));
         self.protocol
-            .build_auth_headers(self.client.post(url))
+            .build_auth_headers(self.client.post(url), &self.config.api_key)
             .json(body)
     }
 

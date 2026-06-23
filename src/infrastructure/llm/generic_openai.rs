@@ -128,9 +128,13 @@ impl LlmProtocol for OpenAiProtocol {
         CHAT_PATH
     }
 
-    fn build_auth_headers(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    fn build_auth_headers(
+        &self,
+        request: reqwest::RequestBuilder,
+        api_key: &str,
+    ) -> reqwest::RequestBuilder {
         request
-            .header("Authorization", "Bearer PLACEHOLDER_API_KEY")
+            .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
     }
 

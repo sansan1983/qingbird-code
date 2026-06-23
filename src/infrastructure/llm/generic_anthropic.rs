@@ -149,9 +149,13 @@ impl LlmProtocol for AnthropicProtocol {
         MESSAGES_PATH
     }
 
-    fn build_auth_headers(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    fn build_auth_headers(
+        &self,
+        request: reqwest::RequestBuilder,
+        api_key: &str,
+    ) -> reqwest::RequestBuilder {
         request
-            .header("x-api-key", "PLACEHOLDER_API_KEY")
+            .header("x-api-key", api_key)
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
     }
