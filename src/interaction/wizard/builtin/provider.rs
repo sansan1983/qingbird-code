@@ -15,8 +15,7 @@ use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 
 pub struct ProviderStep;
 
-/// 内嵌预设厂商数据（对应 docs/examples/providers/*.yaml）
-struct PresetProvider {
+pub struct PresetProvider {
     id: &'static str,
     display_name: &'static str,
     protocol: ProtocolKind,
@@ -25,7 +24,7 @@ struct PresetProvider {
     preset_models: &'static [&'static str],
 }
 
-const PRESETS: &[PresetProvider] = &[
+pub const PRESETS: &[PresetProvider] = &[
     PresetProvider {
         id: "deepseek",
         display_name: "DeepSeek",
@@ -79,6 +78,22 @@ const PRESETS: &[PresetProvider] = &[
             "qwen3.6-plus",
         ],
     },
+    PresetProvider {
+        id: "anthropic",
+        display_name: "Anthropic",
+        protocol: ProtocolKind::AnthropicCompatible,
+        base_url: "https://api.anthropic.com",
+        default_model: "claude-sonnet-4-6",
+        preset_models: &["claude-sonnet-4-6", "claude-opus-4-8", "claude-haiku-4-5"],
+    },
+    PresetProvider {
+        id: "openai",
+        display_name: "OpenAI",
+        protocol: ProtocolKind::OpenaiCompatible,
+        base_url: "https://api.openai.com/v1",
+        default_model: "gpt-4o",
+        preset_models: &["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"],
+    },
 ];
 
 /// preset YAML 文件来源（4 个 + 自定义 = 5 选项）
@@ -88,6 +103,8 @@ fn list_providers() -> Vec<(&'static str, &'static str)> {
         ("minimax", "MiniMax"),
         ("agnes-ai", "Agnes AI"),
         ("opencode-go", "OpenCode Go"),
+        ("anthropic", "Anthropic"),
+        ("openai", "OpenAI"),
         ("custom", "自定义（兼容 OpenAI / Anthropic）"),
     ]
 }
@@ -119,7 +136,7 @@ impl WizardStep for ProviderStep {
             input: None,
             hints: vec![
                 KeyHint {
-                    key: "1-5".into(),
+                    key: "1-7".into(),
                     description: "选择".into(),
                 },
                 KeyHint {
@@ -137,6 +154,8 @@ impl WizardStep for ProviderStep {
             KeyCode::Char('3') => 3,
             KeyCode::Char('4') => 4,
             KeyCode::Char('5') => 5,
+            KeyCode::Char('6') => 6,
+            KeyCode::Char('7') => 7,
             KeyCode::Esc => return StepAction::Cancel,
             _ => return StepAction::Stay,
         };
@@ -195,10 +214,10 @@ mod tests {
     }
 
     #[test]
-    fn char_5_selects_custom_and_does_not_skip_protocol() {
+    fn char_7_selects_custom_and_does_not_skip_protocol() {
         let step = ProviderStep;
         let mut state = WizardState::default();
-        let key = KeyEvent::new(KeyCode::Char('5'), KeyModifiers::NONE);
+        let key = KeyEvent::new(KeyCode::Char('7'), KeyModifiers::NONE);
         let action = step.on_key(key, &mut state);
         assert!(matches!(action, StepAction::Next));
         assert_eq!(state.provider_id.as_deref(), Some("custom"));

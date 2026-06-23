@@ -1,7 +1,7 @@
 // src/cli/prompt.rs — 终端交互组件（纯文本，无 ratatui）
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use std::io::{stdout, Write};
+use std::io::{Write, stdout};
 
 #[derive(Debug, Clone)]
 pub struct MenuItem {
@@ -77,7 +77,7 @@ pub fn select_menu(items: &[MenuItem]) -> Option<usize> {
 
 /// 普通文本输入
 pub fn prompt_input(prompt: &str) -> String {
-    use std::io::{stdin, BufRead};
+    use std::io::{BufRead, stdin};
     print!("{} ", prompt);
     stdout().flush().ok();
     let mut line = String::new();
@@ -90,7 +90,7 @@ pub fn prompt_input(prompt: &str) -> String {
 /// 注意：当前版本不做字符掩码（终端 echo 正常显示）。
 /// 安全场景请使用环境变量配置 API Key。
 pub fn prompt_password(prompt: &str) -> String {
-    use std::io::{stdin, BufRead};
+    use std::io::{BufRead, stdin};
     print!("{} ", prompt);
     stdout().flush().ok();
     let mut line = String::new();
