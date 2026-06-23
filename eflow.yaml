@@ -8,10 +8,6 @@ llm:
     strong: deepseek
     medium: deepseek
     light: deepseek
-  cache:
-    l1_enabled: true
-    l2_enabled: false
-    l2_ttl_days: 7
 
 memory:
   working_memory_limit: 1000

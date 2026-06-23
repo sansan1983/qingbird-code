@@ -23,6 +23,7 @@ pub struct CoreConfig {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LlmConfig {
     pub routing: RoutingConfig,
+    #[serde(default)]
     pub cache: CacheConfig,
 }
 
