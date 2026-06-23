@@ -32,6 +32,8 @@ pub struct Cli {
 pub enum Command {
     /// 运行配置向导
     Init,
+    /// 启动 TUI 对话模式
+    Tui,
     /// Session 管理
     Session {
         #[command(subcommand)]

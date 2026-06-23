@@ -36,12 +36,26 @@ async fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    // 子命令路由（clap derive 替代手写 args.get(1) 路由 + parse_session_flag）
     let cli = Cli::parse_args();
+
+    // 子命令路由
     match cli.command {
         Some(Command::Init) => {
             let exit_code = eflow::cli::init::run();
             std::process::exit(exit_code);
+        }
+        Some(Command::Tui) => {
+            // eflow tui：检测配置 → 未配置则文本配置 → 已配置则进 TUI
+            if !eflow::cli::config::check_llm_configured() {
+                let code = eflow::cli::config::run();
+                if code != 0 {
+                    std::process::exit(code);
+                }
+                println!("配置已保存。重新运行 eflow tui 启动 TUI。");
+                return;
+            }
+            run_tui().await;
+            return;
         }
         Some(Command::Session {
             action: SessionAction::Start { config, lang },
@@ -50,32 +64,28 @@ async fn main() {
             let exit_code = eflow::cli::start::run(config, lang).await;
             std::process::exit(exit_code);
         }
-        None => {}
-    }
-
-    // v1.3.1 T10: 首次启动检测——配置不存在时,提示是否进 init 向导
-    if !cli.show_config && !cli.list_profiles && cli.execute.is_none() {
-        // 只在交互式启动时检测(--show-config / --execute / --list-profiles 不挡 wizard)
-        if let Some(path) = config::find_config()
-            && !path.exists()
-        {
-            use std::io::BufRead;
-            eprintln!("未找到配置 ({})", path.display());
-            eprint!("{}", t!("wizard_prompt_init"));
-            let mut line = String::new();
-            let _ = std::io::stdin().lock().read_line(&mut line);
-            let line = line.trim().to_lowercase();
-            if !line.starts_with('n') {
-                let code = eflow::cli::init::run();
+        None => {
+            // eflow（无子命令）
+            if !eflow::cli::config::check_llm_configured() {
+                let code = eflow::cli::config::run();
                 if code != 0 {
                     std::process::exit(code);
                 }
-                eprintln!("配置已写入。运行 eflow 启动 TUI。");
+                println!("配置已保存。重新运行 eflow 开始使用。");
                 return;
             }
-            // 用户选 N → 继续往下走,会因配置缺失而 exit
+            // CLI 对话模式（--execute / --show-config / --list-profiles 走现有逻辑）
+            if cli.execute.is_some() || cli.show_config || cli.list_profiles || cli.lang.is_some() {
+                // 延后处理——走下面的配置加载 + 执行路径
+            } else {
+                println!("LLM 已配置。运行 eflow --execute \"...\" 执行任务");
+                println!("或 eflow tui 启动 TUI 对话模式。");
+                return;
+            }
         }
     }
+
+    // --- 以下代码在 --execute / --show-config / --list-profiles 时执行 ---
 
     // 加载配置
     let config_path = config::find_config().unwrap_or_else(|| {
@@ -102,7 +112,7 @@ async fn main() {
     let provider_dir = dirs::config_dir()
         .map(|p| p.join("eflow").join("providers"))
         .unwrap_or_else(|| std::path::PathBuf::from("./providers"));
-    let _ = std::fs::create_dir_all(&provider_dir); // 不存在就建（首次启动友好）
+    let _ = std::fs::create_dir_all(&provider_dir);
     let llm = match LlmRouter::from_config(&cfg, &provider_dir) {
         Ok(l) => Arc::new(tokio::sync::Mutex::new(l)),
         Err(e) => {
@@ -111,7 +121,7 @@ async fn main() {
         }
     };
 
-    // v1.1 Task B7: 启动时打印 L2 状态（设计 §8.5）
+    // v1.1 Task B7: 启动时打印 L2 状态
     if cfg.llm.cache.l2_enabled {
         tracing::info!(
             "{}",
@@ -150,7 +160,6 @@ async fn main() {
     let profiles = Arc::new(tokio::sync::RwLock::new(profiles));
 
     // 初始化 Orchestrator
-    // v1.1 M10.5 Task C6: 启动 SubagentPool 注入 Orchestrator
     let pool = Arc::new(SubagentPool::start(4));
     let orchestrator =
         Orchestrator::with_pool(llm.clone(), tools.clone(), events.clone(), pool.clone());
@@ -161,11 +170,11 @@ async fn main() {
         events.clone(),
         memory.clone(),
         orchestrator.clone(),
-        llm.clone(), // v1.3.1 增量
+        llm.clone(),
         cfg.profiles.default.clone(),
     );
 
-    // v1.3.1 T10: 注册 6 个斜杠命令 + required_register 校验
+    // 注册 6 个斜杠命令
     if let Err(e) = register_slash_commands(&mut concierge) {
         eprintln!("{}: {}", t!("err_slash_register", msg = e.to_string()), e);
         std::process::exit(1);
@@ -190,14 +199,12 @@ async fn main() {
         return;
     }
 
-    // 单次执行模式（v1.1 e2e: 等异步 TaskCompleted 事件，让 CLI 有真正 \"fire-then-wait\" 语义）
+    // 单次执行模式
     if let Some(task) = cli.execute {
-        // subscribe 必须早于 handle_input，否则 race：超快 LLM 响应可能在 subscribe 之前 fire
         let mut rx = events.subscribe();
         let ack = concierge.lock().await.handle_input(task).await;
         println!("{ack}");
 
-        // 等 TaskCompleted / TaskFailed，60s timeout 防挂死
         let result = tokio::time::timeout(std::time::Duration::from_secs(60), async {
             loop {
                 match rx.recv().await {
@@ -218,21 +225,93 @@ async fn main() {
             Ok(Err(e)) => eprintln!("Task failed: {e}"),
             Err(_) => eprintln!("Timeout waiting for task completion (60s)"),
         }
+        pool.shutdown().await;
         return;
     }
 
-    // 交互模式（TUI — 设计 §14.3）
-    // v1.2 F6: 默认走 TUI，--execute / --show-config / --list-profiles 保留 CLI 直输出
+    // 不应到达这里——无子命令时上面已处理
+    pool.shutdown().await;
+}
+
+/// TUI 模式启动
+async fn run_tui() {
+    // 基础设施已由调用方初始化
+    let provider_dir = dirs::config_dir()
+        .map(|p| p.join("eflow").join("providers"))
+        .unwrap_or_else(|| std::path::PathBuf::from("./providers"));
+    let config_path = config::find_config().unwrap_or_else(|| {
+        eprintln!("{}", t!("cli_no_config"));
+        std::path::PathBuf::from("eflow.yaml")
+    });
+    let cfg = match config::load_config(&config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{}: {}", t!("err_config_load", msg = e.to_string()), e);
+            return;
+        }
+    };
+    let events = EventChannel::new();
+    let _ = std::fs::create_dir_all(&provider_dir);
+    let llm = match LlmRouter::from_config(&cfg, &provider_dir) {
+        Ok(l) => Arc::new(tokio::sync::Mutex::new(l)),
+        Err(e) => {
+            eprintln!("{}: {}", t!("err_llm_init", msg = e.to_string()), e);
+            return;
+        }
+    };
+
+    let mut tool_registry = ToolRegistry::new();
+    tool_registry.register(Arc::new(ReadFileTool));
+    tool_registry.register(Arc::new(WriteFileTool));
+    tool_registry.register(Arc::new(ExecuteCommandTool));
+    tool_registry.register(Arc::new(SearchCodeTool));
+    let tools = Arc::new(tool_registry);
+
+    let memory = match CompositeMemory::new(
+        cfg.memory.working_memory_limit,
+        std::path::Path::new(&cfg.memory.project_db_path),
+        std::path::Path::new(&cfg.memory.user_db_path),
+    ) {
+        Ok(m) => Arc::new(tokio::sync::Mutex::new(m)),
+        Err(e) => {
+            eprintln!("{}: {}", t!("err_memory_init", msg = e.to_string()), e);
+            return;
+        }
+    };
+
+    let mut profiles = ProfileRegistry::new();
+    if let Err(e) = profiles.load_profiles(std::path::Path::new("profiles")) {
+        tracing::warn!("Failed to load profiles: {}", e);
+    }
+    let _profiles = Arc::new(tokio::sync::RwLock::new(profiles));
+
+    let pool = Arc::new(SubagentPool::start(4));
+    let orchestrator =
+        Orchestrator::with_pool(llm.clone(), tools.clone(), events.clone(), pool.clone());
+    let orchestrator = Arc::new(tokio::sync::Mutex::new(orchestrator));
+
+    let mut concierge = Concierge::new(
+        events.clone(),
+        memory.clone(),
+        orchestrator.clone(),
+        llm.clone(),
+        cfg.profiles.default.clone(),
+    );
+
+    if let Err(e) = register_slash_commands(&mut concierge) {
+        eprintln!("{}: {}", t!("err_slash_register", msg = e.to_string()), e);
+        std::process::exit(1);
+    }
+
+    let concierge = std::sync::Arc::new(tokio::sync::Mutex::new(concierge));
+
     println!("{}", t!("cli_interactive_banner"));
 
-    // TUI 模式：先在 async 上下文填好 profile + cache stats（F3 with_initial）
-    // —— TuiBackend::run 是 sync，profile/cache_hit_rate 必须在 run() 前准备好
     let initial_profile = concierge.lock().await.active_profile().await;
-    let initial_cache_hit_rate = "0/0".to_string(); // v1.2 占位：v1.3 接 L2 cache stats
+    let initial_cache_hit_rate = "0/0".to_string();
     let tui = TuiBackend::with_initial(initial_profile, initial_cache_hit_rate);
     tui.run(concierge.clone(), events.clone());
 
-    // v1.1 M10.5 Task C6: 优雅关闭 SubagentPool（worker 退出）
     pool.shutdown().await;
     events.publish(Event::SystemShutdown);
 }

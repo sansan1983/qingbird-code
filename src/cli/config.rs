@@ -1,8 +1,8 @@
 // src/cli/config.rs — CLI 文本交互式配置（6 步流程）
 
-use crate::cli::prompt::{select_menu, MenuItem, prompt_input, prompt_password};
+use crate::cli::prompt::{MenuItem, prompt_input, prompt_password, select_menu};
 use crate::infrastructure::llm::types::ProtocolKind;
-use crate::interaction::wizard::builtin::provider::{PresetProvider, PRESETS};
+use crate::interaction::wizard::builtin::provider::{PRESETS, PresetProvider};
 
 /// 运行 CLI 文本配置流程。返回退出码（0=成功, 1=取消/错误）。
 pub fn run() -> i32 {
@@ -32,8 +32,14 @@ pub fn run() -> i32 {
     // 自定义路径：先问 protocol 和 base_url
     let (protocol_kind, base_url) = if is_custom {
         let proto_items = vec![
-            MenuItem { key: "1", label: "OpenAI 兼容".into() },
-            MenuItem { key: "2", label: "Anthropic 兼容".into() },
+            MenuItem {
+                key: "1",
+                label: "OpenAI 兼容".into(),
+            },
+            MenuItem {
+                key: "2",
+                label: "Anthropic 兼容".into(),
+            },
         ];
         println!("\n  选择协议类型:");
         let proto_sel = match select_menu(&proto_items) {
@@ -67,22 +73,18 @@ pub fn run() -> i32 {
         if let Ok(client) = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-        {
-            if let Ok(resp) = client
+            && let Ok(resp) = client
                 .get(&url)
                 .header("Authorization", format!("Bearer {}", api_key))
                 .send()
-            {
-                if let Ok(json) = resp.json::<serde_json::Value>() {
-                    if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
-                        for m in data {
-                            if let Some(id) = m.get("id").and_then(|id| id.as_str()) {
-                                let id = id.to_string();
-                                if !models.contains(&id) {
-                                    models.push(id);
-                                }
-                            }
-                        }
+            && let Ok(json) = resp.json::<serde_json::Value>()
+            && let Some(data) = json.get("data").and_then(|d| d.as_array())
+        {
+            for m in data {
+                if let Some(id) = m.get("id").and_then(|id| id.as_str()) {
+                    let id = id.to_string();
+                    if !models.contains(&id) {
+                        models.push(id);
                     }
                 }
             }
@@ -126,7 +128,14 @@ pub fn run() -> i32 {
         ProtocolKind::AnthropicCompatible => "anthropic",
     };
 
-    write_provider(provider_id, display_name, proto_str, &base_url, &api_key, &model);
+    write_provider(
+        provider_id,
+        display_name,
+        proto_str,
+        &base_url,
+        &api_key,
+        &model,
+    );
 
     println!("\n  ✓ 配置已保存");
     println!("  重新运行 eflow 开始使用。\n");
@@ -139,7 +148,12 @@ pub fn check_llm_configured() -> bool {
         .unwrap_or_else(|| std::path::PathBuf::from("./providers"));
     if let Ok(entries) = std::fs::read_dir(&provider_dir) {
         for entry in entries.flatten() {
-            if entry.path().extension().map(|e| e == "yaml").unwrap_or(false) {
+            if entry
+                .path()
+                .extension()
+                .map(|e| e == "yaml")
+                .unwrap_or(false)
+            {
                 return true;
             }
         }
