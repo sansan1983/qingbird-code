@@ -13,5 +13,6 @@ pub mod error;
 pub mod handlers;
 pub mod init;
 pub mod output;
+pub mod prompt;
 pub mod start;
 pub mod stdin;
