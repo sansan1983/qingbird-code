@@ -22,7 +22,7 @@ pub fn select_menu(items: &[MenuItem]) -> Option<usize> {
         print!("\r");
         for (i, item) in items.iter().enumerate() {
             let prefix = if i == selected { " >" } else { "  " };
-            println!("{} {}. {}", prefix, item.key, item.label);
+            println!("{} {}. {}", prefix, i + 1, item.label);
         }
         print!("\x1b[{}A", items.len()); // 上移 N 行
         stdout().flush().ok()?;

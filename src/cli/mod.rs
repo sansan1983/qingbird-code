@@ -9,6 +9,7 @@
 //! - 5 个 stdin action schema 不变
 //! - 4 档 exit code 不变
 
+pub mod config;
 pub mod error;
 pub mod handlers;
 pub mod init;

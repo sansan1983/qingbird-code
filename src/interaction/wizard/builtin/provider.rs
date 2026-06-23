@@ -16,12 +16,12 @@ use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 pub struct ProviderStep;
 
 pub struct PresetProvider {
-    id: &'static str,
-    display_name: &'static str,
-    protocol: ProtocolKind,
-    base_url: &'static str,
-    default_model: &'static str,
-    preset_models: &'static [&'static str],
+    pub id: &'static str,
+    pub display_name: &'static str,
+    pub protocol: ProtocolKind,
+    pub base_url: &'static str,
+    pub default_model: &'static str,
+    pub preset_models: &'static [&'static str],
 }
 
 pub const PRESETS: &[PresetProvider] = &[
