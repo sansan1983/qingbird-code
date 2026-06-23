@@ -143,8 +143,8 @@ pub struct TokenUsage {
 /// 原因：spec B 的 CLI 契约依赖 trait 稳定——GUI 套壳时如果 LLM 调用
 /// 变体，CLI 契约层会 panic。
 ///
-/// TODO(v1.4+): 加 .github/workflows/check-trait-stability.yml
-/// 用 git diff 检查 trait 签名变化，CI 阻断破坏性 PR
+/// 检查：.github/workflows/check-trait-stability.yml 在 PR 阶段自动验证
+/// 抽象方法签名不被意外修改。
 #[async_trait]
 pub trait LlmProvider: Send + Sync {
     /// 非流式聊天

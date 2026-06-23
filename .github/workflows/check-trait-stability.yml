@@ -1,0 +1,40 @@
+name: Check Trait Stability
+
+on:
+  pull_request:
+    paths:
+      - 'src/infrastructure/llm/types.rs'
+
+jobs:
+  check-trait:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check LlmProvider trait stability
+        run: |
+          # Compare abstract method signatures of LlmProvider trait
+          # against the base branch. Default-implemented methods are exempt.
+          BASE="${GITHUB_BASE_SHA:-origin/main}"
+
+          awk '/pub trait LlmProvider/,/^}/' src/infrastructure/llm/types.rs \
+            | grep 'fn ' \
+            | grep -v -E '(list_models_endpoint|retry_params)' \
+            | tr -s ' ' | sort > /tmp/pr.txt
+
+          git show "$BASE:src/infrastructure/llm/types.rs" 2>/dev/null \
+            | awk '/pub trait LlmProvider/,/^}/' \
+            | grep 'fn ' \
+            | grep -v -E '(list_models_endpoint|retry_params)' \
+            | tr -s ' ' | sort > /tmp/base.txt
+
+          if ! diff /tmp/base.txt /tmp/pr.txt; then
+            echo "::error::LlmProvider trait abstract method signatures changed."
+            echo "This trait is frozen (v1.3+ ADR-0011). To modify it:"
+            echo "  1. New methods must have default implementations"
+            echo "  2. Existing method signature changes need ADR + CHANGELOG"
+            exit 1
+          fi
