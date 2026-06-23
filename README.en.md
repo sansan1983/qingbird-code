@@ -3,10 +3,10 @@
 > **Efficient Flow** — A multi-layer Agent collaboration framework written in Rust
 > *One command to rule them all.*
 
-[![Status](https://img.shields.io/badge/status-v1.3.3%20released-brightgreen)]()
+[![Status](https://img.shields.io/badge/status-v1.4.0%20released-brightgreen)]()
 [![License: MIT/Apache-2.0](https://img.shields.io/badge/license-MIT%20%7C%20Apache--2.0-blue)]()
 [![Rust](https://img.shields.io/badge/rust-2024-orange)]()
-[![Tests](https://img.shields.io/badge/tests-312%20passed-blue)]()
+[![Tests](https://img.shields.io/badge/tests-328%20passed-blue)]()
 
 **[简体中文](README.md)**
 
@@ -38,6 +38,8 @@ git clone https://github.com/sansan1983/eflow.git
 cd eflow
 cargo build --release
 ```
+
+> 💡 You can also `cargo install eflow` (once published to crates.io), or download a pre-built binary from [GitHub Releases](https://github.com/sansan1983/eflow/releases).
 
 #### Configure
 
@@ -85,6 +87,8 @@ default_model: "claude-sonnet-4-6"
 
 Or run `eflow init` to launch the setup wizard.
 
+Complete provider config examples at [`docs/examples/providers/`](docs/examples/providers/).
+
 #### Run
 
 ```bash
@@ -94,12 +98,35 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 
 ### Architecture
 
+```mermaid
+graph TD
+    subgraph Interaction["Interaction Layer"]
+        TUI["TUI (ratatui)"]
+        CLI["CLI (--execute)"]
+        HLS["Headless (NDJSON)"]
+    end
+    subgraph Application["Application Layer"]
+        CON["Concierge (zero-blocking)"]
+        ORC["Orchestrator (decompose+parallel)"]
+        CON --> ORC
+    end
+    subgraph Capability["Capability Layer"]
+        DEF["Decisioner → Executor → Feedbacker"]
+        POOL["Subagent Pool"]
+    end
+    subgraph Infrastructure["Infrastructure Layer"]
+        LLM["LLM Router"]
+        MEM["Memory (3-tier)"]
+        PRF["Profile"]
+        EVT["Event Bus"]
+        TLS["Tools"]
+    end
+    Interaction --> Application
+    Application --> Capability
+    Capability --> Infrastructure
 ```
-Interaction  →  TUI (ratatui) + CLI (--execute) + Headless (eflow session start, NDJSON contract)
-Orchestration →  Concierge (zero-blocking) → Orchestrator (decompose + schedule, layer-parallel)
-Capability   →  Decisioner → Executor → Feedbacker (3-role pipeline) + Subagent pool
-Infrastructure → LLM / Memory / Context / Event / Profile / Tools
-```
+
+**Strict dependency direction**: lower layers must not import upper layers.
 
 Detailed architecture: [`docs/superpowers/specs/2026-06-15-eflow-design.md`](docs/superpowers/specs/2026-06-15-eflow-design.md)
 (v1.0 original design; v1.3 LLM provider abstraction: [`v1.3-llm-abstract-design.md`](docs/superpowers/specs/2026-06-17-eflow-v1.3-llm-abstract-design.md))
@@ -115,7 +142,7 @@ Detailed architecture: [`docs/superpowers/specs/2026-06-15-eflow-design.md`](doc
 | v1.3.1 Wizard + slash commands | ✅ Released (spec B1 — 12 tasks) |
 | v1.3.2 CLI contract + headless | ✅ Released (spec B2 — 12 tasks) |
 | v1.3.3 spec C retracted | ✅ Released (spec C — 9 tasks; 3-level abstraction retracted in PR #21) |
-| v1.4 spec D rendering pipeline | 🔵 Planned (spec + plan docs merged to main, PR1 awaits remote server) |
+| v1.4 spec D rendering pipeline + auth fix | ✅ Released (v1.4.0 — render pipeline refactor + third-party API key fix) |
 
 ### Documentation
 

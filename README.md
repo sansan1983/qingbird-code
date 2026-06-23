@@ -3,10 +3,10 @@
 > **Efficient Flow** — Rust 多层 Agent 协作框架
 > *One command to rule them all.*
 
-[![Status](https://img.shields.io/badge/status-v1.3.3%20released-brightgreen)]()
+[![Status](https://img.shields.io/badge/status-v1.4.0%20released-brightgreen)]()
 [![License: MIT/Apache-2.0](https://img.shields.io/badge/license-MIT%20%7C%20Apache--2.0-blue)]()
 [![Rust](https://img.shields.io/badge/rust-2024-orange)]()
-[![Tests](https://img.shields.io/badge/tests-312%20passed-blue)]()
+[![Tests](https://img.shields.io/badge/tests-328%20passed-blue)]()
 
 **[English](README.en.md)**
 
@@ -40,6 +40,8 @@ git clone https://github.com/sansan1983/eflow.git
 cd eflow
 cargo build --release
 ```
+
+> 💡 也可以直接 `cargo install eflow`（发布到 crates.io 后），或从 [GitHub Releases](https://github.com/sansan1983/eflow/releases) 下载预编译二进制。
 
 #### 配置
 
@@ -87,6 +89,8 @@ default_model: "claude-sonnet-4-6"
 
 或直接 `eflow init` 走向导生成。
 
+完整 provider 配置示例见 [`docs/examples/providers/`](docs/examples/providers/)。
+
 #### 运行
 
 ```bash
@@ -96,12 +100,35 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 
 ### 架构
 
+```mermaid
+graph TD
+    subgraph Interaction["交互层"]
+        TUI["TUI (ratatui)"]
+        CLI["CLI (--execute)"]
+        HLS["Headless (NDJSON)"]
+    end
+    subgraph Application["编排层"]
+        CON["Concierge (零阻塞)"]
+        ORC["Orchestrator (分解+并行)"]
+        CON --> ORC
+    end
+    subgraph Capability["能力层"]
+        DEF["Decisioner → Executor → Feedbacker"]
+        POOL["Subagent 池"]
+    end
+    subgraph Infrastructure["基础设施层"]
+        LLM["LLM Router"]
+        MEM["记忆 (3层)"]
+        PRF["Profile"]
+        EVT["Event Bus"]
+        TLS["Tools"]
+    end
+    Interaction --> Application
+    Application --> Capability
+    Capability --> Infrastructure
 ```
-交互层       →  TUI (ratatui) + CLI (--execute) + Headless (eflow session start, NDJSON 契约)
-编排层       →  Concierge (零阻塞) → Orchestrator (分解+调度, 按层并行)
-能力层       →  Decisioner → Executor → Feedbacker (三角色管线段) + Subagent 池
-基础设施层   →  LLM / Memory / Context / Event / Profile / Tools
-```
+
+**严格向下依赖**：下层禁止引用上层。
 
 详细架构见 [`docs/superpowers/specs/2026-06-15-eflow-design.md`](docs/superpowers/specs/2026-06-15-eflow-design.md)
 （v1.0 原始设计；v1.3 LLM provider 抽象见 [`v1.3-llm-abstract-design.md`](docs/superpowers/specs/2026-06-17-eflow-v1.3-llm-abstract-design.md)）
@@ -117,7 +144,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 | v1.3.1 向导 + 斜杠命令 | ✅ 已发布（spec B1 12 tasks） |
 | v1.3.2 CLI 契约 + headless | ✅ 已发布（spec B2 12 tasks） |
 | v1.3.3 spec C 撤回 | ✅ 已发布（spec C 9 tasks，3 档抽象 PR #21 撤回） |
-| v1.4 spec D 渲染管线 | 🔵 计划中（spec + plan 文档已合 main，PR1 待远程服务器实施） |
+| v1.4 spec D 渲染管线 + auth fix | ✅ 已发布（v1.4.0 — spec D 渲染管线重构 + 第三方 API key 修复） |
 
 ### 文档
 
