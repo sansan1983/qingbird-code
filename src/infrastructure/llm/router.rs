@@ -18,6 +18,7 @@ use super::types::{ChatRequest, ChatResponse, LlmProvider, TokenUsage};
 /// LLM Router — 统一入口，按 `ModelTier` 路由到具体 Provider
 pub struct LlmRouter {
     providers: HashMap<String, Arc<dyn LlmProvider>>,
+    preset_models: HashMap<String, Vec<String>>,
     routing: HashMap<ModelTier, String>,
     rate_limit_counters: HashMap<String, u32>,
     l2_cache: Option<Arc<L2CacheManager>>,
@@ -32,6 +33,10 @@ impl LlmRouter {
     pub fn from_config(config: &EflowConfig, provider_dir: &Path) -> Result<Self> {
         // 1. 扫目录加载 presets
         let presets = PresetLoader::load_all(provider_dir)?;
+        let preset_models: HashMap<String, Vec<String>> = presets
+            .iter()
+            .map(|cfg| (cfg.id.clone(), cfg.preset_models.clone()))
+            .collect();
         let mut providers = LlmProviderRegistry::build(presets)?;
 
         // 2. 退化路径：providers 为空时用 v1.2 的 env var 行为
@@ -43,6 +48,13 @@ impl LlmRouter {
         if providers.is_empty() {
             return Err(EflowError::Config(t!("err_no_llm_providers").to_string()));
         }
+
+        // 3b. 退化路径：preset_models 也为空时从 fallback provider 构造
+        let preset_models = if preset_models.is_empty() {
+            Self::fallback_preset_models(&providers)
+        } else {
+            preset_models
+        };
 
         // 4. 构造 routing（routing 引用校验 + 降级）
         let mut routing = HashMap::new();
@@ -108,6 +120,7 @@ impl LlmRouter {
 
         Ok(Self {
             providers,
+            preset_models,
             routing,
             rate_limit_counters: HashMap::new(),
             l2_cache,
@@ -163,6 +176,14 @@ impl LlmRouter {
         }
 
         Ok(providers)
+    }
+
+    /// 退化路径：从 env var fallback provider 构造 preset_models
+    /// 退化路径没有 YAML preset_models，返回空让用户手填。
+    fn fallback_preset_models(
+        _providers: &HashMap<String, Arc<dyn LlmProvider>>,
+    ) -> HashMap<String, Vec<String>> {
+        HashMap::new()
     }
 
     /// 按 `ModelTier` 路由调用（含指数退避重试 + 降级）
@@ -382,13 +403,13 @@ impl LlmRouter {
         self.routing.get(&tier).map(std::string::String::as_str)
     }
 
-    /// v1.3.1 增量：取指定 provider 的 preset_models
+    /// 取指定 provider 的 preset_models
     ///
-    /// v1.3.0 router 不持有 preset_models map，本方法 v1.3.1 阶段先返回 None。
-    /// `/model` 命令会显示空列表，等 spec B 后续实施时再补完整 model cache。
+    /// 从 `from_config` 阶段收集的 preset_models map 中查找。
+    /// 未找到时返回 None（调用方降级为手填）。
     #[must_use]
-    pub fn preset_models_for(&self, _provider_id: &str) -> Option<Vec<String>> {
-        None
+    pub fn preset_models_for(&self, provider_id: &str) -> Option<Vec<String>> {
+        self.preset_models.get(provider_id).cloned()
     }
 }
 
@@ -401,6 +422,7 @@ impl LlmRouter {
     pub fn placeholder() -> Self {
         Self {
             providers: HashMap::new(),
+            preset_models: HashMap::new(),
             routing: HashMap::new(),
             rate_limit_counters: HashMap::new(),
             l2_cache: None,
@@ -500,6 +522,7 @@ mod tests {
             )]),
             routing: HashMap::from([(ModelTier::Light, "flaky".into())]),
             rate_limit_counters: HashMap::new(),
+            preset_models: HashMap::new(),
             l2_cache: None,
         };
         let req = ChatRequest::new("", vec![Message::user("hi")]);
@@ -526,6 +549,7 @@ mod tests {
             )]),
             routing: HashMap::from([(ModelTier::Light, "flaky".into())]),
             rate_limit_counters: HashMap::new(),
+            preset_models: HashMap::new(),
             l2_cache: None,
         };
         let req = ChatRequest::new("", vec![Message::user("hi")]);
@@ -599,6 +623,7 @@ mod tests {
                 (ModelTier::Light, "ok".into()),
             ]),
             rate_limit_counters: HashMap::from([("limited".into(), 5)]),
+            preset_models: HashMap::new(),
             l2_cache: None,
         };
         let req = ChatRequest::new("", vec![Message::user("hi")]);
@@ -627,6 +652,7 @@ mod tests {
                 (ModelTier::Light, "limited".into()),
             ]),
             rate_limit_counters: HashMap::from([("limited".into(), 5)]),
+            preset_models: HashMap::new(),
             l2_cache: None,
         };
         let req = ChatRequest::new("", vec![Message::user("hi")]);
@@ -673,6 +699,7 @@ mod tests {
             providers: HashMap::from([("ok".into(), Arc::new(OkProvider) as Arc<dyn LlmProvider>)]),
             routing: HashMap::from([(ModelTier::Light, "ok".into())]),
             rate_limit_counters: HashMap::new(),
+            preset_models: HashMap::new(),
             l2_cache: Some(cache.clone()),
         };
         let req = ChatRequest::new("", vec![Message::user("hi")]);

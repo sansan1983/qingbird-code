@@ -1,4 +1,7 @@
 //! step 2: 厂商选择（4 个 preset + 自定义）
+//!
+//! v1.4+ 改进：选预设后自动填充 base_url / protocol / preset_models，
+//! 不再让后续步骤从 YAML 文件读取。
 
 use std::sync::Arc;
 
@@ -6,10 +9,77 @@ use async_trait::async_trait;
 use crossterm::event::{KeyCode, KeyEvent};
 use rust_i18n::t;
 
+use crate::infrastructure::llm::types::ProtocolKind;
 use crate::interaction::render::view_model::*;
 use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 
 pub struct ProviderStep;
+
+/// 内嵌预设厂商数据（对应 docs/examples/providers/*.yaml）
+struct PresetProvider {
+    id: &'static str,
+    display_name: &'static str,
+    protocol: ProtocolKind,
+    base_url: &'static str,
+    default_model: &'static str,
+    preset_models: &'static [&'static str],
+}
+
+const PRESETS: &[PresetProvider] = &[
+    PresetProvider {
+        id: "deepseek",
+        display_name: "DeepSeek",
+        protocol: ProtocolKind::OpenaiCompatible,
+        base_url: "https://api.deepseek.com",
+        default_model: "deepseek-v4-pro",
+        preset_models: &["deepseek-v4-pro", "deepseek-v4-flash"],
+    },
+    PresetProvider {
+        id: "minimax",
+        display_name: "MiniMax",
+        protocol: ProtocolKind::OpenaiCompatible,
+        base_url: "https://api.minimaxi.com/v1",
+        default_model: "MiniMax-M3",
+        preset_models: &[
+            "MiniMax-M3",
+            "MiniMax-M2.7",
+            "MiniMax-M2.5",
+            "MiniMax-M2.1",
+            "MiniMax-M2",
+        ],
+    },
+    PresetProvider {
+        id: "agnes-ai",
+        display_name: "Agnes AI",
+        protocol: ProtocolKind::OpenaiCompatible,
+        base_url: "https://apihub.agnes-ai.com/v1",
+        default_model: "agnes-2.0-flash",
+        preset_models: &["agnes-2.0-flash"],
+    },
+    PresetProvider {
+        id: "opencode-go",
+        display_name: "OpenCode Go",
+        protocol: ProtocolKind::OpenaiCompatible,
+        base_url: "https://opencode.ai/zen/go/v1",
+        default_model: "glm-5.1",
+        preset_models: &[
+            "glm-5.1",
+            "glm-5",
+            "kimi-k2.7",
+            "kimi-k2.6",
+            "deepseek-v4-pro",
+            "deepseek-v4-flash",
+            "mimo-v2.5",
+            "mimo-v2.5-pro",
+            "minimax-m3",
+            "minimax-m2.7",
+            "minimax-m2.5",
+            "qwen3.7-max",
+            "qwen3.7-plus",
+            "qwen3.6-plus",
+        ],
+    },
+];
 
 /// preset YAML 文件来源（4 个 + 自定义 = 5 选项）
 fn list_providers() -> Vec<(&'static str, &'static str)> {
@@ -70,17 +140,21 @@ impl WizardStep for ProviderStep {
             KeyCode::Esc => return StepAction::Cancel,
             _ => return StepAction::Stay,
         };
-        let (id, name) = list_providers()[n - 1];
+        let (id, _name) = list_providers()[n - 1];
         if id == "custom" {
             // 自定义路径：标记需要 protocol 步
             state.skip_protocol_step = false;
             state.provider_id = Some("custom".into());
             state.provider_display_name = Some("Custom".into());
-        } else {
-            // preset 路径：跳过 protocol 步
+        } else if let Some(preset) = PRESETS.iter().find(|p| p.id == id) {
+            // preset 路径：从内嵌数据填充 base_url / protocol / preset_models
             state.skip_protocol_step = true;
-            state.provider_id = Some(id.into());
-            state.provider_display_name = Some(name.into());
+            state.provider_id = Some(preset.id.into());
+            state.provider_display_name = Some(preset.display_name.into());
+            state.provider_protocol = Some(preset.protocol);
+            state.provider_base_url = Some(preset.base_url.into());
+            state.default_model = Some(preset.default_model.into());
+            state.preset_models = preset.preset_models.iter().map(|m| m.to_string()).collect();
         }
         StepAction::Next
     }
@@ -106,6 +180,18 @@ mod tests {
         assert!(matches!(action, StepAction::Next));
         assert_eq!(state.provider_id.as_deref(), Some("deepseek"));
         assert!(state.skip_protocol_step);
+        // v1.4+：预设数据应被填充
+        assert_eq!(
+            state.provider_base_url.as_deref(),
+            Some("https://api.deepseek.com")
+        );
+        assert_eq!(state.default_model.as_deref(), Some("deepseek-v4-pro"));
+        assert!(state.preset_models.contains(&"deepseek-v4-pro".to_string()));
+        assert!(
+            state
+                .preset_models
+                .contains(&"deepseek-v4-flash".to_string())
+        );
     }
 
     #[test]

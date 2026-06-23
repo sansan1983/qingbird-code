@@ -1,22 +1,46 @@
-//! step 5: 模型选择（拉取 + 手填 fallback）
+//! step 5: 模型选择（自动拉取 + 手填 fallback）
 
-use std::io::BufRead;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use crossterm::event::KeyEvent;
 use rust_i18n::t;
+use serde_json::Value;
 
 use crate::interaction::render::view_model::*;
 use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 
 pub struct ModelStep;
 
-fn read_line_from_stdin() -> Option<String> {
-    let stdin = std::io::stdin();
-    let mut line = String::new();
-    stdin.lock().read_line(&mut line).ok()?;
-    Some(line.trim().to_string())
+/// 调 /models 拉取可用模型列表，合并入 preset_models
+fn fetch_models(base_url: &str, api_key: &str) -> Result<Vec<String>, String> {
+    let url = format!("{}/models", base_url.trim_end_matches('/'));
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("HTTP client: {}", e))?;
+
+    let resp = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .send()
+        .map_err(|e| format!("request: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+
+    let json: Value = resp.json().map_err(|e| format!("parse JSON: {}", e))?;
+
+    let models = json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .ok_or_else(|| "no 'data' array in response".to_string())?;
+
+    Ok(models
+        .iter()
+        .filter_map(|m| m.get("id").and_then(|id| id.as_str()).map(String::from))
+        .collect())
 }
 
 #[async_trait]
@@ -72,20 +96,60 @@ impl WizardStep for ModelStep {
             focused_field: 0,
         }
     }
-    fn on_key(&self, _key: KeyEvent, state: &mut WizardState) -> StepAction {
-        let input = match read_line_from_stdin() {
-            Some(s) if !s.is_empty() => s,
-            _ => return StepAction::Stay,
-        };
-        if let Ok(n) = input.parse::<usize>()
-            && n >= 1
-            && n <= state.preset_models.len()
-        {
-            state.default_model = Some(state.preset_models[n - 1].clone());
-            return StepAction::Next;
+    fn on_enter(&self, state: &mut WizardState) {
+        // 拉取可用模型，合并到 preset_models
+        if state.fetch_failed || state.provider_api_key.is_none() {
+            return;
         }
-        state.default_model = Some(input);
-        StepAction::Next
+        let base_url = match &state.provider_base_url {
+            Some(u) => u.clone(),
+            None => return,
+        };
+        let api_key = match &state.provider_api_key {
+            Some(k) => k.clone(),
+            None => return,
+        };
+        match fetch_models(&base_url, &api_key) {
+            Ok(fetched) => {
+                // 合并 + 去重：preset_models 在前，fetched 在后
+                let mut models: Vec<String> = state.preset_models.clone();
+                for m in fetched {
+                    if !models.contains(&m) {
+                        models.push(m);
+                    }
+                }
+                state.preset_models = models;
+            }
+            Err(e) => {
+                state.fetch_failed = true;
+                // fetch 失败不阻塞——降级到 preset_models
+                tracing::warn!("fetch /models failed: {}", e);
+            }
+        }
+    }
+
+    fn on_key(&self, key: KeyEvent, state: &mut WizardState) -> StepAction {
+        use crossterm::event::KeyCode;
+        match key.code {
+            KeyCode::Esc => StepAction::Cancel,
+            KeyCode::Enter => {
+                if state.default_model.is_some() {
+                    StepAction::Next
+                } else {
+                    StepAction::Stay
+                }
+            }
+            KeyCode::Char(c) if c.is_ascii_digit() => {
+                let n = c.to_digit(10).unwrap_or(0) as usize;
+                if n >= 1 && n <= state.preset_models.len() {
+                    state.default_model = Some(state.preset_models[n - 1].clone());
+                    StepAction::Next
+                } else {
+                    StepAction::Stay
+                }
+            }
+            _ => StepAction::Stay,
+        }
     }
     fn is_complete(&self, state: &WizardState) -> bool {
         state.default_model.is_some()
