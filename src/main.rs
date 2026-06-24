@@ -3,25 +3,25 @@ use std::sync::Arc;
 // 在 bin crate 中也调用 i18n!() 以生成 _rust_i18n_t! 宏（让 main.rs 里的 t!() 可用）
 rust_i18n::i18n!("locales", fallback = "en-US");
 
-use eflow::application::concierge::Concierge;
-use eflow::application::orchestrator::Orchestrator;
-use eflow::capability::pool::SubagentPool;
-use eflow::capability::tools::{
+use qingbird_code::application::concierge::Concierge;
+use qingbird_code::application::orchestrator::Orchestrator;
+use qingbird_code::capability::pool::SubagentPool;
+use qingbird_code::capability::tools::{
     ToolRegistry,
     command::ExecuteCommandTool,
     file::{ReadFileTool, WriteFileTool},
     search::SearchCodeTool,
 };
-use eflow::common::types::ModelTier;
-use eflow::infrastructure::config;
-use eflow::infrastructure::event::{Event, EventChannel};
-use eflow::infrastructure::llm::LlmRouter;
-use eflow::infrastructure::locale;
-use eflow::infrastructure::memory::CompositeMemory;
-use eflow::infrastructure::profile::ProfileRegistry;
-use eflow::interaction::InteractionLayer;
-use eflow::interaction::cli::{Cli, Command, SessionAction};
-use eflow::interaction::tui::TuiBackend;
+use qingbird_code::common::types::ModelTier;
+use qingbird_code::infrastructure::config;
+use qingbird_code::infrastructure::event::{Event, EventChannel};
+use qingbird_code::infrastructure::llm::LlmRouter;
+use qingbird_code::infrastructure::locale;
+use qingbird_code::infrastructure::memory::CompositeMemory;
+use qingbird_code::infrastructure::profile::ProfileRegistry;
+use qingbird_code::interaction::InteractionLayer;
+use qingbird_code::interaction::cli::{Cli, Command, SessionAction};
+use qingbird_code::interaction::tui::TuiBackend;
 use rust_i18n::t;
 
 #[tokio::main]
@@ -31,7 +31,7 @@ async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "eflow=info".into()),
+                .unwrap_or_else(|_| "qingbird=info".into()),
         )
         .with_writer(std::io::stderr)
         .init();
@@ -41,17 +41,17 @@ async fn main() {
     // 子命令路由
     match cli.command {
         Some(Command::Init) => {
-            let exit_code = eflow::cli::init::run();
+            let exit_code = qingbird_code::cli::init::run();
             std::process::exit(exit_code);
         }
         Some(Command::Tui) => {
-            // eflow tui：检测配置 → 未配置则文本配置 → 已配置则进 TUI
-            if !eflow::cli::config::check_llm_configured() {
-                let code = eflow::cli::config::run();
+            // qingbird tui：检测配置 → 未配置则文本配置 → 已配置则进 TUI
+            if !qingbird_code::cli::config::check_llm_configured() {
+                let code = qingbird_code::cli::config::run();
                 if code != 0 {
                     std::process::exit(code);
                 }
-                println!("配置已保存。重新运行 eflow tui 启动 TUI。");
+                println!("配置已保存。重新运行 qingbird tui 启动 TUI。");
                 return;
             }
             run_tui().await;
@@ -61,25 +61,25 @@ async fn main() {
             action: SessionAction::Start { config, lang },
         }) => {
             let config = config.map(std::path::PathBuf::from);
-            let exit_code = eflow::cli::start::run(config, lang).await;
+            let exit_code = qingbird_code::cli::start::run(config, lang).await;
             std::process::exit(exit_code);
         }
         None => {
             // eflow（无子命令）
-            if !eflow::cli::config::check_llm_configured() {
-                let code = eflow::cli::config::run();
+            if !qingbird_code::cli::config::check_llm_configured() {
+                let code = qingbird_code::cli::config::run();
                 if code != 0 {
                     std::process::exit(code);
                 }
-                println!("配置已保存。重新运行 eflow 开始使用。");
+                println!("配置已保存。重新运行 qingbird 开始使用。");
                 return;
             }
             // CLI 对话模式（--execute / --show-config / --list-profiles 走现有逻辑）
             if cli.execute.is_some() || cli.show_config || cli.list_profiles || cli.lang.is_some() {
                 // 延后处理——走下面的配置加载 + 执行路径
             } else {
-                println!("LLM 已配置。运行 eflow --execute \"...\" 执行任务");
-                println!("或 eflow tui 启动 TUI 对话模式。");
+                println!("LLM 已配置。运行 qingbird --execute \"...\" 执行任务");
+                println!("或 qingbird tui 启动 TUI 对话模式。");
                 return;
             }
         }
@@ -90,7 +90,7 @@ async fn main() {
     // 加载配置
     let config_path = config::find_config().unwrap_or_else(|| {
         eprintln!("{}", t!("cli_no_config"));
-        std::path::PathBuf::from("eflow.yaml")
+        std::path::PathBuf::from("qingbird.yaml")
     });
 
     let cfg = match config::load_config(&config_path) {
@@ -110,7 +110,7 @@ async fn main() {
 
     // v1.3 起：传 provider_dir 给 from_config
     let provider_dir = dirs::config_dir()
-        .map(|p| p.join("eflow").join("providers"))
+        .map(|p| p.join("qingbird").join("providers"))
         .unwrap_or_else(|| std::path::PathBuf::from("./providers"));
     let _ = std::fs::create_dir_all(&provider_dir);
     let llm = match LlmRouter::from_config(&cfg, &provider_dir) {
@@ -237,11 +237,11 @@ async fn main() {
 async fn run_tui() {
     // 基础设施已由调用方初始化
     let provider_dir = dirs::config_dir()
-        .map(|p| p.join("eflow").join("providers"))
+        .map(|p| p.join("qingbird").join("providers"))
         .unwrap_or_else(|| std::path::PathBuf::from("./providers"));
     let config_path = config::find_config().unwrap_or_else(|| {
         eprintln!("{}", t!("cli_no_config"));
-        std::path::PathBuf::from("eflow.yaml")
+        std::path::PathBuf::from("qingbird.yaml")
     });
     let cfg = match config::load_config(&config_path) {
         Ok(c) => c,
@@ -319,9 +319,9 @@ async fn run_tui() {
 /// v1.3.2 T7: 注册 6 个 builtin 斜杠命令到 Concierge
 fn register_slash_commands(
     concierge: &mut Concierge,
-) -> std::result::Result<(), eflow::common::error::EflowError> {
-    use eflow::interaction::slash::CommandRegistry;
-    use eflow::interaction::slash::builtin::{
+) -> std::result::Result<(), qingbird_code::common::error::EflowError> {
+    use qingbird_code::interaction::slash::CommandRegistry;
+    use qingbird_code::interaction::slash::builtin::{
         help::HelpCmd, lang::LangCmd, level::LevelCmd, model::ModelCmd, profile::ProfileCmd,
         quit::QuitCmd,
     };

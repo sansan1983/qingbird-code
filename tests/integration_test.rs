@@ -15,20 +15,20 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::Utc;
-use eflow::application::concierge::Concierge;
-use eflow::application::orchestrator::Orchestrator;
-use eflow::capability::subagent::Subagent;
-use eflow::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
-use eflow::common::error::Result;
-use eflow::common::types::*;
-use eflow::infrastructure::config::{
+use qingbird_code::application::concierge::Concierge;
+use qingbird_code::application::orchestrator::Orchestrator;
+use qingbird_code::capability::subagent::Subagent;
+use qingbird_code::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
+use qingbird_code::common::error::Result;
+use qingbird_code::common::types::*;
+use qingbird_code::infrastructure::config::{
     CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
     RoutingConfig, SecurityConfig,
 };
-use eflow::infrastructure::context::ContextCompressor;
-use eflow::infrastructure::event::{Event, EventChannel};
-use eflow::infrastructure::llm::LlmRouter;
-use eflow::infrastructure::memory::{
+use qingbird_code::infrastructure::context::ContextCompressor;
+use qingbird_code::infrastructure::event::{Event, EventChannel};
+use qingbird_code::infrastructure::llm::LlmRouter;
+use qingbird_code::infrastructure::memory::{
     CompositeMemory, MemoryEntry, MemoryManager, RecallScope, WorkingMemory,
 };
 // (ProfileRegistry 已被 Concierge 删，测试不再需要)
@@ -211,7 +211,7 @@ async fn e2e_event_channel_broadcasts_to_multiple_subscribers() {
 #[test]
 fn e2e_blackboard_with_plan_and_step_carries_task_id_through() {
     // 验证：plan.task_id == 原始 task.id（Orchestrator 拆分后不丢 id）
-    use eflow::capability::blackboard::Blackboard;
+    use qingbird_code::capability::blackboard::Blackboard;
 
     let task = TaskSpec::new("跨层测试".into(), RiskLevel::L0);
     let task_id = task.id;
@@ -415,11 +415,11 @@ async fn e2e_event_channel_publishes_all_6_variants() {
 async fn llm_router_handles_timeout_via_config() {
     // v1.1 Task A2 + A3: timeout_secs=0 → reqwest 立即超时 → A3 retry 也耗尽 → Err
     // （plan 写了 `use std::path::PathBuf;` 没用上，clippy pedantic 必挂 → 已删）
-    use eflow::infrastructure::config::{
+    use qingbird_code::infrastructure::config::{
         CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
         RoutingConfig, SecurityConfig,
     };
-    use eflow::infrastructure::llm::{ChatRequest, LlmRouter, Message};
+    use qingbird_code::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 
     let cfg = EflowConfig {
         core: CoreConfig {
@@ -472,8 +472,10 @@ async fn llm_router_handles_timeout_via_config() {
 #[tokio::test]
 async fn l2_cache_hit_rate_increases_with_repeated_calls() {
     // v1.1 Task B7（设计 §8.5）：重复调用同一 key 命中率上升
-    use eflow::common::types::{IntentType, RiskLevel};
-    use eflow::infrastructure::llm::cache::{CacheKey, CacheValue, ContextProfile, L2CacheManager};
+    use qingbird_code::common::types::{IntentType, RiskLevel};
+    use qingbird_code::infrastructure::llm::cache::{
+        CacheKey, CacheValue, ContextProfile, L2CacheManager,
+    };
     use tempfile::TempDir;
 
     let dir = TempDir::new().unwrap();

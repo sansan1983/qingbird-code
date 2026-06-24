@@ -2,7 +2,7 @@
 //!
 //! 核心零硬编码步骤名：每个 step 1 个 `impl WizardStep`，
 //! 通过 `Wizard::new(steps: Vec<Arc<dyn WizardStep>>)` 注册，
-//! main.rs 启动时统一注册。`eflow init` 调 `Wizard::run`。
+//! main.rs 启动时统一注册。`qingbird init` 调 `Wizard::run`。
 //!
 //! 关键设计决策：
 //! - `WizardState` 跨步共享，每步只关心自己读写哪些字段

@@ -3,8 +3,8 @@ rust_i18n::i18n!("locales", fallback = "en-US");
 use std::fs;
 use std::io::Write;
 
-use eflow::common::types::RiskLevel;
-use eflow::infrastructure::profile::{Profile, ProfileRegistry, Skill};
+use qingbird_code::common::types::RiskLevel;
+use qingbird_code::infrastructure::profile::{Profile, ProfileRegistry, Skill};
 
 fn write_file(dir: &std::path::Path, name: &str, content: &str) -> std::path::PathBuf {
     let path = dir.join(name);
@@ -55,7 +55,10 @@ fn test_load_profile_from_valid_yaml() {
     assert_eq!(p.description, "软件开发专家");
     assert!(p.system_prompt.contains("senior engineer"));
     assert!(p.system_prompt.contains("quality and safety"));
-    assert_eq!(p.default_model, eflow::common::types::ModelTier::Medium);
+    assert_eq!(
+        p.default_model,
+        qingbird_code::common::types::ModelTier::Medium
+    );
     assert_eq!(p.skills, vec!["code_review".to_string()]);
     assert_eq!(
         p.permission_boundary.allowed_paths,
@@ -83,7 +86,10 @@ system_prompt: hi
     reg.load_profiles(dir.path()).unwrap();
 
     let p = reg.get_profile("minimalist").unwrap();
-    assert_eq!(p.default_model, eflow::common::types::ModelTier::Medium);
+    assert_eq!(
+        p.default_model,
+        qingbird_code::common::types::ModelTier::Medium
+    );
     assert!(p.skills.is_empty());
     assert!(p.permission_boundary.allowed_paths.is_empty());
 }
@@ -253,7 +259,7 @@ fn test_profile_clone_works() {
         name: "x".into(),
         description: "y".into(),
         system_prompt: "z".into(),
-        default_model: eflow::common::types::ModelTier::Light,
+        default_model: qingbird_code::common::types::ModelTier::Light,
         skills: vec!["a".into()],
         permission_boundary: Default::default(),
     };

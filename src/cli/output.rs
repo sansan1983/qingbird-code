@@ -49,7 +49,7 @@ mod tests {
     // v1.3.2 T2: stdout/stderr 协议单元测试
     //
     // 简化测试：只验证 4 个方法能调（完整 capture 行为由 tests/gui_smoke_test.py
-    // 在真实 eflow 进程上验证——这里调 stdout/stderr 没法在 unit test 干净 capture）
+    // 在真实 qingbird 进程上验证——这里调 stdout/stderr 没法在 unit test 干净 capture）
 
     #[test]
     fn json_outputs_to_stdout_with_newline() {

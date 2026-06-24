@@ -2,8 +2,8 @@ rust_i18n::i18n!("locales", fallback = "en-US");
 
 use std::time::{Duration, SystemTime};
 
-use eflow::common::types::{Importance, MemoryCategory};
-use eflow::infrastructure::memory::{
+use qingbird_code::common::types::{Importance, MemoryCategory};
+use qingbird_code::infrastructure::memory::{
     CompositeMemory, MemoryEntry, MemoryManager, ProjectMemory, RecallScope, WorkingMemory,
 };
 

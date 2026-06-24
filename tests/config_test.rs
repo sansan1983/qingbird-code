@@ -1,6 +1,6 @@
 rust_i18n::i18n!("locales", fallback = "en-US");
 
-use eflow::infrastructure::config::load_config;
+use qingbird_code::infrastructure::config::load_config;
 use std::io::Write;
 
 #[test]
@@ -112,7 +112,7 @@ profiles:
   default: developer
   available: [developer]
 "#;
-    let cfg: eflow::infrastructure::config::EflowConfig =
+    let cfg: qingbird_code::infrastructure::config::EflowConfig =
         serde_yaml::from_str(yaml).expect("parse ok");
     assert!(cfg.llm.cache.l2_enabled);
     assert_eq!(cfg.llm.cache.l2_ttl_days, 7);

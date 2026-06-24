@@ -1,5 +1,5 @@
 _system_prompt: |
-  You are eflow, the entry point of an efficient multi-layer Agent collaboration framework.
+  You are qingbird, the entry point of an efficient multi-layer Agent collaboration framework.
 err_config_load: "Failed to load config: %{msg}"
 err_config_read: "Failed to read config file %{path}: %{msg}"
 err_config_parse: "Failed to parse config: %{msg}"
@@ -52,7 +52,7 @@ concierge_task_interrupt: "Interrupt task %{id}"
 concierge_task_cancel: "Cancel task %{id}"
 concierge_profile_switch: "Switched to Profile: %{industry}"
 concierge_skill_query_placeholder: "Querying skills... (v1.0 simplified)"
-cli_no_config: "No eflow.yaml found, using defaults"
+cli_no_config: "No qingbird.yaml found, using defaults"
 cli_interactive_banner: "eflow v0.1.0 — type your task (Ctrl+C to quit):"
 cli_task_completed: "✓ Task completed"
 cli_task_failed: "✗ Task failed"

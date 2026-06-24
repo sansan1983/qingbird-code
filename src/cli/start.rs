@@ -1,4 +1,4 @@
-//! `eflow session start` —— 持续运行的 headless 模式
+//! `qingbird session start` —— 持续运行的 headless 模式
 //!
 //! 启动流程：
 //! 1. 加载 config
@@ -74,7 +74,7 @@ pub async fn run(config_path: Option<PathBuf>, lang: Option<String>) -> i32 {
     let events = EventChannel::new();
 
     let provider_dir = dirs::config_dir()
-        .map(|p| p.join("eflow").join("providers"))
+        .map(|p| p.join("qingbird").join("providers"))
         .unwrap_or_else(|| PathBuf::from("./providers"));
     let _ = std::fs::create_dir_all(&provider_dir);
     let llm_router = match LlmRouter::from_config(&eflow_config, &provider_dir) {

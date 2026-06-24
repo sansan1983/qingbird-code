@@ -1,15 +1,15 @@
 [package]
-name = "eflow"
-version = "1.4.0"
+name = "qingbird-code"
+version = "0.1.0"
 edition = "2024"
-description = "Efficient Flow - Multi-layer Agent Collaboration Framework"
+description = "青鸟 (qingbird) - Multi-layer Agent Collaboration Framework"
 
 [[bin]]
-name = "eflow"
+name = "qingbird"
 path = "src/main.rs"
 
 [lib]
-name = "eflow"
+name = "qingbird_code"
 path = "src/lib.rs"
 
 [dependencies]

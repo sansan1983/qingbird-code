@@ -16,15 +16,15 @@ impl WizardStep for WelcomeStep {
         "welcome"
     }
     fn title(&self) -> &'static str {
-        "欢迎使用 eflow — 首次配置向导"
+        "欢迎使用 qingbird — 首次配置向导"
     }
     fn view_model(&self, _state: &WizardState) -> StepViewModel {
         StepViewModel {
-            title: "欢迎使用 eflow — 首次配置向导".into(),
+            title: "欢迎使用 qingbird — 首次配置向导".into(),
             lines: vec![
                 LineVM { text: "".into() },
                 LineVM {
-                    text: "欢迎使用 eflow — 首次配置向导".into(),
+                    text: "欢迎使用 qingbird — 首次配置向导".into(),
                 },
                 LineVM { text: "".into() },
                 LineVM {
@@ -101,7 +101,7 @@ mod tests {
         let step = WelcomeStep;
         let state = WizardState::default();
         let vm = step.view_model(&state);
-        assert!(vm.title.contains("eflow"));
+        assert!(vm.title.contains("qingbird"));
         assert!(
             vm.lines.len() >= 5,
             "welcome step should have multiple lines"

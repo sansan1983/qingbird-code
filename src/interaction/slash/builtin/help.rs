@@ -35,7 +35,7 @@ impl SlashCommand for HelpCmd {
         for (name, help) in &self.commands {
             text.push_str(&format!("  /{:<12} {}\n", name, help));
         }
-        text.push_str("\n运行 `eflow init` 进入配置向导");
+        text.push_str("\n运行 `qingbird init` 进入配置向导");
         Ok(SlashOutput::Text(text))
     }
 }

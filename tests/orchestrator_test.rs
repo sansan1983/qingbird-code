@@ -1,17 +1,17 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use eflow::application::orchestrator::Orchestrator;
-use eflow::capability::pool::SubagentPool;
-use eflow::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
-use eflow::common::error::Result;
-use eflow::common::types::*;
-use eflow::infrastructure::config::{
+use qingbird_code::application::orchestrator::Orchestrator;
+use qingbird_code::capability::pool::SubagentPool;
+use qingbird_code::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
+use qingbird_code::common::error::Result;
+use qingbird_code::common::types::*;
+use qingbird_code::infrastructure::config::{
     CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
     RoutingConfig, SecurityConfig,
 };
-use eflow::infrastructure::event::{Event, EventChannel};
-use eflow::infrastructure::llm::LlmRouter;
+use qingbird_code::infrastructure::event::{Event, EventChannel};
+use qingbird_code::infrastructure::llm::LlmRouter;
 use tokio::sync::Mutex;
 
 // 默认中文 locale
@@ -248,8 +248,8 @@ async fn orchestrator_uses_subagent_pool() {
 
 #[test]
 fn orchestrator_compute_step_layers_groups_by_dependency() {
-    use eflow::application::orchestrator::Orchestrator;
-    use eflow::common::types::{PlannedStep, TaskPlan};
+    use qingbird_code::application::orchestrator::Orchestrator;
+    use qingbird_code::common::types::{PlannedStep, TaskPlan};
     use uuid::Uuid;
 
     // 构造一个 5 步骤计划：
@@ -319,8 +319,8 @@ fn orchestrator_compute_step_layers_groups_by_dependency() {
 
 #[test]
 fn orchestrator_parallel_dispatch_witness_single_layer() {
-    use eflow::application::orchestrator::Orchestrator;
-    use eflow::common::types::{PlannedStep, TaskPlan};
+    use qingbird_code::application::orchestrator::Orchestrator;
+    use qingbird_code::common::types::{PlannedStep, TaskPlan};
     use uuid::Uuid;
 
     let plan = TaskPlan {

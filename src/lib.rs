@@ -1,4 +1,4 @@
-//! eflow - Efficient Flow Agent Collaboration Framework
+//! qingbird - Efficient Flow Agent Collaboration Framework
 //!
 //! A multi-layer Agent collaboration framework with zero-blocking dialogue.
 

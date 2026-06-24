@@ -118,7 +118,7 @@ impl DefaultRenderEngine {
 
         // Header
         let mut header_spans = vec![DrawCommand::Text {
-            content: format!("eflow | profile: {}", vm.header.profile),
+            content: format!("qingbird | profile: {}", vm.header.profile),
             style: TextStyle::primary(),
         }];
         if !vm.header.configured {

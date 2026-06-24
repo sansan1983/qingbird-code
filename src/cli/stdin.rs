@@ -3,9 +3,9 @@
 //! 5 个 action JSON：send / end / level / lang / help
 //!
 //! 关键设计决策：
-//! - `Send` 的 task_id 可选——GUI 不必先知道 task_id；eflow 自动生成
+//! - `Send` 的 task_id 可选——GUI 不必先知道 task_id；qingbird 自动生成
 //! - 用 `#[serde(tag = "action")]` 做 enum 标签——JSON 直观
-//! - **解析失败不退出**——stdin 网络抖动时 GUI 偶尔发坏 JSON 不该让 eflow 死
+//! - **解析失败不退出**——stdin 网络抖动时 GUI 偶尔发坏 JSON 不该让 qingbird 死
 
 use tokio::io::{AsyncBufReadExt, BufReader};
 use uuid::Uuid;

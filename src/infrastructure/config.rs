@@ -103,7 +103,8 @@ pub fn find_config() -> Option<PathBuf> {
 
     let system_dir = if cfg!(windows) {
         // Windows: %PROGRAMDATA%\eflow\eflow.yaml
-        std::env::var_os("PROGRAMDATA").map(|p| PathBuf::from(p).join("eflow").join("eflow.yaml"))
+        std::env::var_os("PROGRAMDATA")
+            .map(|p| PathBuf::from(p).join("eflow").join("eflow.yaml"))
     } else {
         // Unix: /etc/eflow/eflow.yaml
         Some(PathBuf::from("/etc/eflow/eflow.yaml"))

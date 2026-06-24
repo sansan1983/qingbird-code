@@ -8,7 +8,7 @@ const EVENT_BUFFER_SIZE: usize = 256;
 /// 系统事件
 #[derive(Debug, Clone)]
 pub enum Event {
-    /// v1.3.2 增量：start 启动后第一行输出，GUI 用此判断"eflow 启动完成"
+    /// v1.3.2 增量：start 启动后第一行输出，GUI 用此判断"qingbird 启动完成"
     /// —— v1.3.2 当前未在 event channel 流通（start.rs 手写 NDJSON）；
     /// 保留 variant 以便将来按事件流分发时复用。
     SystemReady {

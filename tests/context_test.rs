@@ -1,9 +1,9 @@
 rust_i18n::i18n!("locales", fallback = "en-US");
 
 use chrono::Utc;
-use eflow::common::types::ActionRecord;
-use eflow::infrastructure::context::{ContextCompressor, ContextRef};
-use eflow::infrastructure::locale;
+use qingbird_code::common::types::ActionRecord;
+use qingbird_code::infrastructure::context::{ContextCompressor, ContextRef};
+use qingbird_code::infrastructure::locale;
 
 // 切换到中文，使 compressor 输出的中文字符串可被断言
 // （每个集成测试 binary 是独立进程，全局 locale 互不干扰）

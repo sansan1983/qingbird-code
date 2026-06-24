@@ -138,13 +138,13 @@ pub fn run() -> i32 {
     );
 
     println!("\n  ✓ 配置已保存");
-    println!("  重新运行 eflow 开始使用。\n");
+    println!("  重新运行 qingbird 开始使用。\n");
     0
 }
 
 pub fn check_llm_configured() -> bool {
     let provider_dir = dirs::config_dir()
-        .map(|p| p.join("eflow").join("providers"))
+        .map(|p| p.join("qingbird").join("providers"))
         .unwrap_or_else(|| std::path::PathBuf::from("./providers"));
     if let Ok(entries) = std::fs::read_dir(&provider_dir) {
         for entry in entries.flatten() {
@@ -188,7 +188,7 @@ fn write_provider(
 
     let home = dirs::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("eflow")
+        .join("qingbird")
         .join("providers");
     let _ = std::fs::create_dir_all(&home);
 
@@ -213,7 +213,7 @@ default_model: "{}"
 }
 
 fn update_eflow_yaml(provider_id: &str) {
-    let path = std::path::Path::new("eflow.yaml");
+    let path = std::path::Path::new("qingbird.yaml");
     if !path.exists() {
         return;
     }

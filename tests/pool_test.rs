@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use eflow::capability::pool::SubagentPool;
-use eflow::common::types::Role;
+use qingbird_code::capability::pool::SubagentPool;
+use qingbird_code::common::types::Role;
 
 #[tokio::test]
 async fn pool_dispatches_concurrently_within_capacity() {

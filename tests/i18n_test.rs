@@ -1,6 +1,6 @@
 rust_i18n::i18n!("locales", fallback = "en-US");
 
-use eflow::infrastructure::locale;
+use qingbird_code::infrastructure::locale;
 
 #[test]
 #[serial_test::serial]
@@ -81,7 +81,7 @@ fn test_translations_exist_for_all_keys() {
 #[test]
 #[serial_test::serial]
 fn test_context_compressor_uses_current_locale() {
-    use eflow::infrastructure::context::ContextCompressor;
+    use qingbird_code::infrastructure::context::ContextCompressor;
 
     locale::init(Some("en-US"));
     let s = ContextCompressor::compress_file_content("test.rs", "a\nb\nc");
@@ -110,7 +110,7 @@ fn test_context_compressor_uses_current_locale() {
 #[test]
 #[serial_test::serial]
 fn test_config_error_translates() {
-    use eflow::infrastructure::config::load_config;
+    use qingbird_code::infrastructure::config::load_config;
 
     locale::init(Some("zh-CN"));
     let dir = tempfile::tempdir().unwrap();

@@ -26,17 +26,17 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use eflow::application::orchestrator::Orchestrator;
-use eflow::capability::pool::SubagentPool;
-use eflow::capability::tools::ToolRegistry;
-use eflow::common::error::Result;
-use eflow::common::types::{ModelTier, RiskLevel, TaskSpec};
-use eflow::infrastructure::config::{
+use qingbird_code::application::orchestrator::Orchestrator;
+use qingbird_code::capability::pool::SubagentPool;
+use qingbird_code::capability::tools::ToolRegistry;
+use qingbird_code::common::error::Result;
+use qingbird_code::common::types::{ModelTier, RiskLevel, TaskSpec};
+use qingbird_code::infrastructure::config::{
     CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
     RoutingConfig, SecurityConfig,
 };
-use eflow::infrastructure::event::EventChannel;
-use eflow::infrastructure::llm::{
+use qingbird_code::infrastructure::event::EventChannel;
+use qingbird_code::infrastructure::llm::{
     ChatChunk, ChatRequest, ChatResponse, LlmProvider, LlmRouter, TokenUsage,
 };
 
@@ -67,7 +67,9 @@ read_file: read input E"
         &self,
         _request: ChatRequest,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<ChatChunk>>> {
-        Err(eflow::common::error::EflowError::Internal("n/a".into()))
+        Err(qingbird_code::common::error::EflowError::Internal(
+            "n/a".into(),
+        ))
     }
     fn supports_prefix_cache(&self) -> bool {
         false
@@ -188,7 +190,7 @@ async fn orchestrator_parallel_execution_runs_through_full_pipeline() {
 async fn orchestrator_with_pool_construction_does_not_panic() {
     // v1.2 E6: 验证 Orchestrator::with_pool + SubagentPool 8 worker 集成不破
     // ——不跑完整 execute，只验证集成可用 + pool dispatch 可工作
-    use eflow::common::types::Role;
+    use qingbird_code::common::types::Role;
 
     // SAFETY: 单线程测试构造时清 env var，无 race
     unsafe {

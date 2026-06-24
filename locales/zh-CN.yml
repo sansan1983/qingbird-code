@@ -1,5 +1,5 @@
 _system_prompt: |
-  你是 eflow，一个高效的多层 Agent 协作框架的入口。
+  你是 qingbird，一个高效的多层 Agent 协作框架的入口。
 err_config_load: "加载配置失败: %{msg}"
 err_config_read: "读取配置文件 %{path} 失败: %{msg}"
 err_config_parse: "解析配置失败: %{msg}"
@@ -52,7 +52,7 @@ concierge_task_interrupt: "中断任务 %{id}"
 concierge_task_cancel: "取消任务 %{id}"
 concierge_profile_switch: "切换到 Profile: %{industry}"
 concierge_skill_query_placeholder: "查询 Skills... (v1.0 简化)"
-cli_no_config: "未找到 eflow.yaml，使用默认值"
+cli_no_config: "未找到 qingbird.yaml，使用默认值"
 cli_interactive_banner: "eflow v0.1.0 — 输入你的任务 (Ctrl+C 退出):"
 cli_task_completed: "✓ 任务完成"
 cli_task_failed: "✗ 任务失败"

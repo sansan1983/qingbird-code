@@ -5,7 +5,7 @@
 //!
 //! 布局（ratatui 4 段：1 行 header + main 区 + 1 行 status + 1 行 prompt）：
 //! ┌─────────────────────────────────────────┐
-//! │ Header: eflow | profile | cache hit rate │  ← 1 行
+//! │ Header: qingbird | profile | cache hit rate │  ← 1 行
 //! ├─────────────────────────────────────────┤
 //! │                                         │
 //! │ Messages / Events (滚动)                │  ← main 区

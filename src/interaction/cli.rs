@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 
-/// eflow — Efficient Flow Agent Framework
+/// qingbird — Efficient Flow Agent Framework
 #[derive(Parser, Debug)]
-#[command(name = "eflow")]
+#[command(name = "qingbird")]
 #[command(version = "0.1.0")]
 #[command(about = "Multi-layer Agent Collaboration Framework", long_about = None)]
 pub struct Cli {
@@ -27,7 +27,7 @@ pub struct Cli {
     pub lang: Option<String>,
 }
 
-/// eflow 子命令
+/// qingbird 子命令
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// 运行配置向导
@@ -41,7 +41,7 @@ pub enum Command {
     },
 }
 
-/// eflow session 子命令
+/// qingbird session 子命令
 #[derive(Subcommand, Debug)]
 pub enum SessionAction {
     /// 启动 headless 持续运行模式（NDJSON stdio 契约）

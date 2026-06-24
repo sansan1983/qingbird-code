@@ -4,20 +4,20 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::Utc;
-use eflow::capability::blackboard::Blackboard;
-use eflow::capability::decisioner::Decisioner;
-use eflow::capability::executor::Executor;
-use eflow::capability::feedbacker::Feedbacker;
-use eflow::capability::subagent::Subagent;
-use eflow::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
-use eflow::common::error::Result;
-use eflow::common::types::*;
-use eflow::infrastructure::config::{
+use qingbird_code::capability::blackboard::Blackboard;
+use qingbird_code::capability::decisioner::Decisioner;
+use qingbird_code::capability::executor::Executor;
+use qingbird_code::capability::feedbacker::Feedbacker;
+use qingbird_code::capability::subagent::Subagent;
+use qingbird_code::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
+use qingbird_code::common::error::Result;
+use qingbird_code::common::types::*;
+use qingbird_code::infrastructure::config::{
     CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
     RoutingConfig, SecurityConfig,
 };
-use eflow::infrastructure::llm::LlmRouter;
-use eflow::infrastructure::locale;
+use qingbird_code::infrastructure::llm::LlmRouter;
+use qingbird_code::infrastructure::locale;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 

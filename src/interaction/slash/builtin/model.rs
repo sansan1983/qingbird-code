@@ -47,7 +47,7 @@ impl SlashCommand for ModelCmd {
         let router = ctx.router.lock().await;
         if router.provider_for(ModelTier::Light).is_none() {
             return Err(EflowError::Config(
-                "无法切换模型：未配置 LLM provider。运行 eflow init 配置".into(),
+                "无法切换模型：未配置 LLM provider。运行 qingbird init 配置".into(),
             ));
         }
 

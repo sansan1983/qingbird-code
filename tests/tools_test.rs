@@ -1,9 +1,9 @@
 rust_i18n::i18n!("locales", fallback = "en-US");
 
-use eflow::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
-use eflow::common::error::EflowError;
-use eflow::common::types::RiskLevel;
-use eflow::infrastructure::locale;
+use qingbird_code::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
+use qingbird_code::common::error::EflowError;
+use qingbird_code::common::types::RiskLevel;
+use qingbird_code::infrastructure::locale;
 use std::fs;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -32,7 +32,9 @@ fn test_registry_new_is_empty() {
 #[test]
 fn test_registry_register_and_get() {
     let mut reg = ToolRegistry::new();
-    reg.register(Arc::new(eflow::capability::tools::file::ReadFileTool));
+    reg.register(Arc::new(
+        qingbird_code::capability::tools::file::ReadFileTool,
+    ));
     let got = reg.get("read_file");
     assert!(got.is_some());
     assert_eq!(got.unwrap().definition().name, "read_file");
@@ -41,8 +43,12 @@ fn test_registry_register_and_get() {
 #[test]
 fn test_registry_definitions_returns_all() {
     let mut reg = ToolRegistry::new();
-    reg.register(Arc::new(eflow::capability::tools::file::ReadFileTool));
-    reg.register(Arc::new(eflow::capability::tools::file::WriteFileTool));
+    reg.register(Arc::new(
+        qingbird_code::capability::tools::file::ReadFileTool,
+    ));
+    reg.register(Arc::new(
+        qingbird_code::capability::tools::file::WriteFileTool,
+    ));
     let defs = reg.definitions();
     assert_eq!(defs.len(), 2);
     let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
@@ -128,7 +134,7 @@ async fn test_read_file_success() {
     let dir = tempfile::tempdir().unwrap();
     let path = write_file(dir.path(), "hello.txt", "line1\nline2\nline3");
 
-    let tool = eflow::capability::tools::file::ReadFileTool;
+    let tool = qingbird_code::capability::tools::file::ReadFileTool;
     let out = tool
         .execute(serde_json::json!({"path": path.to_str().unwrap()}))
         .await
@@ -143,14 +149,14 @@ async fn test_read_file_success() {
 
 #[tokio::test]
 async fn test_read_file_missing_path_param() {
-    let tool = eflow::capability::tools::file::ReadFileTool;
+    let tool = qingbird_code::capability::tools::file::ReadFileTool;
     let err = tool.execute(serde_json::json!({})).await.unwrap_err();
     assert!(matches!(err, EflowError::Tool(_)));
 }
 
 #[tokio::test]
 async fn test_read_file_not_found() {
-    let tool = eflow::capability::tools::file::ReadFileTool;
+    let tool = qingbird_code::capability::tools::file::ReadFileTool;
     let err = tool
         .execute(serde_json::json!({"path": "/nonexistent/abc/xyz.txt"}))
         .await
@@ -165,7 +171,7 @@ async fn test_write_file_success() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("out.txt");
 
-    let tool = eflow::capability::tools::file::WriteFileTool;
+    let tool = qingbird_code::capability::tools::file::WriteFileTool;
     let out = tool
         .execute(serde_json::json!({
             "path": path.to_str().unwrap(),
@@ -184,7 +190,7 @@ async fn test_write_file_success() {
 async fn test_write_file_missing_content_param() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("x.txt");
-    let tool = eflow::capability::tools::file::WriteFileTool;
+    let tool = qingbird_code::capability::tools::file::WriteFileTool;
     let err = tool
         .execute(serde_json::json!({"path": path.to_str().unwrap()}))
         .await
@@ -197,7 +203,7 @@ async fn test_write_file_missing_content_param() {
 #[tokio::test]
 async fn test_execute_command_echo_hello() {
     // 用 `true` 作为跨平台 smoke test（Windows/Unix 都有 `true`，退出码 0）
-    let tool = eflow::capability::tools::command::ExecuteCommandTool;
+    let tool = qingbird_code::capability::tools::command::ExecuteCommandTool;
     let cmd = if cfg!(windows) { "cmd" } else { "true" };
     let args: Vec<&str> = if cfg!(windows) {
         vec!["/c", "echo", "hello"]
@@ -219,7 +225,7 @@ async fn test_execute_command_echo_hello() {
 
 #[tokio::test]
 async fn test_execute_command_captures_exit_code() {
-    let tool = eflow::capability::tools::command::ExecuteCommandTool;
+    let tool = qingbird_code::capability::tools::command::ExecuteCommandTool;
     // 跨平台：让进程成功启动但返回非零退出码
     let (cmd, args): (&str, Vec<&str>) = if cfg!(windows) {
         ("cmd", vec!["/c", "exit", "1"])
@@ -240,7 +246,7 @@ async fn test_execute_command_captures_exit_code() {
 
 #[tokio::test]
 async fn test_execute_command_missing_command_param() {
-    let tool = eflow::capability::tools::command::ExecuteCommandTool;
+    let tool = qingbird_code::capability::tools::command::ExecuteCommandTool;
     let err = tool.execute(serde_json::json!({})).await.unwrap_err();
     assert!(matches!(err, EflowError::Tool(_)));
 }
@@ -257,7 +263,7 @@ async fn test_search_code_finds_pattern() {
     );
     write_file(dir.path(), "b.toml", "name = \"x\"\n");
 
-    let tool = eflow::capability::tools::search::SearchCodeTool;
+    let tool = qingbird_code::capability::tools::search::SearchCodeTool;
     let out = tool
         .execute(serde_json::json!({
             "pattern": "fn (foo|bar)",
@@ -280,7 +286,7 @@ async fn test_search_code_no_match() {
     let dir = tempfile::tempdir().unwrap();
     write_file(dir.path(), "a.rs", "fn foo() {}\n");
 
-    let tool = eflow::capability::tools::search::SearchCodeTool;
+    let tool = qingbird_code::capability::tools::search::SearchCodeTool;
     let out = tool
         .execute(serde_json::json!({
             "pattern": "nonexistent_pattern_xyz",
@@ -300,7 +306,7 @@ async fn test_search_code_filters_by_file_type() {
     write_file(dir.path(), "a.rs", "TARGET\n");
     write_file(dir.path(), "b.txt", "TARGET\n");
 
-    let tool = eflow::capability::tools::search::SearchCodeTool;
+    let tool = qingbird_code::capability::tools::search::SearchCodeTool;
     let out = tool
         .execute(serde_json::json!({
             "pattern": "TARGET",
@@ -323,7 +329,7 @@ async fn test_search_code_recursive_into_subdirs() {
     fs::create_dir_all(&sub).unwrap();
     write_file(&sub, "deep.rs", "DEEP_MATCH here too\n");
 
-    let tool = eflow::capability::tools::search::SearchCodeTool;
+    let tool = qingbird_code::capability::tools::search::SearchCodeTool;
     let out = tool
         .execute(serde_json::json!({
             "pattern": "DEEP_MATCH",
@@ -343,7 +349,7 @@ async fn test_search_code_skips_large_files() {
     write_file(dir.path(), "big.rs", &big_content);
     write_file(dir.path(), "small.rs", "SMALL_MATCH\n");
 
-    let tool = eflow::capability::tools::search::SearchCodeTool;
+    let tool = qingbird_code::capability::tools::search::SearchCodeTool;
     let out = tool
         .execute(serde_json::json!({
             "pattern": "SMALL_MATCH",
@@ -358,7 +364,7 @@ async fn test_search_code_skips_large_files() {
 
 #[tokio::test]
 async fn test_search_code_invalid_regex() {
-    let tool = eflow::capability::tools::search::SearchCodeTool;
+    let tool = qingbird_code::capability::tools::search::SearchCodeTool;
     let err = tool
         .execute(serde_json::json!({"pattern": "[unclosed"}))
         .await
@@ -368,7 +374,7 @@ async fn test_search_code_invalid_regex() {
 
 #[tokio::test]
 async fn test_search_code_invalid_path() {
-    let tool = eflow::capability::tools::search::SearchCodeTool;
+    let tool = qingbird_code::capability::tools::search::SearchCodeTool;
     let err = tool
         .execute(serde_json::json!({
             "pattern": "x",
@@ -381,7 +387,7 @@ async fn test_search_code_invalid_path() {
 
 #[tokio::test]
 async fn test_search_code_missing_pattern() {
-    let tool = eflow::capability::tools::search::SearchCodeTool;
+    let tool = qingbird_code::capability::tools::search::SearchCodeTool;
     let err = tool.execute(serde_json::json!({})).await.unwrap_err();
     assert!(matches!(err, EflowError::Tool(_)));
 }

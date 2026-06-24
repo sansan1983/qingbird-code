@@ -1,0 +1,27 @@
+core:
+  language: zh-CN
+  timezone: Asia/Shanghai
+
+llm:
+  # v1.3+ provider 配置在 ~/.eflow/providers/<id>.yaml
+  routing:
+    strong: deepseek
+    medium: deepseek
+    light: deepseek
+
+memory:
+  working_memory_limit: 1000
+  project_db_path: ./data/project.db
+  user_db_path: ./data/user.db
+  cleanup_interval_hours: 24
+
+security:
+  risk_threshold: L2
+  allowed_paths:
+    - ~/projects
+    - ~/documents
+
+profiles:
+  default: developer
+  available:
+    - developer

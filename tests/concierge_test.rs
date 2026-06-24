@@ -3,18 +3,18 @@ rust_i18n::i18n!("locales", fallback = "en-US");
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use eflow::application::concierge::Concierge;
-use eflow::application::orchestrator::Orchestrator;
-use eflow::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
-use eflow::common::error::Result;
-use eflow::common::types::*;
-use eflow::infrastructure::config::{
+use qingbird_code::application::concierge::Concierge;
+use qingbird_code::application::orchestrator::Orchestrator;
+use qingbird_code::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
+use qingbird_code::common::error::Result;
+use qingbird_code::common::types::*;
+use qingbird_code::infrastructure::config::{
     CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
     RoutingConfig, SecurityConfig,
 };
-use eflow::infrastructure::event::{Event, EventChannel};
-use eflow::infrastructure::llm::LlmRouter;
-use eflow::infrastructure::memory::CompositeMemory;
+use qingbird_code::infrastructure::event::{Event, EventChannel};
+use qingbird_code::infrastructure::llm::LlmRouter;
+use qingbird_code::infrastructure::memory::CompositeMemory;
 // (ProfileRegistry 已被 Concierge 删，测试不再需要)
 use tokio::sync::Mutex;
 
@@ -357,7 +357,7 @@ async fn concierge_recalls_memory_before_dispatching_task() {
     // - 复用 make_orchestrator + make_memory
     // - 把 make_memory 的 Arc 多 clone 一份用于预置条目
     // - 断言响应走 with_memory 分支（中文"召回"字面）
-    use eflow::infrastructure::memory::MemoryEntry;
+    use qingbird_code::infrastructure::memory::MemoryEntry;
     let (orch, events) = make_orchestrator();
     let orch = Arc::new(Mutex::new(orch));
     let mem = make_memory();
