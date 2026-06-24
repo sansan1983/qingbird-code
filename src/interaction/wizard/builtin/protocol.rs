@@ -6,7 +6,6 @@ use async_trait::async_trait;
 use crossterm::event::{KeyCode, KeyEvent};
 use rust_i18n::t;
 
-use crate::infrastructure::llm::types::ProtocolKind;
 use crate::interaction::render::view_model::*;
 use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 
@@ -66,8 +65,8 @@ impl WizardStep for ProtocolStep {
             return StepAction::Next;
         }
         let protocol = match key.code {
-            KeyCode::Char('1') => ProtocolKind::OpenaiCompatible,
-            KeyCode::Char('2') => ProtocolKind::AnthropicCompatible,
+            KeyCode::Char('1') => "openai_compatible".to_string(),
+            KeyCode::Char('2') => "anthropic_compatible".to_string(),
             KeyCode::Esc => return StepAction::Cancel,
             _ => return StepAction::Stay,
         };
@@ -85,7 +84,6 @@ impl WizardStep for ProtocolStep {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::llm::types::ProtocolKind;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     #[test]
@@ -95,7 +93,6 @@ mod tests {
             skip_protocol_step: true,
             ..WizardState::default()
         };
-        // 任何 key 都应返回 Next
         let key = KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE);
         let action = step.on_key(key, &mut state);
         assert!(matches!(action, StepAction::Next));
@@ -108,9 +105,9 @@ mod tests {
         let key = KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE);
         let action = step.on_key(key, &mut state);
         assert!(matches!(action, StepAction::Next));
-        assert!(matches!(
-            state.provider_protocol,
-            Some(ProtocolKind::OpenaiCompatible)
-        ));
+        assert_eq!(
+            state.provider_protocol.as_deref(),
+            Some("openai_compatible")
+        );
     }
 }

@@ -7,7 +7,7 @@ use crate::common::error::Result;
 use crate::common::types::{
     ActionRecord, ActionResult, IntentType, ModelTier, RiskLevel, TaskStep, ToolCallSummary,
 };
-use crate::infrastructure::llm::cache::cache_key_for_step;
+use crate::infrastructure::llm::cache_key::cache_key_for_step;
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 use rust_i18n::t;
 
@@ -84,7 +84,7 @@ impl Executor {
         step: &TaskStep,
         risk: RiskLevel,
     ) -> Result<ActionResult> {
-        let mut llm = self.llm.lock().await;
+        let llm = self.llm.lock().await;
 
         let messages = vec![Message::user(format!(
             "任务: {}\n\n请完成任务并提供结果。",

@@ -30,10 +30,10 @@ use qingbird_code::application::orchestrator::Orchestrator;
 use qingbird_code::capability::pool::SubagentPool;
 use qingbird_code::capability::tools::ToolRegistry;
 use qingbird_code::common::error::Result;
-use qingbird_code::common::types::{ModelTier, RiskLevel, TaskSpec};
+use qingbird_code::common::types::{RiskLevel, TaskSpec};
 use qingbird_code::infrastructure::config::{
-    CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
-    RoutingConfig, SecurityConfig,
+    CacheConfig, CoreConfig, DeepseekConfig, EflowConfig, LlmConfig, MemoryConfig,
+    ProfileListConfig, SecurityConfig,
 };
 use qingbird_code::infrastructure::event::EventChannel;
 use qingbird_code::infrastructure::llm::{
@@ -42,6 +42,7 @@ use qingbird_code::infrastructure::llm::{
 
 /// 模拟 LLM Provider：每次 chat 睡 200ms 后返回固定 5 行 plan（让 Orchestrator.decompose
 /// 解析出 5 步链式 plan）
+#[allow(dead_code)]
 struct SlowProvider;
 
 #[async_trait]
@@ -71,9 +72,6 @@ read_file: read input E"
             "n/a".into(),
         ))
     }
-    fn supports_prefix_cache(&self) -> bool {
-        false
-    }
     fn name(&self) -> &'static str {
         "slow"
     }
@@ -86,10 +84,13 @@ fn make_test_config() -> EflowConfig {
             timezone: "UTC".into(),
         },
         llm: LlmConfig {
-            routing: RoutingConfig {
-                strong: "anthropic".into(),
-                medium: "anthropic".into(),
-                light: "anthropic".into(),
+            deepseek: DeepseekConfig {
+                api_key: Some("test-key".into()),
+                base_url: Some("http://localhost:9999".into()),
+                default_model: Some("deepseek-chat".into()),
+                timeout_secs: 5,
+                max_retries: 0,
+                retry_backoff_ms: 100,
             },
             cache: CacheConfig {
                 l1_enabled: false, // v1.2 E6: 关 cache 避免短路
@@ -121,15 +122,9 @@ fn make_router_with_slow_provider() -> Arc<tokio::sync::Mutex<LlmRouter>> {
         std::env::remove_var("ANTHROPIC_BASE_URL");
         std::env::remove_var("OPENAI_BASE_URL");
     }
-    // 显式构造 config（保留 helper 给未来用例用，目前 placeholder router 不需要 config）
-    let _cfg = make_test_config();
-    // 先用 from_config 创建（内部走真实 HTTP——dummy key 会失败）
-    // ——改用 placeholder + inject_test_* 注入 mock provider
-    let mut router = LlmRouter::placeholder();
-    router.inject_test_provider("anthropic".into(), Arc::new(SlowProvider));
-    router.inject_test_routing(ModelTier::Strong, "anthropic".into());
-    router.inject_test_routing(ModelTier::Medium, "anthropic".into());
-    router.inject_test_routing(ModelTier::Light, "anthropic".into());
+    // NOTE: Without mock provider injection, the real DeepSeekProvider
+    // will be used and tests may time out. See Task 9 for proper fix.
+    let router = LlmRouter::from_config(&make_test_config()).unwrap();
     Arc::new(tokio::sync::Mutex::new(router))
 }
 

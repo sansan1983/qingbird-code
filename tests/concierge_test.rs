@@ -9,8 +9,8 @@ use qingbird_code::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolReg
 use qingbird_code::common::error::Result;
 use qingbird_code::common::types::*;
 use qingbird_code::infrastructure::config::{
-    CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
-    RoutingConfig, SecurityConfig,
+    CacheConfig, CoreConfig, DeepseekConfig, EflowConfig, LlmConfig, MemoryConfig,
+    ProfileListConfig, SecurityConfig,
 };
 use qingbird_code::infrastructure::event::{Event, EventChannel};
 use qingbird_code::infrastructure::llm::LlmRouter;
@@ -30,10 +30,13 @@ fn make_test_config() -> EflowConfig {
             timezone: "UTC".into(),
         },
         llm: LlmConfig {
-            routing: RoutingConfig {
-                strong: "anthropic".into(),
-                medium: "anthropic".into(),
-                light: "anthropic".into(),
+            deepseek: DeepseekConfig {
+                api_key: Some("test-key".into()),
+                base_url: Some("http://localhost:9999".into()),
+                default_model: Some("deepseek-chat".into()),
+                timeout_secs: 5,
+                max_retries: 0,
+                retry_backoff_ms: 100,
             },
             cache: CacheConfig {
                 l1_enabled: true,
@@ -67,14 +70,7 @@ fn make_test_router() -> Arc<Mutex<LlmRouter>> {
         std::env::remove_var("OPENAI_BASE_URL");
     }
     let cfg = make_test_config();
-    // v1.3: 把 provider 写到临时 dir（构造测试 provider 注入）
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("anthropic.yaml"),
-        "id: anthropic\ndisplay_name: Anthropic\nprotocol: anthropic_compatible\nbase_url: https://api.anthropic.com\napi_key: test-key\ndefault_model: claude-test\n",
-    )
-    .unwrap();
-    let router = LlmRouter::from_config(&cfg, dir.path()).expect("test router");
+    let router = LlmRouter::from_config(&cfg).expect("test router");
     Arc::new(Mutex::new(router))
 }
 

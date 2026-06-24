@@ -57,7 +57,7 @@ impl Orchestrator {
 
     /// LLM 驱动的任务分解
     pub async fn decompose(&self, task: &TaskSpec) -> Result<TaskPlan> {
-        let mut llm = self.llm.lock().await;
+        let llm = self.llm.lock().await;
 
         // 简单任务：规则分解
         if task.risk_level <= RiskLevel::L1 && task.description.len() < 100 {

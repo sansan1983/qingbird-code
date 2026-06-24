@@ -73,11 +73,7 @@ pub async fn run(config_path: Option<PathBuf>, lang: Option<String>) -> i32 {
     // 3. 初始化基础设施
     let events = EventChannel::new();
 
-    let provider_dir = dirs::config_dir()
-        .map(|p| p.join("qingbird").join("providers"))
-        .unwrap_or_else(|| PathBuf::from("./providers"));
-    let _ = std::fs::create_dir_all(&provider_dir);
-    let llm_router = match LlmRouter::from_config(&eflow_config, &provider_dir) {
+    let llm_router = match LlmRouter::from_config(&eflow_config) {
         Ok(r) => Arc::new(tokio::sync::Mutex::new(r)),
         Err(e) => {
             CliOutput::error(&format!("LLM router init failed: {e}"));

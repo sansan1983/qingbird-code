@@ -9,7 +9,6 @@ use async_trait::async_trait;
 use crossterm::event::{KeyCode, KeyEvent};
 use rust_i18n::t;
 
-use crate::infrastructure::llm::types::ProtocolKind;
 use crate::interaction::render::view_model::*;
 use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 
@@ -18,7 +17,7 @@ pub struct ProviderStep;
 pub struct PresetProvider {
     pub id: &'static str,
     pub display_name: &'static str,
-    pub protocol: ProtocolKind,
+    pub protocol: &'static str,
     pub base_url: &'static str,
     pub default_model: &'static str,
     pub preset_models: &'static [&'static str],
@@ -28,7 +27,7 @@ pub const PRESETS: &[PresetProvider] = &[
     PresetProvider {
         id: "deepseek",
         display_name: "DeepSeek",
-        protocol: ProtocolKind::OpenaiCompatible,
+        protocol: "openai_compatible",
         base_url: "https://api.deepseek.com",
         default_model: "deepseek-v4-pro",
         preset_models: &["deepseek-v4-pro", "deepseek-v4-flash"],
@@ -36,7 +35,7 @@ pub const PRESETS: &[PresetProvider] = &[
     PresetProvider {
         id: "minimax",
         display_name: "MiniMax",
-        protocol: ProtocolKind::OpenaiCompatible,
+        protocol: "openai_compatible",
         base_url: "https://api.minimaxi.com/v1",
         default_model: "MiniMax-M3",
         preset_models: &[
@@ -50,7 +49,7 @@ pub const PRESETS: &[PresetProvider] = &[
     PresetProvider {
         id: "agnes-ai",
         display_name: "Agnes AI",
-        protocol: ProtocolKind::OpenaiCompatible,
+        protocol: "openai_compatible",
         base_url: "https://apihub.agnes-ai.com/v1",
         default_model: "agnes-2.0-flash",
         preset_models: &["agnes-2.0-flash"],
@@ -58,7 +57,7 @@ pub const PRESETS: &[PresetProvider] = &[
     PresetProvider {
         id: "opencode-go",
         display_name: "OpenCode Go",
-        protocol: ProtocolKind::OpenaiCompatible,
+        protocol: "openai_compatible",
         base_url: "https://opencode.ai/zen/go/v1",
         default_model: "glm-5.1",
         preset_models: &[
@@ -81,7 +80,7 @@ pub const PRESETS: &[PresetProvider] = &[
     PresetProvider {
         id: "anthropic",
         display_name: "Anthropic",
-        protocol: ProtocolKind::AnthropicCompatible,
+        protocol: "anthropic_compatible",
         base_url: "https://api.anthropic.com",
         default_model: "claude-sonnet-4-6",
         preset_models: &["claude-sonnet-4-6", "claude-opus-4-8", "claude-haiku-4-5"],
@@ -89,7 +88,7 @@ pub const PRESETS: &[PresetProvider] = &[
     PresetProvider {
         id: "openai",
         display_name: "OpenAI",
-        protocol: ProtocolKind::OpenaiCompatible,
+        protocol: "openai_compatible",
         base_url: "https://api.openai.com/v1",
         default_model: "gpt-4o",
         preset_models: &["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"],
@@ -170,7 +169,7 @@ impl WizardStep for ProviderStep {
             state.skip_protocol_step = true;
             state.provider_id = Some(preset.id.into());
             state.provider_display_name = Some(preset.display_name.into());
-            state.provider_protocol = Some(preset.protocol);
+            state.provider_protocol = Some(preset.protocol.to_string());
             state.provider_base_url = Some(preset.base_url.into());
             state.default_model = Some(preset.default_model.into());
             state.preset_models = preset.preset_models.iter().map(|m| m.to_string()).collect();

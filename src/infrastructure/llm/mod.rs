@@ -1,21 +1,18 @@
 pub mod cache;
-pub mod generic_anthropic;
-pub mod generic_openai;
+pub mod cache_key;
+pub mod deepseek;
 pub mod http_client;
-pub mod preset_loader;
-pub mod registry;
+pub mod l1;
+pub mod l2;
+pub mod lifecycle;
+pub mod retry;
 pub mod router;
+pub mod tier;
 pub mod types;
 
-pub use cache::{CacheKey, CacheValue, ContextProfile, cache_key_for_step, key_hash};
+pub use cache::{CacheKey, CacheValue, ContextProfile};
+pub use cache_key::cache_key_for_step;
+pub use deepseek::DeepseekProvider;
+pub use l2::L2CacheManager;
 pub use router::LlmRouter;
 pub use types::*;
-
-/// 把 `request.model` 中的空字符串替换为 `default_model`（fix v1.0.3 R4 抽离）
-pub(crate) fn pick_model(default_model: &str, request_model: &str) -> String {
-    if request_model.is_empty() {
-        default_model.to_string()
-    } else {
-        request_model.to_string()
-    }
-}

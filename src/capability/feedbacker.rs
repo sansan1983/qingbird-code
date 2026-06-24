@@ -5,7 +5,7 @@ use crate::common::error::Result;
 use crate::common::types::{
     ActionRecord, FeedbackRecord, IntentType, ModelTier, QualityVerdict, RiskLevel, TaskStep,
 };
-use crate::infrastructure::llm::cache::cache_key_for_step;
+use crate::infrastructure::llm::cache_key::cache_key_for_step;
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 use rust_i18n::t;
 
@@ -75,7 +75,7 @@ impl Feedbacker {
         retry_count: u8,
         risk: RiskLevel,
     ) -> Result<QualityVerdict> {
-        let mut llm = self.llm.lock().await;
+        let llm = self.llm.lock().await;
 
         let operation_summary: String = blackboard
             .action_log
@@ -189,20 +189,32 @@ impl Feedbacker {
 }
 
 #[cfg(test)]
-impl Feedbacker {
-    /// 测试用构造（不接真实 LLM，走纯规则）
-    pub fn new_for_test() -> Self {
-        Self::new(std::sync::Arc::new(tokio::sync::Mutex::new(
-            crate::infrastructure::llm::LlmRouter::placeholder(),
-        )))
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use crate::capability::blackboard::Blackboard;
     use crate::common::types::*;
+    use crate::infrastructure::config::{CacheConfig, DeepseekConfig, EflowConfig, LlmConfig};
+
+    fn make_test_config() -> EflowConfig {
+        EflowConfig {
+            llm: LlmConfig {
+                deepseek: DeepseekConfig {
+                    api_key: Some("test-key".into()),
+                    base_url: Some("http://localhost:9999".into()),
+                    default_model: Some("deepseek-chat".to_string()),
+                    timeout_secs: 5,
+                    max_retries: 0,
+                    retry_backoff_ms: 100,
+                },
+                cache: CacheConfig {
+                    l1_enabled: false,
+                    l2_enabled: false,
+                    l2_ttl_days: 7,
+                },
+            },
+            ..Default::default()
+        }
+    }
 
     #[tokio::test]
     async fn feedbacker_accepts_cached_result_when_consistent() {
@@ -234,7 +246,9 @@ mod tests {
             retry_count: 0,
             scratchpad: Default::default(),
         };
-        let f = Feedbacker::new_for_test();
+        let f = Feedbacker::new(Arc::new(tokio::sync::Mutex::new(
+            LlmRouter::from_config(&make_test_config()).unwrap(),
+        )));
         let verdict = f.evaluate_with_cache_hint(bb, true).await;
         match verdict {
             QualityVerdict::Pass { .. } => {} // OK
@@ -248,7 +262,7 @@ mod tests {
     // v1.2 retry_count 传 None，operation_summary 也不进 signature → 同 logical call 命中
     #[test]
     fn feedbacker_cache_key_stable_across_retries() {
-        use crate::infrastructure::llm::cache::cache_key_for_step;
+        use crate::infrastructure::llm::cache_key::cache_key_for_step;
         let make = |retry_count: Option<u8>| {
             let step = TaskStep {
                 action: "op_summary_v1".into(),

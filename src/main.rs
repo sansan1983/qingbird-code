@@ -12,7 +12,6 @@ use qingbird_code::capability::tools::{
     file::{ReadFileTool, WriteFileTool},
     search::SearchCodeTool,
 };
-use qingbird_code::common::types::ModelTier;
 use qingbird_code::infrastructure::config;
 use qingbird_code::infrastructure::event::{Event, EventChannel};
 use qingbird_code::infrastructure::llm::LlmRouter;
@@ -108,12 +107,7 @@ async fn main() {
     // 初始化基础设施
     let events = EventChannel::new();
 
-    // v1.3 起：传 provider_dir 给 from_config
-    let provider_dir = dirs::config_dir()
-        .map(|p| p.join("qingbird").join("providers"))
-        .unwrap_or_else(|| std::path::PathBuf::from("./providers"));
-    let _ = std::fs::create_dir_all(&provider_dir);
-    let llm = match LlmRouter::from_config(&cfg, &provider_dir) {
+    let llm = match LlmRouter::from_config(&cfg) {
         Ok(l) => Arc::new(tokio::sync::Mutex::new(l)),
         Err(e) => {
             eprintln!("{}: {}", t!("err_llm_init", msg = e.to_string()), e);
@@ -185,10 +179,7 @@ async fn main() {
     // 显示配置
     if cli.show_config {
         println!("Active profile: {}", cfg.profiles.default);
-        println!(
-            "LLM Strong: {:?}",
-            llm.lock().await.provider_for(ModelTier::Strong)
-        );
+        println!("LLM Strong: {}", llm.lock().await.provider_name());
         return;
     }
 
@@ -236,9 +227,6 @@ async fn main() {
 /// TUI 模式启动
 async fn run_tui() {
     // 基础设施已由调用方初始化
-    let provider_dir = dirs::config_dir()
-        .map(|p| p.join("qingbird").join("providers"))
-        .unwrap_or_else(|| std::path::PathBuf::from("./providers"));
     let config_path = config::find_config().unwrap_or_else(|| {
         eprintln!("{}", t!("cli_no_config"));
         std::path::PathBuf::from("qingbird.yaml")
@@ -251,8 +239,7 @@ async fn run_tui() {
         }
     };
     let events = EventChannel::new();
-    let _ = std::fs::create_dir_all(&provider_dir);
-    let llm = match LlmRouter::from_config(&cfg, &provider_dir) {
+    let llm = match LlmRouter::from_config(&cfg) {
         Ok(l) => Arc::new(tokio::sync::Mutex::new(l)),
         Err(e) => {
             eprintln!("{}: {}", t!("err_llm_init", msg = e.to_string()), e);

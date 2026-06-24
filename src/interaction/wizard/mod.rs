@@ -17,7 +17,6 @@ use ratatui::backend::CrosstermBackend;
 
 use crate::common::error::Result;
 use crate::infrastructure::config::EflowConfig;
-use crate::infrastructure::llm::types::ProtocolKind;
 use crate::interaction::render::FrameViewModel;
 use crate::interaction::render::ScreenViewModel;
 use crate::interaction::render::render_engine::{DefaultRenderEngine, RenderEngine};
@@ -48,7 +47,7 @@ pub trait WizardStep: Send + Sync {
 #[derive(Debug, Clone, Default)]
 pub struct WizardState {
     pub config: EflowConfig,
-    pub provider_protocol: Option<ProtocolKind>,
+    pub provider_protocol: Option<String>,
     pub provider_base_url: Option<String>,
     pub provider_api_key: Option<String>,
     pub provider_id: Option<String>,

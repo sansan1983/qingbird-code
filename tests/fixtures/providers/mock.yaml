@@ -1,8 +1,0 @@
-id: mock
-display_name: "Mock Provider (test only)"
-protocol: openai_compatible
-base_url: "http://localhost:9999"  # 故意不可达——smoke test 不调真 LLM
-api_key: "test-mock-key-not-real"
-default_model: "mock-model"
-preset_models:
-  - "mock-model"

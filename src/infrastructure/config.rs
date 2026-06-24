@@ -22,16 +22,51 @@ pub struct CoreConfig {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LlmConfig {
-    pub routing: RoutingConfig,
     #[serde(default)]
     pub cache: CacheConfig,
+    /// V0.1.0: DeepSeek 专属配置
+    #[serde(default)]
+    pub deepseek: DeepseekConfig,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct RoutingConfig {
-    pub strong: String,
-    pub medium: String,
-    pub light: String,
+/// DeepSeek 提供商配置 — V0.1.0 deepseek-only
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeepseekConfig {
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub base_url: Option<String>,
+    #[serde(default)]
+    pub default_model: Option<String>,
+    #[serde(default = "default_timeout_secs")]
+    pub timeout_secs: u64,
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u8,
+    #[serde(default = "default_retry_backoff_ms")]
+    pub retry_backoff_ms: u64,
+}
+
+impl Default for DeepseekConfig {
+    fn default() -> Self {
+        Self {
+            api_key: None,
+            base_url: None,
+            default_model: None,
+            timeout_secs: 30,
+            max_retries: 3,
+            retry_backoff_ms: 1000,
+        }
+    }
+}
+
+fn default_timeout_secs() -> u64 {
+    30
+}
+fn default_max_retries() -> u8 {
+    3
+}
+fn default_retry_backoff_ms() -> u64 {
+    1000
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -95,28 +130,30 @@ pub fn load_config(path: &Path) -> crate::common::error::Result<EflowConfig> {
     Ok(config)
 }
 
-/// 寻找配置文件：当前目录 → 用户配置目录 → 系统配置目录
-/// 跨平台：Windows 用 %APPDATA%，Unix 用 ~/.config
+/// 寻找配置文件：当前目录 → 用户配置目录
+/// 优先读当前目录的 `qingbird.yaml`，回退 `~/.qingbird/config.yaml`
 #[must_use]
 pub fn find_config() -> Option<PathBuf> {
-    let user_dir = dirs::config_dir().map(|p| p.join("eflow").join("eflow.yaml"));
-
-    let system_dir = if cfg!(windows) {
-        // Windows: %PROGRAMDATA%\eflow\eflow.yaml
-        std::env::var_os("PROGRAMDATA")
-            .map(|p| PathBuf::from(p).join("eflow").join("eflow.yaml"))
-    } else {
-        // Unix: /etc/eflow/eflow.yaml
-        Some(PathBuf::from("/etc/eflow/eflow.yaml"))
-    };
-
-    let mut candidates: Vec<PathBuf> = vec![PathBuf::from("eflow.yaml")];
-    if let Some(p) = user_dir {
-        candidates.push(p);
-    }
-    if let Some(p) = system_dir {
-        candidates.push(p);
+    let current = PathBuf::from("qingbird.yaml");
+    if current.exists() {
+        return Some(current);
     }
 
-    candidates.into_iter().find(|p| p.exists())
+    let user_dir = dirs::config_dir()
+        .or_else(|| {
+            // fallback: 检查 HOME/APPDATA 层级
+            if cfg!(windows) {
+                let p = PathBuf::from(std::env::var("APPDATA").unwrap_or_default());
+                (!p.as_os_str().is_empty()).then_some(p)
+            } else {
+                std::env::var("HOME").ok().map(PathBuf::from)
+            }
+        })
+        .map(|p| p.join("qingbird").join("config.yaml"));
+
+    if let Some(p) = user_dir.filter(|p| p.exists()) {
+        return Some(p);
+    }
+
+    None
 }

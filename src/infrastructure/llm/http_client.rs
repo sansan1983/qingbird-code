@@ -1,154 +1,133 @@
-//! HTTP 客户端基类 - 提取自 generic_anthropic.rs / generic_openai.rs
-//!
-//! 提供通用 reqwest 客户端、配置管理、URL 构建、HTTP 发送和错误处理等功能。
-//! Provider-specific 逻辑通过 LlmProtocol trait 实现。
+//! HTTP client for OpenAI-compatible API (V0.1.0 deepseek-only)
 
-use std::collections::HashMap;
 use std::time::Duration;
 
-use async_trait::async_trait;
 use reqwest::Client;
-use serde_json::Value;
+use serde_json::{Value, json};
+use tokio::sync::mpsc;
 
+use super::types::{ChatChunk, ChatRequest, ChatResponse, MessageRole, TokenUsage};
 use crate::common::error::{EflowError, Result};
-use rust_i18n::t;
 
 /// HTTP 客户端配置
-#[derive(Debug, Clone)]
 pub struct HttpClientConfig {
-    pub id: String,
-    pub api_key: String,
-    pub default_model: String,
     pub base_url: String,
+    pub api_key: String,
     pub timeout_secs: u64,
     pub max_retries: u8,
     pub retry_backoff_ms: u64,
-    pub model_endpoints: HashMap<String, String>,
 }
 
-/// HTTP 客户端协议 - 提供商特定实现
-#[async_trait]
-pub trait LlmProtocol: Send + Sync {
-    /// 获取默认路径
-    fn get_default_path(&self) -> &'static str;
-
-    /// 构建认证头
-    fn build_auth_headers(
-        &self,
-        request: reqwest::RequestBuilder,
-        api_key: &str,
-    ) -> reqwest::RequestBuilder;
-
-    /// 解析聊天响应
-    fn parse_chat_response(
-        &self,
-        json: &Value,
-    ) -> (
-        String,
-        Option<Vec<crate::infrastructure::llm::types::ToolCall>>,
-        crate::infrastructure::llm::types::TokenUsage,
-        String,
-    );
-}
-
-/// HTTP 客户端基类
-pub struct HttpLlmClient<P: LlmProtocol> {
-    pub config: HttpClientConfig,
+/// HTTP 客户端（OpenAI 兼容）
+pub struct HttpLlmClient {
     client: Client,
-    protocol: P,
+    config: HttpClientConfig,
 }
 
-impl<P: LlmProtocol> HttpLlmClient<P> {
+impl HttpLlmClient {
     /// 创建新的 HTTP 客户端
-    pub fn new(config: HttpClientConfig, protocol: P) -> Result<Self> {
+    pub fn new(config: HttpClientConfig) -> std::result::Result<Self, String> {
         let client = Client::builder()
             .timeout(Duration::from_secs(config.timeout_secs))
             .build()
-            .map_err(|e| {
-                EflowError::Internal(t!("err_llm_init", msg = e.to_string()).to_string())
-            })?;
+            .map_err(|e| e.to_string())?;
+        Ok(Self { client, config })
+    }
 
-        Ok(Self {
-            config,
-            client,
-            protocol,
+    /// 非流式聊天
+    pub async fn chat(
+        &self,
+        model: &str,
+        path: &str,
+        request: ChatRequest,
+    ) -> Result<ChatResponse> {
+        let url = format!("{}{}", self.config.base_url.trim_end_matches('/'), path);
+        let body = Self::build_request_body(model, &request);
+        let response = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.config.api_key))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| EflowError::LlmProvider(format!("HTTP request failed: {}", e)))?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body_text = response.text().await.unwrap_or_default();
+            return Err(EflowError::LlmProvider(format!(
+                "API error ({}): {}",
+                status, body_text
+            )));
+        }
+        // Parse as generic JSON first, then extract fields
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| EflowError::LlmProvider(format!("JSON parse failed: {}", e)))?;
+
+        let content = json["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+
+        let input_tokens = json["usage"]["prompt_tokens"]
+            .as_u64()
+            .or_else(|| json["usage"]["input_tokens"].as_u64())
+            .unwrap_or(0) as u32;
+        let output_tokens = json["usage"]["completion_tokens"]
+            .as_u64()
+            .or_else(|| json["usage"]["output_tokens"].as_u64())
+            .unwrap_or(0) as u32;
+
+        let finish_reason = json["choices"][0]["finish_reason"]
+            .as_str()
+            .unwrap_or("unknown")
+            .to_string();
+
+        Ok(ChatResponse {
+            content,
+            tool_calls: None,
+            usage: TokenUsage {
+                input_tokens,
+                output_tokens,
+            },
+            finish_reason,
         })
     }
 
-    /// 获取重试参数
-    pub fn retry_params(&self) -> (u8, u64) {
-        (self.config.max_retries, self.config.retry_backoff_ms)
-    }
-
-    /// 构建 POST 请求 URL
-    fn build_url(&self, model: &str) -> String {
-        let path = self
-            .config
-            .model_endpoints
-            .get(model)
-            .map(String::as_str)
-            .unwrap_or(self.protocol.get_default_path());
-
-        format!("{}{}", self.config.base_url.trim_end_matches('/'), path)
-    }
-
-    /// 构建 POST 请求
-    pub fn build_post(&self, body: &Value) -> reqwest::RequestBuilder {
-        let url = self.build_url(body["model"].as_str().unwrap_or(""));
-        self.protocol
-            .build_auth_headers(self.client.post(url), &self.config.api_key)
-            .json(body)
-    }
-
-    /// 发送 HTTP 请求并检查状态
-    #[allow(dead_code)]
-    async fn send_request(&self, request: reqwest::RequestBuilder) -> Result<reqwest::Response> {
-        let response = request.send().await.map_err(|e| {
-            EflowError::LlmProvider(t!("err_http", msg = e.to_string()).to_string())
-        })?;
-
-        check_status(response, self.config.id.as_str()).await
-    }
-
-    /// 解析聊天响应
-    pub async fn parse_chat_response(
+    /// 流式聊天（V0.1.0 尚未实现）
+    pub async fn chat_stream(
         &self,
-        json: &Value,
-    ) -> Result<(
-        String,
-        Option<Vec<crate::infrastructure::llm::types::ToolCall>>,
-        crate::infrastructure::llm::types::TokenUsage,
-        String,
-    )> {
-        let (content, tool_calls, usage, finish_reason) = self.protocol.parse_chat_response(json);
-        Ok((content, tool_calls, usage, finish_reason))
+        _model: &str,
+        _path: &str,
+        _request: ChatRequest,
+    ) -> Result<mpsc::Receiver<Result<ChatChunk>>> {
+        Err(EflowError::LlmProvider(
+            "streaming not yet supported".into(),
+        ))
     }
-}
 
-/// 检查 HTTP 状态码
-pub async fn check_status(
-    response: reqwest::Response,
-    provider_name: &str,
-) -> Result<reqwest::Response> {
-    let status = response.status();
-    match status {
-        reqwest::StatusCode::UNAUTHORIZED => Err(EflowError::LlmAuthFailed(provider_name.into())),
-        reqwest::StatusCode::TOO_MANY_REQUESTS => {
-            Err(EflowError::RateLimited(provider_name.into()))
-        }
-        _ if status.is_success() => Ok(response),
-        _ => {
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "[unreadable error body]".into());
-            Err(EflowError::LlmProvider(
-                t!(
-                    "err_http",
-                    msg = format!("status {}: {}", status.as_u16(), body)
-                )
-                .to_string(),
-            ))
-        }
+    /// 构建 OpenAI 兼容的请求体
+    fn build_request_body(model: &str, request: &ChatRequest) -> Value {
+        let messages: Vec<Value> = request
+            .messages
+            .iter()
+            .map(|m| {
+                let role_str = match m.role {
+                    MessageRole::System => "system",
+                    MessageRole::User => "user",
+                    MessageRole::Assistant => "assistant",
+                };
+                json!({ "role": role_str, "content": m.content })
+            })
+            .collect();
+
+        json!({
+            "model": model,
+            "messages": messages,
+            "temperature": request.temperature,
+            "max_tokens": request.max_tokens,
+        })
     }
 }

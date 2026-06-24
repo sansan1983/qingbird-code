@@ -6,7 +6,6 @@ use async_trait::async_trait;
 use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::common::error::{EflowError, Result};
-use crate::infrastructure::llm::types::{ProtocolKind, ProviderConfig};
 use crate::interaction::render::view_model::*;
 use crate::interaction::wizard::{StepAction, WizardState, WizardStep};
 
@@ -33,10 +32,10 @@ impl WizardStep for ConfirmStep {
             })
             .unwrap_or_else(|| "(未填)".to_string());
 
-        let protocol_display = match state.provider_protocol {
-            Some(ProtocolKind::OpenaiCompatible) => "openai_compatible",
-            Some(ProtocolKind::AnthropicCompatible) => "anthropic_compatible",
-            None => "(preset 跳过)",
+        let protocol_display = match state.provider_protocol.as_deref() {
+            Some("openai_compatible") => "openai_compatible",
+            Some("anthropic_compatible") => "anthropic_compatible",
+            _ => "(preset 跳过)",
         };
 
         StepViewModel {
@@ -124,34 +123,28 @@ fn finalize(state: &WizardState) -> Result<()> {
     if let Some(id) = &state.provider_id {
         let protocol = state
             .provider_protocol
-            .unwrap_or(ProtocolKind::OpenaiCompatible);
+            .clone()
+            .unwrap_or_else(|| "openai_compatible".to_string());
         let base_url = state
             .provider_base_url
             .clone()
-            .unwrap_or_else(|| match protocol {
-                ProtocolKind::OpenaiCompatible => "https://api.openai.com/v1".to_string(),
-                ProtocolKind::AnthropicCompatible => "https://api.anthropic.com".to_string(),
+            .unwrap_or_else(|| match protocol.as_str() {
+                "anthropic_compatible" => "https://api.anthropic.com".to_string(),
+                _ => "https://api.openai.com/v1".to_string(),
             });
-        let provider_cfg = ProviderConfig {
-            id: id.clone(),
-            display_name: state
-                .provider_display_name
-                .clone()
-                .unwrap_or_else(|| id.clone()),
-            protocol,
-            base_url,
-            api_key: state.provider_api_key.clone().unwrap_or_default(),
-            default_model: state.default_model.clone().unwrap_or_default(),
-            timeout_secs: 30,
-            max_retries: 3,
-            retry_backoff_ms: 1000,
-            preset_models: state.preset_models.clone(),
-            list_models_endpoint: None,
-            list_models: vec![],
-            extra_config: serde_json::Value::Null,
-        };
-        let provider_content = serde_yaml::to_string(&provider_cfg)
-            .map_err(|e| EflowError::Config(format!("序列化 provider 失败: {e}")))?;
+        let provider_content = serde_yaml::to_string(&serde_json::json!({
+            "id": id,
+            "display_name": state.provider_display_name.clone().unwrap_or_else(|| id.clone()),
+            "protocol": protocol,
+            "base_url": base_url,
+            "api_key": state.provider_api_key.clone().unwrap_or_default(),
+            "default_model": state.default_model.clone().unwrap_or_default(),
+            "timeout_secs": 30,
+            "max_retries": 3,
+            "retry_backoff_ms": 1000,
+            "preset_models": state.preset_models.clone(),
+        }))
+        .map_err(|e| EflowError::Config(format!("序列化 provider 失败: {e}")))?;
         atomic_write(&providers_dir.join(format!("{id}.yaml")), &provider_content)?;
     }
 
@@ -208,7 +201,7 @@ mod tests {
     fn view_model_shows_protocol_display() {
         let step = ConfirmStep;
         let state = WizardState {
-            provider_protocol: Some(ProtocolKind::OpenaiCompatible),
+            provider_protocol: Some("openai_compatible".into()),
             ..WizardState::default()
         };
         let vm = step.view_model(&state);

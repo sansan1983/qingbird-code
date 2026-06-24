@@ -22,8 +22,8 @@ use qingbird_code::capability::tools::{Tool, ToolDefinition, ToolOutput, ToolReg
 use qingbird_code::common::error::Result;
 use qingbird_code::common::types::*;
 use qingbird_code::infrastructure::config::{
-    CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
-    RoutingConfig, SecurityConfig,
+    CacheConfig, CoreConfig, DeepseekConfig, EflowConfig, LlmConfig, MemoryConfig,
+    ProfileListConfig, SecurityConfig,
 };
 use qingbird_code::infrastructure::context::ContextCompressor;
 use qingbird_code::infrastructure::event::{Event, EventChannel};
@@ -45,10 +45,13 @@ fn make_test_config() -> EflowConfig {
             timezone: "UTC".into(),
         },
         llm: LlmConfig {
-            routing: RoutingConfig {
-                strong: "anthropic".into(),
-                medium: "anthropic".into(),
-                light: "anthropic".into(),
+            deepseek: DeepseekConfig {
+                api_key: Some("test-key".into()),
+                base_url: Some("http://localhost:9999".into()),
+                default_model: Some("deepseek-chat".into()),
+                timeout_secs: 5,
+                max_retries: 0,
+                retry_backoff_ms: 100,
             },
             cache: CacheConfig {
                 l1_enabled: true,
@@ -75,14 +78,7 @@ fn make_test_config() -> EflowConfig {
 
 fn make_test_router() -> Arc<Mutex<LlmRouter>> {
     let cfg = make_test_config();
-    // v1.3: 把 provider 写到临时 dir
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("anthropic.yaml"),
-        "id: anthropic\ndisplay_name: Anthropic\nprotocol: anthropic_compatible\nbase_url: https://api.anthropic.com\napi_key: test-key\ndefault_model: claude-test\n",
-    )
-    .unwrap();
-    let router = LlmRouter::from_config(&cfg, dir.path()).expect("test router");
+    let router = LlmRouter::from_config(&cfg).expect("test router");
     Arc::new(Mutex::new(router))
 }
 
@@ -417,7 +413,7 @@ async fn llm_router_handles_timeout_via_config() {
     // （plan 写了 `use std::path::PathBuf;` 没用上，clippy pedantic 必挂 → 已删）
     use qingbird_code::infrastructure::config::{
         CacheConfig, CoreConfig, EflowConfig, LlmConfig, MemoryConfig, ProfileListConfig,
-        RoutingConfig, SecurityConfig,
+        SecurityConfig,
     };
     use qingbird_code::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 
@@ -427,10 +423,13 @@ async fn llm_router_handles_timeout_via_config() {
             timezone: "Asia/Shanghai".into(),
         },
         llm: LlmConfig {
-            routing: RoutingConfig {
-                strong: "anthropic".into(),
-                medium: "anthropic".into(),
-                light: "anthropic".into(),
+            deepseek: DeepseekConfig {
+                api_key: Some("test-key".into()),
+                base_url: Some("http://localhost:9999".into()),
+                default_model: Some("deepseek-chat".into()),
+                timeout_secs: 5,
+                max_retries: 0,
+                retry_backoff_ms: 100,
             },
             cache: CacheConfig {
                 l1_enabled: true,
@@ -454,16 +453,9 @@ async fn llm_router_handles_timeout_via_config() {
         },
     };
 
-    // v1.3: 临时 dir 提供 anthropic provider
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("anthropic.yaml"),
-        "id: anthropic\ndisplay_name: Anthropic\nprotocol: anthropic_compatible\nbase_url: https://api.anthropic.com\napi_key: sk-test\ndefault_model: claude-sonnet-4-6\n",
-    )
-    .unwrap();
-    let mut router = LlmRouter::from_config(&cfg, dir.path()).unwrap();
+    let router = LlmRouter::from_config(&cfg).unwrap();
     let req = ChatRequest::new("", vec![Message::user("hi")]);
-    let result = router.chat_with_retry(ModelTier::Light, req, 0, 0).await;
+    let result = router.chat(ModelTier::Light, req).await;
     assert!(result.is_err());
 }
 
@@ -473,9 +465,8 @@ async fn llm_router_handles_timeout_via_config() {
 async fn l2_cache_hit_rate_increases_with_repeated_calls() {
     // v1.1 Task B7（设计 §8.5）：重复调用同一 key 命中率上升
     use qingbird_code::common::types::{IntentType, RiskLevel};
-    use qingbird_code::infrastructure::llm::cache::{
-        CacheKey, CacheValue, ContextProfile, L2CacheManager,
-    };
+    use qingbird_code::infrastructure::llm::cache::{CacheKey, CacheValue, ContextProfile};
+    use qingbird_code::infrastructure::llm::l2::L2CacheManager;
     use tempfile::TempDir;
 
     let dir = TempDir::new().unwrap();

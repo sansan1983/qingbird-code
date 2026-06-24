@@ -1,7 +1,6 @@
 // src/cli/config.rs — CLI 文本交互式配置（6 步流程）
 
 use crate::cli::prompt::{MenuItem, prompt_input, prompt_password, select_menu};
-use crate::infrastructure::llm::types::ProtocolKind;
 use crate::interaction::wizard::builtin::provider::{PRESETS, PresetProvider};
 
 /// 运行 CLI 文本配置流程。返回退出码（0=成功, 1=取消/错误）。
@@ -30,7 +29,7 @@ pub fn run() -> i32 {
     };
 
     // 自定义路径：先问 protocol 和 base_url
-    let (protocol_kind, base_url) = if is_custom {
+    let (protocol_str, base_url) = if is_custom {
         let proto_items = vec![
             MenuItem {
                 key: "1",
@@ -47,9 +46,9 @@ pub fn run() -> i32 {
             None => return 0,
         };
         let kind = if proto_sel == 0 {
-            ProtocolKind::OpenaiCompatible
+            "openai_compatible"
         } else {
-            ProtocolKind::AnthropicCompatible
+            "anthropic_compatible"
         };
         let url = prompt_input("Base URL:");
         (kind, url)
@@ -123,9 +122,10 @@ pub fn run() -> i32 {
     } else {
         return 1;
     };
-    let proto_str = match protocol_kind {
-        ProtocolKind::OpenaiCompatible => "openai",
-        ProtocolKind::AnthropicCompatible => "anthropic",
+    let proto_str = if protocol_str.starts_with("openai") {
+        "openai"
+    } else {
+        "anthropic"
     };
 
     write_provider(
@@ -143,22 +143,11 @@ pub fn run() -> i32 {
 }
 
 pub fn check_llm_configured() -> bool {
-    let provider_dir = dirs::config_dir()
-        .map(|p| p.join("qingbird").join("providers"))
-        .unwrap_or_else(|| std::path::PathBuf::from("./providers"));
-    if let Ok(entries) = std::fs::read_dir(&provider_dir) {
-        for entry in entries.flatten() {
-            if entry
-                .path()
-                .extension()
-                .map(|e| e == "yaml")
-                .unwrap_or(false)
-            {
-                return true;
-            }
-        }
+    // V0.1.0: DeepSeek-only — 检查配置文件和 env var 二选一
+    if std::env::var("DEEPSEEK_API_KEY").is_ok() {
+        return true;
     }
-    false
+    crate::infrastructure::config::find_config().is_some()
 }
 
 fn build_provider_menu() -> Vec<MenuItem> {
@@ -212,40 +201,6 @@ default_model: "{}"
     update_eflow_yaml(id);
 }
 
-fn update_eflow_yaml(provider_id: &str) {
-    let path = std::path::Path::new("qingbird.yaml");
-    if !path.exists() {
-        return;
-    }
-    let content = match std::fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-    let mut output = String::new();
-    let mut in_routing = false;
-    for line in content.lines() {
-        if line.trim() == "routing:" {
-            in_routing = true;
-            output.push_str(line);
-            output.push('\n');
-            output.push_str(&format!("    strong: {}\n", provider_id));
-            output.push_str(&format!("    medium: {}\n", provider_id));
-            output.push_str(&format!("    light: {}\n", provider_id));
-        } else if in_routing {
-            // 跳过旧的 routing 子项（以空格开头的行），直到非缩进行
-            if !line.starts_with(' ') && !line.starts_with("  ") {
-                in_routing = false;
-                output.push_str(line);
-                output.push('\n');
-            }
-        } else {
-            output.push_str(line);
-            output.push('\n');
-        }
-    }
-    // 更新 eflow.yaml
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(path, output);
+fn update_eflow_yaml(_provider_id: &str) {
+    // V0.1.0: routing 由 lifecycle.rs 硬编码，无需写 yaml
 }

@@ -11,10 +11,13 @@ core:
   language: zh-CN
   timezone: Asia/Shanghai
 llm:
-  routing:
-    strong: anthropic
-    medium: anthropic
-    light: openai
+  deepseek:
+    api_key: "sk-test"
+    base_url: "https://api.deepseek.com"
+    default_model: "deepseek-chat"
+    timeout_secs: 30
+    max_retries: 3
+    retry_backoff_ms: 1000
   cache:
     l1_enabled: true
 memory:
@@ -31,10 +34,9 @@ profiles:
 "#;
     tmp.write_all(yaml.as_bytes()).unwrap();
     let config = load_config(tmp.path()).unwrap();
-    assert_eq!(config.llm.routing.strong, "anthropic");
-    assert_eq!(config.llm.routing.light, "openai");
     assert_eq!(config.core.language, "zh-CN");
     assert_eq!(config.memory.working_memory_limit, 100);
+    assert!(config.llm.deepseek.default_model.as_deref() == Some("deepseek-chat"));
 }
 
 #[test]
@@ -45,8 +47,6 @@ fn test_missing_config_file() {
 
 #[test]
 fn test_env_var_expansion_in_config() {
-    // v1.3: env var expansion 在 expand_env_vars 阶段处理整段 yaml
-    // 这里验证 eflow.yaml 内任意字段（含 routing）都做 expansion。
     unsafe {
         std::env::set_var("EFLOW_TEST_KEY", "expanded-key-value");
     }
@@ -56,10 +56,10 @@ core:
   language: en
   timezone: UTC
 llm:
-  routing:
-    strong: ${EFLOW_TEST_KEY}
-    medium: anthropic
-    light: anthropic
+  deepseek:
+    api_key: "${EFLOW_TEST_KEY}"
+    base_url: "https://api.deepseek.com"
+    default_model: "deepseek-chat"
   cache:
     l1_enabled: false
 memory:
@@ -76,26 +76,27 @@ profiles:
 "#;
     tmp.write_all(yaml.as_bytes()).unwrap();
     let config = load_config(tmp.path()).unwrap();
-    // v1.3: routing.strong 引用了 env var，应被 expand
-    assert_eq!(config.llm.routing.strong, "expanded-key-value");
+    // deepseek.api_key 引用了 env var，应被 expand
+    assert_eq!(
+        config.llm.deepseek.api_key.as_deref(),
+        Some("expanded-key-value")
+    );
     unsafe {
         std::env::remove_var("EFLOW_TEST_KEY");
     }
 }
 
 #[test]
-fn parses_llm_provider_timeout_and_retry() {
-    // v1.3: timeout / retry 已迁到 ProviderConfig（per-provider YAML 字段）
-    // 这里只测 cache 字段仍在 LlmConfig 里。
+fn parses_llm_cache_defaults() {
     let yaml = r#"
 core:
   language: zh-CN
   timezone: Asia/Shanghai
 llm:
-  routing:
-    strong: anthropic
-    medium: anthropic
-    light: anthropic
+  deepseek:
+    api_key: "sk-test"
+    base_url: "https://api.deepseek.com"
+    default_model: "deepseek-chat"
   cache:
     l1_enabled: true
     l2_enabled: true

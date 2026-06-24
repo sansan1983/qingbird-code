@@ -7,8 +7,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::common::error::{EflowError, Result};
-use crate::common::types::ModelTier;
+use crate::common::error::Result;
 use crate::interaction::slash::{CommandContext, SlashArgs, SlashCommand, SlashOutput};
 use crate::interaction::widgets::select_list::{SelectItem, SelectItemSource, SelectList};
 
@@ -43,21 +42,13 @@ impl SlashCommand for ModelCmd {
         "切换当前 provider 的模型（弹 SelectList 子视图）"
     }
     async fn execute(&self, _args: SlashArgs, ctx: &mut CommandContext) -> Result<SlashOutput> {
-        // v1.3.1 阶段：检查 router 是否有 provider，没有 → 错误
+        // V0.1.0: deepseek 单 provider，provider_name 恒为 "deepseek"
         let router = ctx.router.lock().await;
-        if router.provider_for(ModelTier::Light).is_none() {
-            return Err(EflowError::Config(
-                "无法切换模型：未配置 LLM provider。运行 qingbird init 配置".into(),
-            ));
-        }
-
-        // 拿当前 provider id（这里简化：直接拿 Light tier 的 provider id）
-        let provider_id = router.provider_for(ModelTier::Light).unwrap().to_string();
-
-        // 简化：从 router 拿当前 provider 的 preset_models（v1.3.1 阶段没有 model cache 抽象）
-        // v1.3.1 计划走"返回 None"——`/model` 显示"暂无模型列表"
-        let preset_models = router.preset_models_for(&provider_id).unwrap_or_default();
+        let provider_id = router.provider_name().to_string();
         drop(router); // 提前释放锁——下面 SelectList::load 不需要 router
+
+        // V0.1.0: 没有 preset_models 支持，返回空列表
+        let preset_models: Vec<String> = Vec::new();
 
         let source = Arc::new(ModelListSource {
             provider_id,

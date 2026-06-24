@@ -225,22 +225,39 @@ impl Concierge {
     }
 }
 
-/// 测试用 placeholder Concierge（v1.3.3 deviation #13d: v1.3.0 没加，
-/// v1.3.3 spec C 实施时补——参考 v1.3.1 LlmRouter::placeholder 模式）
-///
-/// **非测试代码不应调用**——用 `Concierge::new`。
-#[doc(hidden)]
-impl Concierge {
-    #[must_use]
-    pub fn placeholder() -> Self {
-        use crate::application::orchestrator::Orchestrator;
-        use crate::capability::tools::ToolRegistry;
-        use crate::infrastructure::event::EventChannel;
-        use crate::infrastructure::llm::LlmRouter;
-        use crate::infrastructure::memory::CompositeMemory;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::common::types::Intent;
+    use crate::infrastructure::config::{CacheConfig, DeepseekConfig, EflowConfig, LlmConfig};
+    use crate::infrastructure::event::EventChannel;
 
-        let llm = Arc::new(Mutex::new(LlmRouter::placeholder()));
-        let tools = Arc::new(ToolRegistry::new());
+    fn make_test_config() -> EflowConfig {
+        EflowConfig {
+            llm: LlmConfig {
+                deepseek: DeepseekConfig {
+                    api_key: Some("test-key".into()),
+                    base_url: Some("http://localhost:9999".into()),
+                    default_model: Some("deepseek-chat".to_string()),
+                    timeout_secs: 5,
+                    max_retries: 0,
+                    retry_backoff_ms: 100,
+                },
+                cache: CacheConfig {
+                    l1_enabled: false,
+                    l2_enabled: false,
+                    l2_ttl_days: 7,
+                },
+            },
+            ..Default::default()
+        }
+    }
+
+    fn make_test_concierge() -> Concierge {
+        let llm = Arc::new(Mutex::new(
+            LlmRouter::from_config(&make_test_config()).unwrap(),
+        ));
+        let tools = Arc::new(crate::capability::tools::ToolRegistry::new());
         let events = EventChannel::new();
         let memory = Arc::new(Mutex::new(CompositeMemory::in_memory(10).unwrap()));
         let orchestrator = Arc::new(Mutex::new(Orchestrator::new(
@@ -248,19 +265,12 @@ impl Concierge {
             tools,
             events.clone(),
         )));
-
-        Self::new(events, memory, orchestrator, llm, "default".into())
+        Concierge::new(events, memory, orchestrator, llm, "default".into())
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::common::types::Intent;
 
     #[test]
     fn classify_default_goes_to_task_dispatch() {
-        let concierge = Concierge::placeholder();
+        let concierge = make_test_concierge();
         // 不含任何关键词的 input → 默认 TaskDispatch
         let intent = concierge.classify_intent("review the auth module");
         assert!(matches!(intent, Intent::TaskDispatch { .. }));
@@ -268,7 +278,7 @@ mod tests {
 
     #[test]
     fn classify_chinese_long_input_goes_to_task_dispatch() {
-        let concierge = Concierge::placeholder();
+        let concierge = make_test_concierge();
         let intent =
             concierge.classify_intent("请帮我处理一个长任务描述，超过 30 字符以触发标准派发路径");
         assert!(matches!(intent, Intent::TaskDispatch { .. }));
@@ -276,28 +286,28 @@ mod tests {
 
     #[test]
     fn classify_profile_switch_intent_zh() {
-        let concierge = Concierge::placeholder();
+        let concierge = make_test_concierge();
         let intent = concierge.classify_intent("切换到 backend profile");
         assert!(matches!(intent, Intent::ProfileSwitch { .. }));
     }
 
     #[test]
     fn classify_task_cancel_intent_zh() {
-        let concierge = Concierge::placeholder();
+        let concierge = make_test_concierge();
         let intent = concierge.classify_intent("取消 任务 abc");
         assert!(matches!(intent, Intent::TaskCancel { .. }));
     }
 
     #[test]
     fn classify_task_interrupt_intent_zh() {
-        let concierge = Concierge::placeholder();
+        let concierge = make_test_concierge();
         let intent = concierge.classify_intent("中断当前任务");
         assert!(matches!(intent, Intent::TaskInterrupt { .. }));
     }
 
     #[test]
     fn classify_skill_query_intent_en() {
-        let concierge = Concierge::placeholder();
+        let concierge = make_test_concierge();
         let intent = concierge.classify_intent("query skill xyz");
         assert!(matches!(intent, Intent::SkillQuery { .. }));
     }
@@ -309,7 +319,7 @@ mod tests {
             .enable_all()
             .build()
             .expect("rt build");
-        let mut concierge = Concierge::placeholder();
+        let mut concierge = make_test_concierge();
         let ack = rt.block_on(
             concierge.handle_input("some long input that goes to task dispatch path".into()),
         );
@@ -323,14 +333,14 @@ mod tests {
             .enable_all()
             .build()
             .expect("rt build");
-        let concierge = Concierge::placeholder();
+        let concierge = make_test_concierge();
         let p = rt.block_on(concierge.active_profile());
         assert_eq!(p, "default");
     }
 
     #[test]
     fn subscribe_events_returns_receiver() {
-        let concierge = Concierge::placeholder();
+        let concierge = make_test_concierge();
         let mut rx = concierge.subscribe_events();
         // 空 broadcast channel：try_recv 立即返 Empty（sender 还活着）
         let r = rx.try_recv();

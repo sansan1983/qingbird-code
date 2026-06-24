@@ -3,7 +3,7 @@ use crate::common::error::Result;
 use crate::common::types::{
     ExecutionPlan, IntentType, ModelTier, PlannedStep, RiskLevel, TaskStep,
 };
-use crate::infrastructure::llm::cache::cache_key_for_step;
+use crate::infrastructure::llm::cache_key::cache_key_for_step;
 use crate::infrastructure::llm::{ChatRequest, LlmRouter, Message};
 
 /// Decisioner — 风险评估 + 执行计划生成 + 模型路由
@@ -64,7 +64,7 @@ impl Decisioner {
         risk: RiskLevel,
         retry_count: u8,
     ) -> Result<Vec<TaskStep>> {
-        let mut llm = self.llm.lock().await;
+        let llm = self.llm.lock().await;
 
         let messages = vec![
             Message::system("你是一个任务规划专家。将以下操作拆分为更小的子步骤。"),
