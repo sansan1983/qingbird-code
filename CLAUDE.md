@@ -8,7 +8,14 @@
 
 | 项 | 值 |
 |--- |--- |
-| **当前** | V0.1.0 restructuring（eflow → qingbird 改名 + 瘦身） |
+| **当前** | V0.1.0 restructuring 完成（13 tasks，全部门禁通过） |
+| **上次完成** | V0.1.0 实施：eflow → qingbird 重命名、DeepSeek 专属瘦身、Provider 抽象全部删除、DeepSeek 真链路 smoke test ×3 通过。45 files / +1403 -3189。 |
+
+**近期日志**：
+
+| 日期 | 动作 | 产出 |
+|------|------|------|
+| 2026-06-24 | V0.1.0 restructuring 完成 | 13 tasks 全部实施：项目重命名、删多 Provider 抽象（ProtocolKind/ProviderConfig/tier 路由等）、配置路径更新、config.yaml 简化、测试清理、ADR-0018、git bundle 归档。4 门禁全过。commit `09b020b` |
 | **版本** | 0.1.0 |
 | **LLM** | DeepSeek 唯一，配置在 `~/.qingbird/config.yaml` 或 `qingbird.yaml` |
 | **二进制** | `qingbird` |
