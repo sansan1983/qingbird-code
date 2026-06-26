@@ -8,15 +8,15 @@
 
 | 项 | 值 |
 |--- |--- |
-| **当前** | V0.2.0 实施完成（20 tasks, 所有门禁通过） |
-| **上次完成** | V0.2.0 实施：单crate D-E-F → 5-crate workspace ReAct 循环 + 多 Provider。新架构：models → infra → tools → agents → binary。DeepSeek 深度优化（双协议 + thinking mode + reasoning_content），Ollama 本地真链路测试，OpenAI/Anthropic 协议骨架占位。ReAct 循环（含死循环检测 + Nudge 机制）替代 D-E-F 管线。 |
+| **当前** | V0.2.0 实施完成 + 最终审查修复（21 tasks, 所有门禁通过, 68 tests） |
+| **上次完成** | V0.2.0 实施：单crate D-E-F → 5-crate workspace ReAct 循环 + 多 Provider。新架构：models → infra → tools → agents → binary。DeepSeek 深度优化（双协议 + thinking mode + reasoning_content），Ollama 本地真链路测试，OpenAI/Anthropic 协议骨架占位。ReAct 循环（含死循环检测 + Nudge 机制 + 系统提示词 + i18n）替代 D-E-F 管线。 |
 
 **近期日志**：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
-| 2026-06-24 | V0.1.0 restructuring 完成 | 13 tasks 全部实施：项目重命名、删多 Provider 抽象（ProtocolKind/ProviderConfig/tier 路由等）、配置路径更新、config.yaml 简化、测试清理、ADR-0018、git bundle 归档。4 门禁全过。commit `09b020b` |
-| 2026-06-26 | V0.2.0 实施完成 | 20 tasks: workspace 5-crate split + 4 Provider (DeepSeek双协议/Ollama/OpenAI占位/Anthropic占位) + ReAct 循环 (死循环检测 + Nudge) + Subagent + 集成、所有门禁通过 |
+| 2026-06-26 | V0.2.0 实施完成 | 20 tasks: workspace 5-crate split + 4 Provider (DeepSeek双协议/Ollama/OpenAI占位/Anthropic占位) + ReAct 循环 (死循环检测 + Nudge + i18n) + Subagent + 集成、所有门禁通过 |
+| 2026-06-27 | V0.2.0 最终审查修复 | 7 个 Important 问题修复：系统提示词、配置文件、Nudge i18n、死循环、死代码、68/68 测试通过 |
 
 | **版本** | 0.2.0 |
 | **LLM** | DeepSeek / Ollama / OpenAI / Anthropic (2个占位) |
