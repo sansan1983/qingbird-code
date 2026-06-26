@@ -1,25 +1,27 @@
 # CLAUDE.md — qingbird
 
-## △ V0.1.0 — DeepSeek 专属重构
+## △ V0.2.0 — Workspace + ReAct + 多 Provider
 
-版本 0.1.0，DeepSeek-only。所有多 Provider 抽象(`ProtocolKind`/`ProviderConfig`/`ModelEntry`/`tier` 路由)已删除。
+版本 0.2.0，5-crate workspace + ReAct 循环 + 多 Provider。
 
 ### 关键路径
 
 | 项 | 值 |
 |--- |--- |
-| **当前** | V0.1.0 restructuring 完成（13 tasks，全部门禁通过） |
-| **上次完成** | V0.1.0 实施：eflow → qingbird 重命名、DeepSeek 专属瘦身、Provider 抽象全部删除、DeepSeek 真链路 smoke test ×3 通过。45 files / +1403 -3189。 |
+| **当前** | V0.2.0 实施完成（20 tasks, 所有门禁通过） |
+| **上次完成** | V0.2.0 实施：单crate D-E-F → 5-crate workspace ReAct 循环 + 多 Provider。新架构：models → infra → tools → agents → binary。DeepSeek 深度优化（双协议 + thinking mode + reasoning_content），Ollama 本地真链路测试，OpenAI/Anthropic 协议骨架占位。ReAct 循环（含死循环检测 + Nudge 机制）替代 D-E-F 管线。 |
 
 **近期日志**：
 
 | 日期 | 动作 | 产出 |
 |------|------|------|
 | 2026-06-24 | V0.1.0 restructuring 完成 | 13 tasks 全部实施：项目重命名、删多 Provider 抽象（ProtocolKind/ProviderConfig/tier 路由等）、配置路径更新、config.yaml 简化、测试清理、ADR-0018、git bundle 归档。4 门禁全过。commit `09b020b` |
-| **版本** | 0.1.0 |
-| **LLM** | DeepSeek 唯一，配置在 `~/.qingbird/config.yaml` 或 `qingbird.yaml` |
-| **二进制** | `qingbird` |
-| **库** | `qingbird_code` |
+| 2026-06-26 | V0.2.0 实施完成 | 20 tasks: workspace 5-crate split + 4 Provider (DeepSeek双协议/Ollama/OpenAI占位/Anthropic占位) + ReAct 循环 (死循环检测 + Nudge) + Subagent + 集成、所有门禁通过 |
+
+| **版本** | 0.2.0 |
+| **LLM** | DeepSeek / Ollama / OpenAI / Anthropic (2个占位) |
+| **架构** | 5-crate workspace: qbird-code-models / infra / tools / agents / qbird-code |
+| **二进制** | `qingbird` (crates/qbird-code) |
 
 ### 4 门禁
 
@@ -30,10 +32,11 @@
 
 ### 文件结构
 
-- `src/main.rs` — CLI 入口，`--execute`/子命令/TUI 路由
-- `src/infrastructure/llm/` — DeepSeek provider、L1/L2 缓存
-- `src/application/` — Concierge + Orchestrator
-- `src/capability/` — Decisioner/Executor/Feedbacker + Subagent 池 + Tools
+- `crates/qbird-code-models/` — 核心类型 (ProviderKind/LlmMessage/LlmResponse/ToolDef)
+- `crates/qbird-code-infra/` — 4 Provider + config + event + env
+- `crates/qbird-code-tools/` — 工具定义与注册
+- `crates/qbird-code-agents/` — ReAct 循环 (Concierge) + Subagent + 死循环检测 + Nudge 机制
+- `crates/qbird-code/` — 二进制入口，CLI/TUI/路由
 - `locales/` — 中英双语
 
 ## 收工仪式
