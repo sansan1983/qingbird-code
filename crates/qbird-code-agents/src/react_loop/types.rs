@@ -6,9 +6,7 @@ pub enum TurnResult {
     /// 继续下一轮迭代
     Continue,
     /// 需要执行工具调用
-    ToolCalls {
-        tool_calls: Vec<ToolCall>,
-    },
+    ToolCalls { tool_calls: Vec<ToolCall> },
     /// 任务完成
     Complete {
         content: String,
@@ -47,7 +45,14 @@ impl LoopState {
     }
 }
 
+impl Default for LoopState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Loop 内部控制流信号
+#[allow(dead_code)]
 pub(super) enum LoopAction {
     Continue,
     Return(Result<AgentResult, qbird_code_models::EflowError>),
@@ -65,12 +70,7 @@ pub enum ExecutionStrategy {
 ///
 /// Note: `glob` and `list_dir` are planned for V0.1.1 and do not yet exist
 /// in the tools crate. They are listed here as forward-looking entries.
-pub(super) static READ_ONLY_TOOLS: &[&str] = &[
-    "read_file",
-    "search_code",
-    "glob",
-    "list_dir",
-];
+pub(super) static READ_ONLY_TOOLS: &[&str] = &["read_file", "search_code", "glob", "list_dir"];
 
 /// ReAct 循环配置
 #[derive(Debug, Clone)]

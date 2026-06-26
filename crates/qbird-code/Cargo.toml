@@ -13,9 +13,11 @@ path = "src/main.rs"
 qbird-code-models.workspace = true
 qbird-code-infra.workspace = true
 qbird-code-tools.workspace = true
-# qbird-code-agents 尚未创建，先不加
+qbird-code-agents.workspace = true
 
 tokio.workspace = true
 clap.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+serde_json.workspace = true
+futures-util.workspace = true

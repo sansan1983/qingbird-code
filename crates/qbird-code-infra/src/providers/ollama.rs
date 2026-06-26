@@ -22,21 +22,32 @@ impl OllamaProvider {
     }
 
     fn to_openai_messages(messages: &[Message]) -> Vec<Value> {
-        messages.iter().map(|msg| {
-            json!({
-                "role": msg.role_str(),
-                "content": msg.content,
+        messages
+            .iter()
+            .map(|msg| {
+                json!({
+                    "role": msg.role_str(),
+                    "content": msg.content,
+                })
             })
-        }).collect()
+            .collect()
     }
 }
 
 #[async_trait]
 impl Provider for OllamaProvider {
-    fn kind(&self) -> ProviderKind { ProviderKind::Ollama }
-    fn protocol(&self) -> ProtocolKind { ProtocolKind::OpenAICompatible }
-    fn model(&self) -> &str { &self.config.default_model }
-    fn base_url(&self) -> &str { &self.config.base_url }
+    fn kind(&self) -> ProviderKind {
+        ProviderKind::Ollama
+    }
+    fn protocol(&self) -> ProtocolKind {
+        ProtocolKind::OpenAICompatible
+    }
+    fn model(&self) -> &str {
+        &self.config.default_model
+    }
+    fn base_url(&self) -> &str {
+        &self.config.base_url
+    }
 
     fn build_request_body(&self, messages: &[Message], config: &RequestConfig) -> Value {
         let mut body = json!({
@@ -58,7 +69,8 @@ impl Provider for OllamaProvider {
     }
 
     async fn parse_response(&self, body: &Value) -> qbird_code_models::Result<ChatResponse> {
-        let choice = body["choices"].get(0)
+        let choice = body["choices"]
+            .get(0)
             .ok_or_else(|| qbird_code_models::EflowError::LlmProvider("No choices".into()))?;
         let message = &choice["message"];
         Ok(ChatResponse {

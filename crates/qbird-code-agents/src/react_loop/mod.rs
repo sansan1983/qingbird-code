@@ -110,8 +110,9 @@ impl ReactLoop {
                         m.tool_calls
                             .as_ref()
                             .map(|tc| {
-                                tc.iter()
-                                    .any(|c| !types::READ_ONLY_TOOLS.contains(&c.function.name.as_str()))
+                                tc.iter().any(|c| {
+                                    !types::READ_ONLY_TOOLS.contains(&c.function.name.as_str())
+                                })
                             })
                             .unwrap_or(false)
                     });
@@ -248,8 +249,8 @@ impl ReactLoop {
         for tc in tool_calls {
             let registry = Arc::clone(tool_registry);
             let name = tc.function.name.clone();
-            let args: serde_json::Value = serde_json::from_str(&tc.function.arguments)
-                .unwrap_or(serde_json::json!({}));
+            let args: serde_json::Value =
+                serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::json!({}));
             let call_id = tc.id.clone();
             let call_name = tc.function.name.clone();
 
@@ -280,8 +281,8 @@ impl ReactLoop {
         let task_id = uuid::Uuid::new_v4();
 
         for tc in tool_calls {
-            let args: serde_json::Value = serde_json::from_str(&tc.function.arguments)
-                .unwrap_or(serde_json::json!({}));
+            let args: serde_json::Value =
+                serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::json!({}));
 
             let result = tool_registry
                 .execute(&tc.function.name, args, task_id)

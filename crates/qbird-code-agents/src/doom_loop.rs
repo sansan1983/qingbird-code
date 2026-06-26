@@ -40,7 +40,9 @@ impl DoomLoopDetector {
         }
     }
 
-    pub fn nudge_count(&self) -> usize { self.nudge_count }
+    pub fn nudge_count(&self) -> usize {
+        self.nudge_count
+    }
 
     pub fn reset(&mut self) {
         self.recent.clear();
@@ -77,7 +79,9 @@ impl DoomLoopDetector {
 
             let segment = &tail[tail.len() - required..];
             let pattern = &segment[..cycle_len];
-            let is_cycle = segment.iter().enumerate()
+            let is_cycle = segment
+                .iter()
+                .enumerate()
                 .all(|(i, fp)| *fp == pattern[i % cycle_len]);
 
             if is_cycle {
@@ -91,12 +95,15 @@ impl DoomLoopDetector {
                         tool_name, DOOM_LOOP_THRESHOLD
                     )
                 } else {
-                    let names: Vec<&str> = pattern.iter()
+                    let names: Vec<&str> = pattern
+                        .iter()
                         .map(|p| p.split(':').next().unwrap_or("?"))
                         .collect();
                     format!(
                         "Agent 重复 {}-步循环 ({}) {} 次，可能陷入死循环。",
-                        cycle_len, names.join(" → "), DOOM_LOOP_THRESHOLD
+                        cycle_len,
+                        names.join(" → "),
+                        DOOM_LOOP_THRESHOLD
                     )
                 };
 
@@ -121,14 +128,15 @@ impl DoomLoopDetector {
     /// 根据检测结果生成恢复消息
     pub fn recovery_message(action: &DoomLoopAction) -> Option<String> {
         match action {
-            DoomLoopAction::Redirect => Some(
-                "你似乎陷入了重复的循环。请换一种方式来解决问题。".into()
-            ),
+            DoomLoopAction::Redirect => {
+                Some("你似乎陷入了重复的循环。请换一种方式来解决问题。".into())
+            }
             DoomLoopAction::Notify => Some(
-                "你已多次重复相同的操作。建议从根本上重新思考你的方法，而不是继续当前路径。".into()
+                "你已多次重复相同的操作。建议从根本上重新思考你的方法，而不是继续当前路径。".into(),
             ),
             DoomLoopAction::ForceStop => Some(
-                "由于反复执行相同的操作，此任务已被强制终止。请总结当前的发现，然后宣布完成。".into()
+                "由于反复执行相同的操作，此任务已被强制终止。请总结当前的发现，然后宣布完成。"
+                    .into(),
             ),
             DoomLoopAction::None => None,
         }
@@ -136,7 +144,9 @@ impl DoomLoopDetector {
 }
 
 impl Default for DoomLoopDetector {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -158,11 +168,11 @@ mod tests {
         let mut detector = DoomLoopDetector::new();
         let tc = make_tool_call("read_file", r#"{"path":"a.txt"}"#);
 
-        let (a1, _) = detector.check(&[tc.clone()]); // 1st
+        let (a1, _) = detector.check(std::slice::from_ref(&tc)); // 1st
         assert_eq!(a1, DoomLoopAction::None);
-        let (a2, _) = detector.check(&[tc.clone()]); // 2nd
+        let (a2, _) = detector.check(std::slice::from_ref(&tc)); // 2nd
         assert_eq!(a2, DoomLoopAction::None);
-        let (a3, w) = detector.check(&[tc.clone()]); // 3rd → doom!
+        let (a3, w) = detector.check(std::slice::from_ref(&tc)); // 3rd → doom!
         assert_eq!(a3, DoomLoopAction::Redirect);
         assert!(w.contains("read_file"));
     }
@@ -186,15 +196,21 @@ mod tests {
         let tc = make_tool_call("grep", r#"{"pattern":"foo"}"#);
 
         // Round 1: 3 repeats → Redirect
-        for _ in 0..3 { detector.check(&[tc.clone()]); }
+        for _ in 0..3 {
+            detector.check(std::slice::from_ref(&tc));
+        }
         assert_eq!(detector.nudge_count(), 1);
 
         // Round 2: 3 more repeats → Notify
-        for _ in 0..3 { detector.check(&[tc.clone()]); }
+        for _ in 0..3 {
+            detector.check(std::slice::from_ref(&tc));
+        }
         assert_eq!(detector.nudge_count(), 2);
 
         // Round 3: 3 more repeats → ForceStop
-        for _ in 0..3 { detector.check(&[tc.clone()]); }
+        for _ in 0..3 {
+            detector.check(std::slice::from_ref(&tc));
+        }
         assert_eq!(detector.nudge_count(), 3);
     }
 }

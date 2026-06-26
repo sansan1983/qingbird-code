@@ -127,15 +127,15 @@ impl Provider for AnthropicProvider {
 
     async fn parse_response(&self, body: &Value) -> qbird_code_models::Result<ChatResponse> {
         let content_blocks = body["content"].as_array().ok_or_else(|| {
-            qbird_code_models::EflowError::LlmProvider(
-                "No content in Anthropic response".into(),
-            )
+            qbird_code_models::EflowError::LlmProvider("No content in Anthropic response".into())
         })?;
 
         let mut text = String::new();
 
         for block in content_blocks {
-            if block["type"].as_str() == Some("text") && let Some(t) = block["text"].as_str() {
+            if block["type"].as_str() == Some("text")
+                && let Some(t) = block["text"].as_str()
+            {
                 text.push_str(t);
             }
         }
@@ -157,11 +157,7 @@ impl Provider for AnthropicProvider {
                     })
                 })
                 .collect();
-            if calls.is_empty() {
-                None
-            } else {
-                Some(calls)
-            }
+            if calls.is_empty() { None } else { Some(calls) }
         };
 
         let stop_reason = body["stop_reason"].as_str().unwrap_or("").to_string();
@@ -169,7 +165,9 @@ impl Provider for AnthropicProvider {
         let usage_stats = UsageStats {
             prompt_tokens: body["usage"]["input_tokens"].as_u64().unwrap_or(0),
             completion_tokens: body["usage"]["output_tokens"].as_u64().unwrap_or(0),
-            cache_hit_tokens: body["usage"]["cache_read_input_tokens"].as_u64().unwrap_or(0),
+            cache_hit_tokens: body["usage"]["cache_read_input_tokens"]
+                .as_u64()
+                .unwrap_or(0),
             cache_miss_tokens: 0,
         };
 
@@ -273,10 +271,7 @@ mod tests {
         let headers = provider.build_headers();
 
         assert_eq!(headers.get("Content-Type").unwrap(), "application/json");
-        assert_eq!(
-            headers.get("anthropic-version").unwrap(),
-            "2023-06-01"
-        );
+        assert_eq!(headers.get("anthropic-version").unwrap(), "2023-06-01");
         // Should have x-api-key, not Authorization header
         assert!(headers.contains_key("x-api-key"));
         assert!(!headers.contains_key("Authorization"));
@@ -429,9 +424,6 @@ mod tests {
         assert!(body["tools"].is_array());
         assert_eq!(body["tools"].as_array().unwrap().len(), 1);
         assert_eq!(body["tools"][0]["name"], "get_weather");
-        assert_eq!(
-            body["tools"][0]["input_schema"]["type"],
-            "object"
-        );
+        assert_eq!(body["tools"][0]["input_schema"]["type"], "object");
     }
 }

@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use qbird_code_models::{Message, MessageRole, UsageStats};
 
-use super::{ChatResponse, Provider, ProtocolKind, ProviderKind, RequestConfig};
+use super::{ChatResponse, ProtocolKind, Provider, ProviderKind, RequestConfig};
 use crate::config::DeepseekConfig;
 use crate::http_client::HttpLlmClient;
 
@@ -27,28 +27,34 @@ impl DeepseekAnthropicProvider {
 
     /// 将工具定义从 OpenAI 格式转为 Anthropic 格式
     fn convert_tools(openai_tools: &[Value]) -> Vec<Value> {
-        openai_tools.iter().filter_map(|t| {
-            let func = t.get("function")?;
-            Some(json!({
-                "name": func["name"],
-                "description": func.get("description").and_then(|v| v.as_str()).unwrap_or(""),
-                "input_schema": func["parameters"].clone(),
-            }))
-        }).collect()
+        openai_tools
+            .iter()
+            .filter_map(|t| {
+                let func = t.get("function")?;
+                Some(json!({
+                    "name": func["name"],
+                    "description": func.get("description").and_then(|v| v.as_str()).unwrap_or(""),
+                    "input_schema": func["parameters"].clone(),
+                }))
+            })
+            .collect()
     }
 
     /// 将 tool_calls 从 Anthropic 格式转回统一格式
     fn parse_anthropic_tool_calls(content_blocks: &[Value]) -> Option<Vec<Value>> {
-        let calls: Vec<Value> = content_blocks.iter()
+        let calls: Vec<Value> = content_blocks
+            .iter()
             .filter(|b| b["type"].as_str() == Some("tool_use"))
-            .map(|b| json!({
-                "id": b["id"],
-                "type": "function",
-                "function": {
-                    "name": b["name"],
-                    "arguments": serde_json::to_string(&b["input"]).unwrap_or_default(),
-                }
-            }))
+            .map(|b| {
+                json!({
+                    "id": b["id"],
+                    "type": "function",
+                    "function": {
+                        "name": b["name"],
+                        "arguments": serde_json::to_string(&b["input"]).unwrap_or_default(),
+                    }
+                })
+            })
             .collect();
         if calls.is_empty() { None } else { Some(calls) }
     }
@@ -57,14 +63,23 @@ impl DeepseekAnthropicProvider {
 #[async_trait]
 #[allow(clippy::misnamed_getters)]
 impl Provider for DeepseekAnthropicProvider {
-    fn kind(&self) -> ProviderKind { ProviderKind::DeepSeek }
-    fn protocol(&self) -> ProtocolKind { ProtocolKind::Anthropic }
-    fn model(&self) -> &str { &self.config.default_model }
-    fn base_url(&self) -> &str { &self.config.base_url_anthropic }
+    fn kind(&self) -> ProviderKind {
+        ProviderKind::DeepSeek
+    }
+    fn protocol(&self) -> ProtocolKind {
+        ProtocolKind::Anthropic
+    }
+    fn model(&self) -> &str {
+        &self.config.default_model
+    }
+    fn base_url(&self) -> &str {
+        &self.config.base_url_anthropic
+    }
 
     fn build_request_body(&self, messages: &[Message], config: &RequestConfig) -> Value {
         // Anthropic 格式：system 单独字段，messages 不含 system role
-        let system_content: String = messages.iter()
+        let system_content: String = messages
+            .iter()
             .filter(|m| m.role == MessageRole::System)
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
@@ -149,10 +164,9 @@ impl Provider for DeepseekAnthropicProvider {
     }
 
     async fn parse_response(&self, body: &Value) -> qbird_code_models::Result<ChatResponse> {
-        let content_blocks = body["content"].as_array()
-            .ok_or_else(|| qbird_code_models::EflowError::LlmProvider(
-                "No content in Anthropic response".into()
-            ))?;
+        let content_blocks = body["content"].as_array().ok_or_else(|| {
+            qbird_code_models::EflowError::LlmProvider("No content in Anthropic response".into())
+        })?;
 
         let mut text = String::new();
         let mut reasoning = String::new();
@@ -181,13 +195,19 @@ impl Provider for DeepseekAnthropicProvider {
         let usage_stats = UsageStats {
             prompt_tokens: body["usage"]["input_tokens"].as_u64().unwrap_or(0),
             completion_tokens: body["usage"]["output_tokens"].as_u64().unwrap_or(0),
-            cache_hit_tokens: body["usage"]["cache_read_input_tokens"].as_u64().unwrap_or(0),
+            cache_hit_tokens: body["usage"]["cache_read_input_tokens"]
+                .as_u64()
+                .unwrap_or(0),
             cache_miss_tokens: 0,
         };
 
         Ok(ChatResponse {
             content: text,
-            reasoning_content: if reasoning.is_empty() { None } else { Some(reasoning) },
+            reasoning_content: if reasoning.is_empty() {
+                None
+            } else {
+                Some(reasoning)
+            },
             tool_calls,
             finish_reason: Some(stop_reason),
             usage: usage_stats,
@@ -195,7 +215,10 @@ impl Provider for DeepseekAnthropicProvider {
     }
 
     fn build_headers(&self) -> HashMap<String, String> {
-        let api_key = self.config.api_key.clone()
+        let api_key = self
+            .config
+            .api_key
+            .clone()
             .or_else(|| std::env::var("DEEPSEEK_API_KEY").ok())
             .unwrap_or_default();
         let mut headers = HashMap::new();
@@ -362,7 +385,10 @@ mod tests {
         let result = rt.block_on(provider.parse_response(&json)).unwrap();
 
         assert_eq!(result.content, "Here is the final answer.");
-        assert_eq!(result.reasoning_content.unwrap(), "Let me think step by step...");
+        assert_eq!(
+            result.reasoning_content.unwrap(),
+            "Let me think step by step..."
+        );
     }
 
     #[test]
@@ -466,7 +492,10 @@ mod tests {
         let anthropic_tools = DeepseekAnthropicProvider::convert_tools(&openai_tools);
         assert_eq!(anthropic_tools.len(), 1);
         assert_eq!(anthropic_tools[0]["name"], "get_weather");
-        assert_eq!(anthropic_tools[0]["description"], "Get weather for a location");
+        assert_eq!(
+            anthropic_tools[0]["description"],
+            "Get weather for a location"
+        );
         assert_eq!(anthropic_tools[0]["input_schema"]["type"], "object");
     }
 }
