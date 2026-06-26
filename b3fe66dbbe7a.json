@@ -1,0 +1,15 @@
+{
+  "id": "b3fe66dbbe7a",
+  "created_at": "2026-06-26T09:01:46.453669200+00:00",
+  "updated_at": "2026-06-26T09:01:46.453675300+00:00",
+  "messages": [],
+  "context_files": [],
+  "metadata": {},
+  "file_changes": [],
+  "channel": "cli",
+  "chat_type": "direct",
+  "channel_user_id": "",
+  "delivery_context": {},
+  "workspace_confirmed": false,
+  "subagent_sessions": {}
+}

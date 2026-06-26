@@ -275,9 +275,8 @@ fn default_user_db() -> String {
 // ===== 配置加载 =====
 
 pub fn load_config(path: &Path) -> Result<EflowConfig> {
-    let content = std::fs::read_to_string(path).map_err(|e| {
-        EflowError::Config(format!("读取配置文件失败 {}: {}", path.display(), e))
-    })?;
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| EflowError::Config(format!("读取配置文件失败 {}: {}", path.display(), e)))?;
     let expanded = crate::env::expand_env_vars(&content)?;
     let config: EflowConfig = serde_yaml::from_str(&expanded)
         .map_err(|e| EflowError::Config(format!("解析配置失败: {}", e)))?;

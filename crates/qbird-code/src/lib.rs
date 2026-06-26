@@ -1,1 +1,3 @@
-pub fn stub() -> &'static str { "stub" }
+pub fn stub() -> &'static str {
+    "stub"
+}

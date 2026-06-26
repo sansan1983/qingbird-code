@@ -90,10 +90,7 @@ impl Message {
     }
 
     /// 创建 assistant 消息（带可选 thinking 内容）
-    pub fn assistant(
-        content: impl Into<String>,
-        reasoning_content: Option<String>,
-    ) -> Self {
+    pub fn assistant(content: impl Into<String>, reasoning_content: Option<String>) -> Self {
         Self {
             role: MessageRole::Assistant,
             content: content.into(),
@@ -134,7 +131,10 @@ impl Message {
 
     /// 是否有工具调用
     pub fn has_tool_calls(&self) -> bool {
-        self.tool_calls.as_ref().map(|tc| !tc.is_empty()).unwrap_or(false)
+        self.tool_calls
+            .as_ref()
+            .map(|tc| !tc.is_empty())
+            .unwrap_or(false)
     }
 }
 

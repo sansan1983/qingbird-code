@@ -4,6 +4,9 @@ pub use deepseek::DeepseekProvider;
 pub mod deepseek_anthropic;
 pub use deepseek_anthropic::DeepseekAnthropicProvider;
 
+pub mod ollama;
+pub use ollama::OllamaProvider;
+
 use async_trait::async_trait;
 use qbird_code_models::{Message, Result, UsageStats};
 use serde::{Deserialize, Serialize};
