@@ -1,0 +1,48 @@
+[package]
+name = "qingbird-code"
+version = "0.1.0"
+edition = "2024"
+description = "青鸟 (qingbird) - Multi-layer Agent Collaboration Framework"
+
+[[bin]]
+name = "qingbird"
+path = "src/main.rs"
+
+[lib]
+name = "qingbird_code"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+uuid = { version = "1", features = ["v4", "serde"] }
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+async-trait = "0.1"
+sha2 = "0.10"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+indexmap = "2"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+once_cell = "1"
+regex-lite = "0.1.9"
+dirs = "6.0.0"
+futures-util = "0.3.32"
+rust-i18n = "3"
+walkdir = "2"
+lru = "0.12"
+ratatui = "0.29"
+crossterm = "0.28"
+
+[dev-dependencies]
+tempfile = "3"
+tokio-test = "0.4"
+# 串行化 locale 相关测试（rust-i18n 用 process-global 状态，cargo test 多线程并发会污染）
+serial_test = "3"
+
+[features]
+default = []

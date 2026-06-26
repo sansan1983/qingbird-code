@@ -1,48 +1,93 @@
-[package]
-name = "qingbird-code"
-version = "0.1.0"
+[workspace]
+resolver = "2"
+members = [
+    "crates/qbird-code-models",
+    "crates/qbird-code-infra",
+    "crates/qbird-code-tools",
+    "crates/qbird-code-agents",
+    "crates/qbird-code",
+]
+
+[workspace.package]
+version = "0.2.0"
 edition = "2024"
-description = "青鸟 (qingbird) - Multi-layer Agent Collaboration Framework"
+license = "MIT"
+authors = ["sansan1983"]
 
-[[bin]]
-name = "qingbird"
-path = "src/main.rs"
-
-[lib]
-name = "qingbird_code"
-path = "src/lib.rs"
-
-[dependencies]
+[workspace.dependencies]
+# async runtime
 tokio = { version = "1", features = ["full"] }
-clap = { version = "4", features = ["derive"] }
+futures-util = "0.3.32"
+
+# serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
-uuid = { version = "1", features = ["v4", "serde"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# HTTP
 reqwest = { version = "0.12", features = ["json", "blocking"] }
+
+# database
 rusqlite = { version = "0.32", features = ["bundled"] }
+
+# async tools
 async-trait = "0.1"
+
+# crypto
 sha2 = "0.10"
+
+# observability
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# data types
 indexmap = "2"
 chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# error handling
 thiserror = "2"
+
+# utilities
 once_cell = "1"
 regex-lite = "0.1.9"
 dirs = "6.0.0"
-futures-util = "0.3.32"
-rust-i18n = "3"
-walkdir = "2"
 lru = "0.12"
+walkdir = "2"
+
+# i18n
+rust-i18n = "3"
+
+# TUI
 ratatui = "0.29"
 crossterm = "0.28"
 
-[dev-dependencies]
-tempfile = "3"
-tokio-test = "0.4"
-# 串行化 locale 相关测试（rust-i18n 用 process-global 状态，cargo test 多线程并发会污染）
-serial_test = "3"
+[workspace.dependencies.qbird-code-models]
+path = "crates/qbird-code-models"
 
-[features]
-default = []
+[workspace.dependencies.qbird-code-infra]
+path = "crates/qbird-code-infra"
+
+[workspace.dependencies.qbird-code-tools]
+path = "crates/qbird-code-tools"
+
+[workspace.dependencies.qbird-code-agents]
+path = "crates/qbird-code-agents"
+
+# dev dependencies
+[workspace.dependencies.tempfile]
+version = "3"
+
+[workspace.dependencies.tokio-test]
+version = "0.4"
+
+[workspace.dependencies.serial_test]
+version = "3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
