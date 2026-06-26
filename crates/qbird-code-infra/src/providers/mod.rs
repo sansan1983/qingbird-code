@@ -1,3 +1,6 @@
+pub mod deepseek;
+pub use deepseek::DeepseekProvider;
+
 use async_trait::async_trait;
 use qbird_code_models::{Message, Result, UsageStats};
 use serde::{Deserialize, Serialize};
@@ -82,11 +85,8 @@ pub trait Provider: Send + Sync {
     }
 
     /// 构建 HTTP 请求体 (JSON)
-    fn build_request_body(
-        &self,
-        messages: &[Message],
-        config: &RequestConfig,
-    ) -> serde_json::Value;
+    fn build_request_body(&self, messages: &[Message], config: &RequestConfig)
+    -> serde_json::Value;
 
     /// 解析响应体为统一 ChatResponse
     async fn parse_response(&self, body: &serde_json::Value) -> Result<ChatResponse>;
