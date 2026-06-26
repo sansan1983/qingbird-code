@@ -31,7 +31,9 @@ pub struct LoopState {
     pub iteration: usize,
     pub consecutive_no_tool_calls: usize,
     pub consecutive_reads: usize,
+    pub read_nudge_sent: bool,
     pub completion_nudge_sent: bool,
+    pub no_tool_nudge_sent: bool,
 }
 
 impl LoopState {
@@ -40,7 +42,9 @@ impl LoopState {
             iteration: 0,
             consecutive_no_tool_calls: 0,
             consecutive_reads: 0,
+            read_nudge_sent: false,
             completion_nudge_sent: false,
+            no_tool_nudge_sent: false,
         }
     }
 }

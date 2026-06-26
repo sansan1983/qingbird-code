@@ -87,3 +87,11 @@ wizard_step_title_model_fallback: "拉取失败，请手动输入模型 ID"
 wizard_provider_hint_preset: "（预置厂商）"
 wizard_provider_hint_custom: "（自定义，兼容 OpenAI / Anthropic 协议）"
 wizard_prompt_init: "未找到配置，是否进入初始化向导？[Y/n]"
+
+# === Nudge 提醒 ===
+nudge_consecutive_reads: "你已经连续 %{count} 轮只进行读取操作。是否需要开始写代码或执行修改？"
+nudge_iteration_warning: "只剩 %{remaining} 轮迭代机会了。请尽快给出最终结论，不要再进行探索性操作。"
+nudge_completion_without_write: "你声明了任务完成，但尚未执行任何写入操作。如果有待办事项未完成，请先完成。"
+nudge_no_tool_calls: "你已连续多轮没有调用工具。请使用可用工具来完成操作。"
+nudge_max_iterations: "达到最大迭代次数。请立即总结当前状态并给出最终回答。"
+nudge_prefix: "[系统提醒]"

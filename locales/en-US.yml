@@ -87,3 +87,11 @@ wizard_step_title_model_fallback: "Fetch failed, please enter model ID manually"
 wizard_provider_hint_preset: "(preset vendor)"
 wizard_provider_hint_custom: "(custom, OpenAI / Anthropic compatible)"
 wizard_prompt_init: "Config not found, enter init wizard? [Y/n]"
+
+# === Nudge reminders ===
+nudge_consecutive_reads: "You have performed %{count} consecutive read-only operations. Do you want to start writing code or making changes?"
+nudge_iteration_warning: "Only %{remaining} iterations remaining. Please reach a conclusion without further exploration."
+nudge_completion_without_write: "You declared the task complete, but no write operations were performed. Please finish any pending items if applicable."
+nudge_no_tool_calls: "You have gone multiple rounds without calling any tool. Please use the available tools to complete the operation."
+nudge_max_iterations: "Maximum iterations reached. Please summarize the current state and give a final answer now."
+nudge_prefix: "[System]"

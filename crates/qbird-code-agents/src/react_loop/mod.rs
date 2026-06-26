@@ -8,6 +8,7 @@ use qbird_code_infra::http_client::HttpLlmClient;
 use qbird_code_infra::providers::{Provider, RequestConfig};
 use qbird_code_models::{EflowError, Message, ToolCall, ToolCallFunction};
 use qbird_code_tools::ToolRegistry;
+use rust_i18n::t;
 
 pub struct ReactLoop {
     pub config: ReactLoopConfig,
@@ -40,10 +41,17 @@ impl ReactLoop {
             state.iteration += 1;
 
             // === 1. 安全自检 ===
-            self.check_safety(&state, max_iters, messages)?;
+            if let Some(nudge) = self.check_safety(&state, max_iters) {
+                crate::nudge::NudgeSystem::inject_nudge(messages, &nudge);
+                return Ok(AgentResult {
+                    content: nudge,
+                    messages: messages.clone(),
+                    usage: Default::default(),
+                });
+            }
 
             // === 2. Nudge 检测 ===
-            self.check_nudges(&state, messages);
+            self.check_nudges(&mut state, messages);
 
             // === 3. LLM 调用 ===
             let request_config = RequestConfig {
@@ -200,29 +208,30 @@ impl ReactLoop {
     }
 
     /// === 安全自检 ===
-    fn check_safety(
-        &self,
-        state: &LoopState,
-        max_iters: usize,
-        messages: &mut Vec<Message>,
-    ) -> Result<(), EflowError> {
+    fn check_safety(&self, state: &LoopState, max_iters: usize) -> Option<String> {
         if state.iteration > max_iters {
-            // Wind-down: 注入总结请求
-            crate::nudge::NudgeSystem::inject_nudge(
-                messages,
-                "达到最大迭代次数。请立即总结当前状态并给出最终回答。",
-            );
-            return Err(EflowError::Internal("Max iterations reached".into()));
+            Some(t!("nudge_max_iterations").to_string())
+        } else {
+            None
         }
-        Ok(())
     }
 
     /// === Nudge 检测 ===
-    fn check_nudges(&self, state: &LoopState, messages: &mut Vec<Message>) {
+    fn check_nudges(&self, state: &mut LoopState, messages: &mut Vec<Message>) {
         if let Some(n) = crate::nudge::NudgeSystem::check_consecutive_reads(
             state.consecutive_reads,
             self.config.max_consecutive_reads,
+            state.read_nudge_sent,
         ) {
+            state.read_nudge_sent = true;
+            crate::nudge::NudgeSystem::inject_nudge(messages, &n);
+        }
+
+        if let Some(n) = crate::nudge::NudgeSystem::check_no_tool_calls(
+            state.consecutive_no_tool_calls,
+            state.no_tool_nudge_sent,
+        ) {
+            state.no_tool_nudge_sent = true;
             crate::nudge::NudgeSystem::inject_nudge(messages, &n);
         }
 

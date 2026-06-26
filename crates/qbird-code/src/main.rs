@@ -26,6 +26,15 @@ struct Cli {
     interactive: bool,
 }
 
+fn build_system_message(registry: &ToolRegistry) -> Message {
+    let defs = registry.definitions();
+    let tool_names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
+    Message::system(format!(
+        "你是 qingbird，一个高效的编码助手。\n\n可用工具：{}\n\n请通过调用工具来完成任务。每次调用工具后会得到执行结果，根据结果决定下一步。任务完成时给出总结。",
+        tool_names.join(", ")
+    ))
+}
+
 #[tokio::main]
 async fn main() {
     // === 1. 初始化日志（走 stderr） ===
@@ -101,7 +110,7 @@ async fn main() {
     // === 5. 单次执行模式 ===
     if let Some(prompt) = cli.execute {
         let react_loop = ReactLoop::new(ReactLoopConfig::default());
-        let mut messages = vec![Message::user(&prompt)];
+        let mut messages = vec![build_system_message(&tool_registry), Message::user(&prompt)];
 
         match react_loop
             .run(
@@ -157,7 +166,7 @@ async fn main() {
                 continue;
             }
 
-            let mut messages = vec![Message::user(&line)];
+            let mut messages = vec![build_system_message(&tool_registry), Message::user(&line)];
 
             match react_loop
                 .run(

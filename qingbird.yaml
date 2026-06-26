@@ -3,11 +3,18 @@ core:
   timezone: Asia/Shanghai
 
 llm:
-  # v1.3+ provider 配置在 ~/.eflow/providers/<id>.yaml
-  routing:
-    strong: deepseek
-    medium: deepseek
-    light: deepseek
+  active: deepseek
+  deepseek:
+    api_key: ""
+    base_url: "https://api.deepseek.com"
+    base_url_anthropic: "https://api.deepseek.com/anthropic"
+    default_model: "deepseek-chat"
+    fast_model: "deepseek-chat"
+    thinking_enabled: true
+    thinking_effort: "high"
+    timeout_secs: 30
+    max_retries: 3
+    retry_backoff_ms: 1000
 
 memory:
   working_memory_limit: 1000
