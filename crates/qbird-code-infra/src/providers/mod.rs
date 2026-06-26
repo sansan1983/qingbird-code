@@ -1,11 +1,14 @@
+pub mod anthropic;
 pub mod deepseek;
-pub use deepseek::DeepseekProvider;
-
 pub mod deepseek_anthropic;
-pub use deepseek_anthropic::DeepseekAnthropicProvider;
-
 pub mod ollama;
+pub mod openai;
+
+pub use anthropic::AnthropicProvider;
+pub use deepseek::DeepseekProvider;
+pub use deepseek_anthropic::DeepseekAnthropicProvider;
 pub use ollama::OllamaProvider;
+pub use openai::OpenAIProvider;
 
 use async_trait::async_trait;
 use qbird_code_models::{Message, Result, UsageStats};
