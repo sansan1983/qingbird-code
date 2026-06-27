@@ -27,15 +27,21 @@ struct Cli {
     interactive: bool,
 
     /// LLM Provider（覆盖 config 中的 llm.active）
-    #[arg(long)]
+    #[arg(
+        long,
+        value_parser = clap::builder::PossibleValuesParser::new([
+            "deepseek", "deepseek-anthropic", "ollama", "openai", "anthropic"
+        ])
+    )]
     provider: Option<String>,
 }
 
-fn build_system_message(registry: &ToolRegistry) -> Message {
+fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message {
     let defs = registry.definitions();
     let tool_names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
     Message::system(format!(
-        "你是 qingbird，一个高效的编码助手。\n\n可用工具：{}\n\n请通过调用工具来完成任务。每次调用工具后会得到执行结果，根据结果决定下一步。任务完成时给出总结。",
+        "你是 qingbird，一个高效的编码助手。当前 LLM Provider：{}。\n\n可用工具：{}\n\n请通过调用工具来完成任务。每次调用工具后会得到执行结果，根据结果决定下一步。任务完成时给出总结。",
+        provider_name,
         tool_names.join(", ")
     ))
 }
@@ -126,7 +132,11 @@ async fn main() {
             )
         }
         "ollama" => {
-            let h = match HttpLlmClient::new(cfg.llm.ollama.timeout_secs, 3, 1000) {
+            let h = match HttpLlmClient::new(
+                cfg.llm.ollama.timeout_secs,
+                cfg.llm.ollama.max_retries,
+                cfg.llm.ollama.retry_backoff_ms,
+            ) {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!("Failed to initialize HTTP client: {}", e);
@@ -146,7 +156,11 @@ async fn main() {
             )
         }
         "openai" => {
-            let h = match HttpLlmClient::new(cfg.llm.openai.timeout_secs, 3, 1000) {
+            let h = match HttpLlmClient::new(
+                cfg.llm.openai.timeout_secs,
+                cfg.llm.openai.max_retries,
+                cfg.llm.openai.retry_backoff_ms,
+            ) {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!("Failed to initialize HTTP client: {}", e);
@@ -166,7 +180,11 @@ async fn main() {
             )
         }
         "anthropic" => {
-            let h = match HttpLlmClient::new(cfg.llm.anthropic.timeout_secs, 3, 1000) {
+            let h = match HttpLlmClient::new(
+                cfg.llm.anthropic.timeout_secs,
+                cfg.llm.anthropic.max_retries,
+                cfg.llm.anthropic.retry_backoff_ms,
+            ) {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!("Failed to initialize HTTP client: {}", e);
@@ -233,7 +251,10 @@ async fn main() {
             thinking_effort: thinking_effort.clone(),
             ..ReactLoopConfig::default()
         });
-        let mut messages = vec![build_system_message(&tool_registry), Message::user(&prompt)];
+        let mut messages = vec![
+            build_system_message(&tool_registry, &cfg.llm.active),
+            Message::user(&prompt),
+        ];
 
         match react_loop
             .run(
@@ -264,7 +285,7 @@ async fn main() {
             thinking_effort: thinking_effort.clone(),
             ..ReactLoopConfig::default()
         });
-        let mut messages = vec![build_system_message(&tool_registry)];
+        let mut messages = vec![build_system_message(&tool_registry, &cfg.llm.active)];
         println!("qingbird interactive mode. Type /quit or /exit to exit.");
         println!();
 

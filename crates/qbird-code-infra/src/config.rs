@@ -86,8 +86,11 @@ pub struct OllamaConfig {
     pub default_model: String,
     #[serde(default = "default_timeout_secs")]
     pub timeout_secs: u64,
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u8,
+    #[serde(default = "default_retry_backoff_ms")]
+    pub retry_backoff_ms: u64,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenaiConfig {
     #[serde(default)]
@@ -98,6 +101,10 @@ pub struct OpenaiConfig {
     pub default_model: String,
     #[serde(default = "default_timeout_secs")]
     pub timeout_secs: u64,
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u8,
+    #[serde(default = "default_retry_backoff_ms")]
+    pub retry_backoff_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,6 +117,10 @@ pub struct AnthropicConfig {
     pub default_model: String,
     #[serde(default = "default_timeout_secs")]
     pub timeout_secs: u64,
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u8,
+    #[serde(default = "default_retry_backoff_ms")]
+    pub retry_backoff_ms: u64,
 }
 
 // ===== 缓存配置 =====
@@ -180,6 +191,8 @@ impl Default for OllamaConfig {
             base_url: default_ollama_url(),
             default_model: default_ollama_model(),
             timeout_secs: default_timeout_secs(),
+            max_retries: default_max_retries(),
+            retry_backoff_ms: default_retry_backoff_ms(),
         }
     }
 }
@@ -191,6 +204,8 @@ impl Default for OpenaiConfig {
             base_url: default_openai_url(),
             default_model: default_openai_model(),
             timeout_secs: default_timeout_secs(),
+            max_retries: default_max_retries(),
+            retry_backoff_ms: default_retry_backoff_ms(),
         }
     }
 }
@@ -202,6 +217,8 @@ impl Default for AnthropicConfig {
             base_url: default_anthropic_url(),
             default_model: default_anthropic_model(),
             timeout_secs: default_timeout_secs(),
+            max_retries: default_max_retries(),
+            retry_backoff_ms: default_retry_backoff_ms(),
         }
     }
 }

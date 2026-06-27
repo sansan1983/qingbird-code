@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.7] - 2026-06-27
+
+### Added
+
+- **`--help` 增强**: `--provider` 参数现在显示可选值列表（deepseek/deepseek-anthropic/ollama/openai/anthropic）
+- **Ollama/OpenAI/Anthropic 配置统一**: 新增 `max_retries`/`retry_backoff_ms` 字段，不再硬编码 3/1000
+- **系统提示词定制**: `build_system_message` 现在包含当前 Provider 名称
+
+---
+
 ## [0.2.6] - 2026-06-27
 
 ### Added
