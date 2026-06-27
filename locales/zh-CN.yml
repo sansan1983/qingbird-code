@@ -60,6 +60,10 @@ status_startup_info: "qingbird 已启动 — Provider: %{provider}, 模型: %{mo
 status_usage: "用法: qingbird --execute \"提示词\" | qingbird --interactive"
 err_http_client_init: "初始化 HTTP 客户端失败: %{msg}"
 err_llm_provider_init: "初始化 LLM Provider 失败: %{msg}"
+err_llm_auth_failed: "LLM 鉴权失败: %{msg}"
+err_skill_not_found: "未找到 skill: %{name}"
+err_permission_denied: "权限不足: %{msg}"
+err_session_store_unavailable: "会话存储不可用"
 
 # === Nudge（补充 key） ===
 nudge_prefix: "[提醒]"

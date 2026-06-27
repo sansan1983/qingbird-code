@@ -429,7 +429,7 @@ async fn main() {
                                 }
                             }
                         } else {
-                            eprintln!("Session store not available");
+                            eprintln!("{}", t!("err_session_store_unavailable"));
                         }
                     }
                     "/session" => {
