@@ -1,6 +1,6 @@
 use qbird_code_models::{
-    Importance, MemoryCategory, Message, MessageRole, PermissionSet, RetryPolicy, RiskLevel,
-    Role, ToolCall, ToolCallFunction, UsageStats,
+    Importance, MemoryCategory, Message, MessageRole, PermissionSet, RetryPolicy, RiskLevel, Role,
+    ToolCall, ToolCallFunction, UsageStats,
 };
 
 // ===== Message =====

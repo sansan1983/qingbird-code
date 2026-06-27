@@ -49,6 +49,13 @@ struct Cli {
     /// LLM 温度参数（0.0 ~ 2.0，覆盖 config 中的 temperature）
     #[arg(long)]
     temperature: Option<f64>,
+
+    /// 界面 locale（覆盖 yaml `core.language`）
+    #[arg(
+        long,
+        value_parser = clap::builder::PossibleValuesParser::new(["zh-CN", "en-US"])
+    )]
+    lang: Option<String>,
 }
 
 fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message {
@@ -118,6 +125,11 @@ async fn main() {
             std::process::exit(1);
         }
     };
+
+    // === 2.5. 初始化 locale（CLI --lang > yaml core.language > 默认） ===
+    let resolved_locale_input = cli.lang.as_deref().unwrap_or(cfg.core.language.as_str());
+    let active_locale = qbird_code_infra::locale::init(resolved_locale_input);
+    tracing::info!(locale = active_locale, "locale activated");
 
     // --provider 命令行参数覆盖 config 中的 llm.active
     if let Some(ref provider) = cli.provider {
