@@ -52,6 +52,9 @@ walkdir = "2"
 # i18n
 rust-i18n = "3"
 
+# database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
 [workspace.dependencies.qbird-code-models]
 path = "crates/qbird-code-models"
 

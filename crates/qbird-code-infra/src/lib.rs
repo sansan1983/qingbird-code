@@ -4,4 +4,5 @@ pub mod event;
 pub mod http_client;
 pub mod locale;
 
+pub mod memory;
 pub mod providers;
