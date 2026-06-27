@@ -343,6 +343,7 @@ async fn main() {
                 &tool_schemas,
                 &tool_registry,
                 None,
+                None,
             )
             .await
         {
@@ -466,6 +467,7 @@ async fn main() {
                     &mut messages,
                     &tool_schemas,
                     &tool_registry,
+                    None,
                     None,
                 )
                 .await

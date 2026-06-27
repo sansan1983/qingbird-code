@@ -81,6 +81,8 @@ pub struct ReactLoopConfig {
     pub thinking_enabled: bool,
     /// thinking effort: "high" | "max"
     pub thinking_effort: String,
+    pub context_token_limit: usize,
+    pub context_checkpoint_threshold: f64,
 }
 
 impl Default for ReactLoopConfig {
@@ -93,6 +95,8 @@ impl Default for ReactLoopConfig {
             max_consecutive_reads: 5,
             thinking_enabled: true,
             thinking_effort: "high".into(),
+            context_token_limit: 32000,
+            context_checkpoint_threshold: 0.8,
         }
     }
 }

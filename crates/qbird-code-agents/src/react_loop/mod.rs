@@ -7,6 +7,7 @@ pub use types::{AgentHook, AgentResult, HookAction, LoopState, ReactLoopConfig, 
 use std::sync::Arc;
 
 use qbird_code_infra::http_client::HttpLlmClient;
+use qbird_code_infra::memory::ContextManager;
 use qbird_code_infra::providers::{Provider, RequestConfig};
 use qbird_code_models::{EflowError, Message, ToolCall};
 use qbird_code_tools::ToolRegistry;
@@ -28,6 +29,7 @@ impl ReactLoop {
     }
 
     /// 主入口：运行 ReAct 循环（外部接口不变）
+    #[allow(clippy::too_many_arguments)]
     pub async fn run(
         &self,
         provider: &dyn Provider,
@@ -36,6 +38,7 @@ impl ReactLoop {
         tool_schemas: &[serde_json::Value],
         tool_registry: &Arc<ToolRegistry>,
         max_iterations_override: Option<usize>,
+        mut context_manager: Option<&mut ContextManager>,
     ) -> Result<AgentResult, EflowError> {
         let max_iters = max_iterations_override.unwrap_or(self.config.max_iterations);
         let mut state = LoopState::new();
@@ -78,6 +81,13 @@ impl ReactLoop {
             // === 决策: LLM 说了什么？ ===
             let step =
                 r#loop::process_llm_response(&mut state, &mut hooks, &chat_response, messages)?;
+
+            // 更新 ContextManager 检查点
+            if let Some(ref mut cm) = context_manager
+                && let Some(event) = cm.checkpoint_if_needed()
+            {
+                tracing::info!("Context checkpoint: {:?}", event);
+            }
 
             match step {
                 Step::CallTools { tool_calls } => {

@@ -33,6 +33,7 @@ async fn ollama_simple_reply_smoke_test() {
             &tool_schemas,
             &tool_registry,
             Some(10),
+            None,
         )
         .await;
 
