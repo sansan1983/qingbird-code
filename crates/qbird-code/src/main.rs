@@ -294,6 +294,7 @@ async fn main() {
     registry.register(Arc::new(GlobTool));
     registry.register(Arc::new(ListDirTool));
     registry.register(Arc::new(WebFetchTool));
+    registry.set_allowed_paths(cfg.security.allowed_paths.clone());
     // 提取 thinking 配置（仅 DeepSeek 支持）
     let (thinking_enabled, thinking_effort) = match cfg.llm.active.as_str() {
         "deepseek" | "deepseek-anthropic" => (

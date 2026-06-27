@@ -32,6 +32,7 @@ pub trait Tool: Send + Sync {
 /// 工具注册表
 pub struct ToolRegistry {
     tools: HashMap<String, Arc<dyn Tool>>,
+    allowed_paths: Vec<String>,
 }
 
 impl ToolRegistry {
@@ -39,7 +40,12 @@ impl ToolRegistry {
     pub fn new() -> Self {
         Self {
             tools: HashMap::new(),
+            allowed_paths: Vec::new(),
         }
+    }
+
+    pub fn set_allowed_paths(&mut self, paths: Vec<String>) {
+        self.allowed_paths = paths;
     }
 
     pub fn register(&mut self, tool: Arc<dyn Tool>) {
@@ -80,6 +86,24 @@ impl ToolRegistry {
                 task_id: task_id.to_string(),
                 reason: t!("err_tool_l3_required", name = name).to_string(),
             });
+        }
+
+        // 路径安全校验（仅对 L1+ 工具）
+        if def.risk_level >= RiskLevel::L1
+            && !self.allowed_paths.is_empty()
+            && let Some(path) = params.get("path").and_then(|v| v.as_str())
+        {
+            let allowed = self.allowed_paths.iter().any(|p| path.starts_with(p));
+            if !allowed {
+                return Err(EflowError::PermissionDenied(
+                    t!(
+                        "err_permission_path",
+                        path = path,
+                        allowed = self.allowed_paths.join(", ")
+                    )
+                    .to_string(),
+                ));
+            }
         }
 
         tool.execute(params).await
