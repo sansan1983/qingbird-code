@@ -9,4 +9,4 @@ pub mod subagent_pool;
 
 pub use react_loop::{ReactLoop, ReactLoopConfig};
 pub use subagent::{Subagent, SubagentConfig, SubagentRole};
-pub use subagent_pool::{SubagentPool, execute_parallel};
+pub use subagent_pool::execute_parallel;

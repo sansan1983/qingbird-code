@@ -105,23 +105,6 @@ pub struct PlannedStep {
     pub depends_on: Option<u8>, // 依赖的前置步骤序号
 }
 
-// ========== 执行计划 ==========
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExecutionPlan {
-    pub step: PlannedStep,
-    pub model_tier: ModelTier,
-    pub risk_level: RiskLevel,
-    pub sub_steps: Vec<TaskStep>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum ModelTier {
-    Strong, // Decisioner: Claude Opus / GPT-4
-    Medium, // Feedbacker: Claude Sonnet / GPT-4o
-    Light,  // Executor:   Claude Haiku / GPT-4o-mini
-}
-
 // ========== 执行结果 ==========
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

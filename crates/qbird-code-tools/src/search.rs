@@ -1,10 +1,10 @@
 use async_trait::async_trait;
-use std::fs;
 use std::path::Path;
 
 use regex_lite::Regex;
 use walkdir::WalkDir;
 
+use crate::glob::glob_match;
 use crate::registry::{Tool, ToolDefinition, ToolOutput};
 use qbird_code_models::{EflowError, Result, RiskLevel};
 use rust_i18n::t;
@@ -90,7 +90,7 @@ impl Tool for SearchCodeTool {
                     Some(n) => n,
                     None => continue,
                 };
-                if !type_filters.iter().any(|g| glob_matches(g, name)) {
+                if !type_filters.iter().any(|g| glob_match(g, name)) {
                     continue;
                 }
             }
@@ -106,8 +106,7 @@ impl Tool for SearchCodeTool {
 
             files_scanned += 1;
 
-            // 同步读（搜索是 CPU/IO 密集型，不用 async）
-            let content = match fs::read_to_string(path) {
+            let content = match tokio::fs::read_to_string(path).await {
                 Ok(c) => c,
                 Err(_) => continue, // 单文件失败跳过
             };
@@ -142,17 +141,5 @@ impl Tool for SearchCodeTool {
                 "truncated": count >= MAX_MATCHES,
             })),
         })
-    }
-}
-
-/// 简易 glob 匹配：只支持 `*.ext` / `name.ext` 两种常见形式
-/// （v1.0 不引入完整 glob crate，保持依赖最小）
-fn glob_matches(pattern: &str, name: &str) -> bool {
-    if let Some(stripped) = pattern.strip_prefix("*.") {
-        // *.rs → 以 .rs 结尾
-        name.ends_with(&format!(".{stripped}"))
-    } else {
-        // 完全匹配
-        pattern == name
     }
 }

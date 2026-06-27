@@ -69,12 +69,17 @@ impl Provider for OllamaProvider {
             .get(0)
             .ok_or_else(|| qbird_code_models::EflowError::LlmProvider("No choices".into()))?;
         let message = &choice["message"];
+        let usage = body["usage"].clone();
         Ok(ChatResponse {
             content: message["content"].as_str().unwrap_or("").to_string(),
-            reasoning_content: None, // Ollama 无 thinking
+            reasoning_content: None,
             tool_calls: message["tool_calls"].as_array().cloned(),
             finish_reason: choice["finish_reason"].as_str().map(String::from),
-            usage: UsageStats::default(), // Ollama 默认不返回 usage
+            usage: UsageStats {
+                prompt_tokens: usage["prompt_tokens"].as_u64().unwrap_or(0),
+                completion_tokens: usage["completion_tokens"].as_u64().unwrap_or(0),
+                ..Default::default()
+            },
         })
     }
 

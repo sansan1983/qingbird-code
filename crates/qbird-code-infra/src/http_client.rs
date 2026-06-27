@@ -9,7 +9,6 @@ use crate::providers::Provider;
 /// 统一 HTTP 客户端 — 支持 OpenAI 和 Anthropic 两种协议
 pub struct HttpLlmClient {
     client: Client,
-    _timeout: Duration,
     max_retries: u8,
     retry_backoff_ms: u64,
 }
@@ -23,7 +22,6 @@ impl HttpLlmClient {
 
         Ok(Self {
             client,
-            _timeout: Duration::from_secs(timeout_secs),
             max_retries,
             retry_backoff_ms,
         })

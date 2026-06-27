@@ -1,172 +1,117 @@
-# eflow
+# qingbird (青鸟)
 
-> **Efficient Flow** — A multi-layer Agent collaboration framework written in Rust
-> *One command to rule them all.*
+> Efficient Rust Agent collaboration framework — single binary, multi-provider, ReAct loop
 
-[![Status](https://img.shields.io/badge/status-v1.4.0%20released-brightgreen)]()
 [![License: MIT/Apache-2.0](https://img.shields.io/badge/license-MIT%20%7C%20Apache--2.0-blue)]()
 [![Rust](https://img.shields.io/badge/rust-2024-orange)]()
-[![Tests](https://img.shields.io/badge/tests-328%20passed-blue)]()
 
 **[简体中文](README.md)**
 
-eflow is a multi-layer Agent collaboration framework written in Rust, with **zero-blocking dialogue** as its
-first design principle. Through **industry-identity-driven SOP dispatch**, **hierarchical decision execution**,
-and **intelligent context & memory management**, eflow makes AI work like a well-trained team.
-
-### Core Features
-
-- **Zero-blocking dialogue** — Concierge dispatches and returns immediately; tasks run async, progress via event channel
-- **Hierarchical decisions** — Decisioner → Executor → Feedbacker pipeline; rule + LLM dual-driven
-- **Multi-provider LLM** — Configure any OpenAI/Anthropic-compatible provider via `~/.eflow/providers/*.yaml`; tier routing + rate-limit degradation
-- **Three-tier memory** — Working (in-memory LRU) → Project (SQLite FTS5) → User (SQLite FTS5)
-- **i18n** — Built-in zh-CN / en-US, based on rust-i18n
-- **Zero-dep deploy** — Single Rust binary; Windows / Linux / macOS
-- **Headless mode** — `eflow session start` with NDJSON stdio contract (for v2.0 GUI frontends)
-
-### Quick Start
-
-#### Prerequisites
-
-- Rust 2024 edition (stable ≥ 1.85)
-- API key: Anthropic or OpenAI
-
-#### Install
+## Quick Start
 
 ```bash
-git clone https://github.com/sansan1983/eflow.git
-cd eflow
+# 1. Build
 cargo build --release
+
+# 2. Set API key
+export DEEPSEEK_API_KEY="sk-..."
+
+# 3. Run
+./target/release/qingbird --execute "Analyze the current directory"
 ```
 
-> 💡 You can also `cargo install eflow` (once published to crates.io), or download a pre-built binary from [GitHub Releases](https://github.com/sansan1983/eflow/releases).
+## Configuration
 
-#### Configure
-
-Create `eflow.yaml` (v1.3 schema — providers in `~/.eflow/providers/*.yaml`):
+Config file: `qingbird.yaml` (current dir) or `~/.qingbird/config.yaml`
 
 ```yaml
-core:
-  language: zh-CN
-  timezone: UTC
-
 llm:
-  # v1.3+: routing references ~/.eflow/providers/<id>.yaml id
-  routing:
-    strong: anthropic
-    medium: anthropic
-    light: anthropic
-  cache:
-    l1_enabled: true
-
-memory:
-  working_memory_limit: 100
-  project_db_path: ./data/project.db
-  user_db_path: ./data/user.db
-  cleanup_interval_hours: 24
-
-security:
-  risk_threshold: L2
-  allowed_paths: []
-
-profiles:
-  default: developer
-  available: [developer]
+  active: deepseek                    # default provider
+  deepseek:
+    api_key: "${DEEPSEEK_API_KEY}"    # env var substitution supported
+    base_url: "https://api.deepseek.com"
+    default_model: "deepseek-chat"
+    thinking_enabled: true
+    thinking_effort: "high"
+    timeout_secs: 30
+    max_retries: 3
+    retry_backoff_ms: 1000
 ```
 
-And create `~/.eflow/providers/anthropic.yaml`:
+Works with just the environment variable (`DEEPSEEK_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`), no config file needed.
 
-```yaml
-id: anthropic
-display_name: Anthropic
-protocol: anthropic_compatible
-base_url: "https://api.anthropic.com"
-api_key: "${ANTHROPIC_API_KEY}"
-default_model: "claude-sonnet-4-6"
+## CLI Usage
+
+```
+qingbird --execute "prompt"                           Single execution
+qingbird --interactive                                 Interactive REPL
+qingbird --provider ollama --execute "..."             Switch provider on the fly
+qingbird --model deepseek-chat --execute "..."         Switch model on the fly
+qingbird --temperature 0.3 --execute "..."             Set temperature on the fly
+qingbird --help                                        All options
 ```
 
-Or run `eflow init` to launch the setup wizard.
+## Interactive Mode
 
-Complete provider config examples at [`docs/examples/providers/`](docs/examples/providers/).
+Enter `--interactive` for multi-turn conversation. Slash commands:
 
-#### Run
+```
+/help                     Show help
+/model <name>             Switch model
+/temperature <n>          Set temperature (0.0–2.0)
+/usage                    Show token usage
+/sessions                 List saved sessions
+/session load <id>        Load a previous session
+/sdd run <input>          Run SDD workflow
+/quit /exit               Exit
+```
+
+Conversation history auto-truncates at 50 messages (keeps system + recent half).
+
+## Supported Providers
+
+| Provider | `active` value | Env var |
+|----------|---------------|---------|
+| DeepSeek (OpenAI protocol) | `deepseek` | `DEEPSEEK_API_KEY` |
+| DeepSeek (Anthropic protocol) | `deepseek-anthropic` | `DEEPSEEK_API_KEY` |
+| Ollama (local) | `ollama` | none |
+| OpenAI | `openai` | `OPENAI_API_KEY` |
+| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` |
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-./target/release/eflow --execute "Read Cargo.toml and summarize the project"
+# Example: local Ollama
+qingbird --provider ollama --interactive
+
+# Example: GPT-4o
+export OPENAI_API_KEY="sk-..."
+qingbird --provider openai --model gpt-4o --execute "Hello"
 ```
 
-### Architecture
+## Install
 
-```mermaid
-graph TD
-    subgraph Interaction["Interaction Layer"]
-        TUI["TUI (ratatui)"]
-        CLI["CLI (--execute)"]
-        HLS["Headless (NDJSON)"]
-    end
-    subgraph Application["Application Layer"]
-        CON["Concierge (zero-blocking)"]
-        ORC["Orchestrator (decompose+parallel)"]
-        CON --> ORC
-    end
-    subgraph Capability["Capability Layer"]
-        DEF["Decisioner → Executor → Feedbacker"]
-        POOL["Subagent Pool"]
-    end
-    subgraph Infrastructure["Infrastructure Layer"]
-        LLM["LLM Router"]
-        MEM["Memory (3-tier)"]
-        PRF["Profile"]
-        EVT["Event Bus"]
-        TLS["Tools"]
-    end
-    Interaction --> Application
-    Application --> Capability
-    Capability --> Infrastructure
+```bash
+# From source
+git clone <repo>
+cd qingbird-code
+cargo build --release
+./target/release/qingbird --execute "..."
+
+# Or cargo install
+cargo install qingbird-code
+```
+
+## Architecture
+
+```
+qingbird (binary CLI)
+  └── qbird-code-agents    — ReactLoop + doom loop detection + nudge
+  └── qbird-code-tools     — 7 built-in tools (read/write/search/command/glob/list_dir/web_fetch)
+  └── qbird-code-infra     — 5 LLM providers + HTTP client + memory + config
+  └── qbird-code-models    — core types (Message/Error/RiskLevel)
 ```
 
 **Strict dependency direction**: lower layers must not import upper layers.
 
-Detailed architecture: [`docs/superpowers/specs/2026-06-15-eflow-design.md`](docs/superpowers/specs/2026-06-15-eflow-design.md)
-(v1.0 original design; v1.3 LLM provider abstraction: [`v1.3-llm-abstract-design.md`](docs/superpowers/specs/2026-06-17-eflow-v1.3-llm-abstract-design.md))
+## License
 
-### Project Status
-
-| Milestone | Status |
-|-----------|--------|
-| v1.0 Core | ✅ Released (end-to-end runnable skeleton) |
-| v1.1 L2 cache + Subagent pool | ✅ Released (M4.5 + M8 + M10.5) |
-| v1.2 Debt cleanup + parallel dispatch + TUI | ✅ Released (D1-D4 + E1-E6 + F1-F6) |
-| v1.3.0 LLM abstraction + provider yaml | ✅ Released (spec A — 26 tasks) |
-| v1.3.1 Wizard + slash commands | ✅ Released (spec B1 — 12 tasks) |
-| v1.3.2 CLI contract + headless | ✅ Released (spec B2 — 12 tasks) |
-| v1.3.3 spec C retracted | ✅ Released (spec C — 9 tasks; 3-level abstraction retracted in PR #21) |
-| v1.4 spec D rendering pipeline + auth fix | ✅ Released (v1.4.0 — render pipeline refactor + third-party API key fix) |
-
-### Documentation
-
-- Architecture design: [`docs/superpowers/specs/2026-06-15-eflow-design.md`](docs/superpowers/specs/2026-06-15-eflow-design.md)
-- Contributing guide: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Changelog: [CHANGELOG.md](CHANGELOG.md)
-- Session handoff: [CLAUDE.md](CLAUDE.md)
-- AI agent quick reference: [AGENTS.md](AGENTS.md)
-
-### Contributing
-
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for branch strategy and development workflow.
-
-> ⚠ **Important rule**: Since v1.1, all changes must go through `feature/*` or `fix/*` branches + PR merge. **Direct push to `main` is forbidden**.
-
-### License
-
-Dual-licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT License ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
-
-### Credits
-
-eflow is maintained by the eflow contributors.
+MIT / Apache-2.0 dual-licensed.

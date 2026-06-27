@@ -106,9 +106,4 @@ impl AgentHook for AgentHooks {
             DoomLoopAction::None => HookAction::Proceed,
         }
     }
-
-    /// 工具执行后：当前无额外逻辑
-    fn on_tool_results(&mut self, _state: &LoopState) -> HookAction {
-        HookAction::Proceed
-    }
 }

@@ -5,7 +5,7 @@
 
 ## 这是什么
 
-Rust 2024 5-crate workspace 二进制 Agent 框架（`qingbird` v0.2.0）。Crate 严格依赖：
+Rust 2024 5-crate workspace 二进制 Agent 框架（`qingbird` v0.2.17）。Crate 严格依赖：
 
 ```
 qbird-code (bin) → qbird-code-agents → qbird-code-tools
@@ -16,16 +16,16 @@ qbird-code (bin) → qbird-code-agents → qbird-code-tools
 
 ## 四个门禁（commit / PR 前必跑）
 
-每个改动本地全过这 4 个。**没有 CI**（项目无 `.github/workflows/`），reviewer 手跑：
+每个改动本地全过这 4 个。CI（`.github/workflows/ci.yaml`）在 push/PR 到 `main` 时也跑，顺序一致：
 
 ```bash
-cargo build                                       # release 约 4s，dev 更快
-cargo clippy --all-targets -- -D warnings        # 零警告
-cargo fmt --check                                 # rustfmt 默认；无自定义配置
-cargo test                                        # v0.2.0 时 67 个测试
+cargo fmt --check                                 # 第一个跑，最快反馈
+cargo clippy --all-targets --workspace -- -D warnings
+cargo test --workspace
+cargo build                                       # CI 加 --release --workspace
 ```
 
-顺序影响反馈速度：`fmt --check` → `clippy` → `test` → `build`。
+顺序按 CI：`fmt --check` → `clippy` → `test` → `build`。`clippy` 和 `test` 加 `--workspace` 避免漏 crate。
 
 ## 分支与 PR 流程（严格）
 
@@ -34,7 +34,8 @@ cargo test                                        # v0.2.0 时 67 个测试
 - 分支命名：小写 kebab-case，≤50 字符，动词或名词短语（不是数字）。
   前缀：`milestone/v<X>.<Y>`、`feature/*`、`fix/*`、`hotfix/*`。
 - Squash-merge 到 milestone 分支。milestone → main 由 maintainer 单 PR 收尾。
-- PR 模板 `.github/PULL_REQUEST_TEMPLATE.md` 是契约，checkbox 没勾齐不要 ship。
+- PR 模板 `.github/PULL_REQUEST_TEMPLATE.md` 是契约，checkbox 没勾齐不要 ship。尤其注意 CHANGELOG.md `[Unreleased]` 必须更新。
+- 所有 crate 共享 workspace 版本号 `0.2.17`，无特殊情况不要单独改。
 
 ## 精准改动（Surgical Changes）
 
@@ -65,10 +66,15 @@ PR 不带无关重构。不重排/重命名/"改进"无关文件。看到 dead c
 | ReAct 循环 | `crates/qbird-code-agents/src/react_loop/` |
 | 死循环检测 + Nudge | `crates/qbird-code-agents/src/{doom_loop,nudge}.rs` |
 | Subagent | `crates/qbird-code-agents/src/subagent.rs` |
-| LLM Provider（4 家） | `crates/qbird-code-infra/src/providers/{deepseek,ollama,openai,anthropic}.rs` |
+| Subagent 并发池 | `crates/qbird-code-agents/src/subagent_pool.rs` |
+| Skill 插件体系 | `crates/qbird-code-agents/src/skill/` |
+| LLM Provider（5 路由） | `crates/qbird-code-infra/src/providers/{deepseek,ollama,openai,anthropic}.rs` + deepseek-anthropic |
 | HTTP 客户端（重试+退避） | `crates/qbird-code-infra/src/http_client.rs` |
 | 配置系统 | `crates/qbird-code-infra/src/config.rs` |
+| 记忆系统（SQLite+FTS5） | `crates/qbird-code-infra/src/memory/` |
+| 事件/环境模块 | `crates/qbird-code-infra/src/{event,env}.rs` |
 | 核心类型 | `crates/qbird-code-models/src/{types,message,error}.rs` |
-| 工具系统（读/写/搜索/命令） | `crates/qbird-code-tools/src/` |
+| 工具系统（7 内置） | `crates/qbird-code-tools/src/`（read/write/search/command/glob/list_dir/web_fetch） |
+| 工具注册表 | `crates/qbird-code-tools/src/registry.rs` |
 | i18n key | `locales/zh-CN.yml`、`locales/en-US.yml` |
 | 配置样例 | `qingbird.yaml`（项目根） |

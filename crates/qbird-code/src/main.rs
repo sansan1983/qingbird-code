@@ -64,6 +64,34 @@ fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message
     )
 }
 
+fn init_llm(
+    timeout_secs: u64,
+    max_retries: u8,
+    retry_backoff_ms: u64,
+    provider_result: qbird_code_models::Result<
+        impl qbird_code_infra::providers::Provider + 'static,
+    >,
+) -> (
+    HttpLlmClient,
+    Box<dyn qbird_code_infra::providers::Provider>,
+) {
+    let http = match HttpLlmClient::new(timeout_secs, max_retries, retry_backoff_ms) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{}", t!("err_http_client_init", msg = e));
+            std::process::exit(1);
+        }
+    };
+    let provider = match provider_result {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{}", t!("err_llm_provider_init", msg = e));
+            std::process::exit(1);
+        }
+    };
+    (http, Box::new(provider))
+}
+
 #[tokio::main]
 async fn main() {
     // === 1. 初始化日志（走 stderr） ===
@@ -110,130 +138,37 @@ async fn main() {
         .unwrap_or_else(|| default_model.to_string());
     // === 3. 初始化基础设施（根据 cfg.llm.active 路由） ===
     let active = cfg.llm.active.clone();
-    let (http_client, provider): (
-        HttpLlmClient,
-        Box<dyn qbird_code_infra::providers::Provider>,
-    ) = match active.as_str() {
-        "deepseek" => {
-            let h = match HttpLlmClient::new(
-                cfg.llm.deepseek.timeout_secs,
-                cfg.llm.deepseek.max_retries,
-                cfg.llm.deepseek.retry_backoff_ms,
-            ) {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("{}", t!("err_http_client_init", msg = e));
-                    std::process::exit(1);
-                }
-            };
-            let p = match DeepseekProvider::new(cfg.llm.deepseek.clone()) {
-                Ok(p) => p,
-                Err(e) => {
-                    eprintln!("{}", t!("err_llm_provider_init", msg = e));
-                    std::process::exit(1);
-                }
-            };
-            (
-                h,
-                Box::new(p) as Box<dyn qbird_code_infra::providers::Provider>,
-            )
-        }
-        "deepseek-anthropic" => {
-            let h = match HttpLlmClient::new(
-                cfg.llm.deepseek.timeout_secs,
-                cfg.llm.deepseek.max_retries,
-                cfg.llm.deepseek.retry_backoff_ms,
-            ) {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("{}", t!("err_http_client_init", msg = e));
-                    std::process::exit(1);
-                }
-            };
-            let p = match DeepseekAnthropicProvider::new(cfg.llm.deepseek.clone()) {
-                Ok(p) => p,
-                Err(e) => {
-                    eprintln!("{}", t!("err_llm_provider_init", msg = e));
-                    std::process::exit(1);
-                }
-            };
-            (
-                h,
-                Box::new(p) as Box<dyn qbird_code_infra::providers::Provider>,
-            )
-        }
-        "ollama" => {
-            let h = match HttpLlmClient::new(
-                cfg.llm.ollama.timeout_secs,
-                cfg.llm.ollama.max_retries,
-                cfg.llm.ollama.retry_backoff_ms,
-            ) {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("{}", t!("err_http_client_init", msg = e));
-                    std::process::exit(1);
-                }
-            };
-            let p = match OllamaProvider::new(cfg.llm.ollama.clone()) {
-                Ok(p) => p,
-                Err(e) => {
-                    eprintln!("{}", t!("err_llm_provider_init", msg = e));
-                    std::process::exit(1);
-                }
-            };
-            (
-                h,
-                Box::new(p) as Box<dyn qbird_code_infra::providers::Provider>,
-            )
-        }
-        "openai" => {
-            let h = match HttpLlmClient::new(
-                cfg.llm.openai.timeout_secs,
-                cfg.llm.openai.max_retries,
-                cfg.llm.openai.retry_backoff_ms,
-            ) {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("{}", t!("err_http_client_init", msg = e));
-                    std::process::exit(1);
-                }
-            };
-            let p = match OpenAIProvider::new(cfg.llm.openai.clone()) {
-                Ok(p) => p,
-                Err(e) => {
-                    eprintln!("{}", t!("err_llm_provider_init", msg = e));
-                    std::process::exit(1);
-                }
-            };
-            (
-                h,
-                Box::new(p) as Box<dyn qbird_code_infra::providers::Provider>,
-            )
-        }
-        "anthropic" => {
-            let h = match HttpLlmClient::new(
-                cfg.llm.anthropic.timeout_secs,
-                cfg.llm.anthropic.max_retries,
-                cfg.llm.anthropic.retry_backoff_ms,
-            ) {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("{}", t!("err_http_client_init", msg = e));
-                    std::process::exit(1);
-                }
-            };
-            let p = match AnthropicProvider::new(cfg.llm.anthropic.clone()) {
-                Ok(p) => p,
-                Err(e) => {
-                    eprintln!("{}", t!("err_llm_provider_init", msg = e));
-                    std::process::exit(1);
-                }
-            };
-            (
-                h,
-                Box::new(p) as Box<dyn qbird_code_infra::providers::Provider>,
-            )
-        }
+    let (http_client, provider) = match active.as_str() {
+        "deepseek" => init_llm(
+            cfg.llm.deepseek.timeout_secs,
+            cfg.llm.deepseek.max_retries,
+            cfg.llm.deepseek.retry_backoff_ms,
+            DeepseekProvider::new(cfg.llm.deepseek.clone()),
+        ),
+        "deepseek-anthropic" => init_llm(
+            cfg.llm.deepseek.timeout_secs,
+            cfg.llm.deepseek.max_retries,
+            cfg.llm.deepseek.retry_backoff_ms,
+            DeepseekAnthropicProvider::new(cfg.llm.deepseek.clone()),
+        ),
+        "ollama" => init_llm(
+            cfg.llm.ollama.timeout_secs,
+            cfg.llm.ollama.max_retries,
+            cfg.llm.ollama.retry_backoff_ms,
+            OllamaProvider::new(cfg.llm.ollama.clone()),
+        ),
+        "openai" => init_llm(
+            cfg.llm.openai.timeout_secs,
+            cfg.llm.openai.max_retries,
+            cfg.llm.openai.retry_backoff_ms,
+            OpenAIProvider::new(cfg.llm.openai.clone()),
+        ),
+        "anthropic" => init_llm(
+            cfg.llm.anthropic.timeout_secs,
+            cfg.llm.anthropic.max_retries,
+            cfg.llm.anthropic.retry_backoff_ms,
+            AnthropicProvider::new(cfg.llm.anthropic.clone()),
+        ),
         other => {
             eprintln!(
                 "{}",
@@ -246,8 +181,6 @@ async fn main() {
             std::process::exit(1);
         }
     };
-    drop(active);
-
     // 检查 API Key 是否已配置（仅远程 Provider）
     let env_var = match cfg.llm.active.as_str() {
         "deepseek" | "deepseek-anthropic" => {
@@ -278,14 +211,7 @@ async fn main() {
         std::process::exit(1);
     }
 
-    tracing::info!(
-        "{}",
-        t!(
-            "status_startup_info",
-            provider = cfg.llm.active,
-            model = model
-        )
-    );
+    tracing::info!("Startup: provider={}, model={}", cfg.llm.active, model);
 
     // === 4. 初始化工具注册表 ===
     let mut registry = ToolRegistry::new();
@@ -303,7 +229,7 @@ async fn main() {
             cfg.llm.deepseek.thinking_enabled,
             cfg.llm.deepseek.thinking_effort.clone(),
         ),
-        _ => (true, "high".into()),
+        _ => (false, "high".into()),
     };
     let tool_registry = Arc::new(registry);
 

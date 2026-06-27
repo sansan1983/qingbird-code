@@ -59,12 +59,17 @@ impl Provider for OpenAIProvider {
             .get(0)
             .ok_or_else(|| qbird_code_models::EflowError::LlmProvider("No choices".into()))?;
         let msg = &choice["message"];
+        let usage = body["usage"].clone();
         Ok(ChatResponse {
             content: msg["content"].as_str().unwrap_or("").to_string(),
             reasoning_content: None,
             tool_calls: msg["tool_calls"].as_array().cloned(),
             finish_reason: choice["finish_reason"].as_str().map(String::from),
-            usage: UsageStats::default(),
+            usage: UsageStats {
+                prompt_tokens: usage["prompt_tokens"].as_u64().unwrap_or(0),
+                completion_tokens: usage["completion_tokens"].as_u64().unwrap_or(0),
+                ..Default::default()
+            },
         })
     }
 

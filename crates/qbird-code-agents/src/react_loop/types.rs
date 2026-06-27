@@ -68,8 +68,6 @@ pub enum HookAction {
 pub trait AgentHook: Send {
     /// LLM 响应后、状态更新前调用
     fn on_llm_response(&mut self, state: &LoopState) -> HookAction;
-    /// 工具执行结果处理后调用
-    fn on_tool_results(&mut self, state: &LoopState) -> HookAction;
 }
 
 /// ReAct 循环配置

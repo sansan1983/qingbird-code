@@ -112,6 +112,18 @@ impl Tool for WebFetchTool {
     }
 }
 
+fn decode_html_entity(name: &str) -> &'static str {
+    match name {
+        "amp" => "&",
+        "lt" => "<",
+        "gt" => ">",
+        "quot" => "\"",
+        "nbsp" => " ",
+        "apos" => "'",
+        _ => "",
+    }
+}
+
 fn strip_html(html: &str) -> String {
     let mut result = String::with_capacity(html.len());
     let mut in_tag = false;
@@ -128,16 +140,7 @@ fn strip_html(html: &str) -> String {
             }
             ';' if in_entity => {
                 in_entity = false;
-                let decoded = match entity_buf.as_str() {
-                    "amp" => "&",
-                    "lt" => "<",
-                    "gt" => ">",
-                    "quot" => "\"",
-                    "nbsp" => " ",
-                    "apos" => "'",
-                    _ => "",
-                };
-                result.push_str(decoded);
+                result.push_str(decode_html_entity(&entity_buf));
             }
             _ if in_tag => {}
             _ if in_entity => entity_buf.push(c),
@@ -216,16 +219,7 @@ fn html_to_markdown(html: &str) -> String {
             }
             ';' if in_entity => {
                 in_entity = false;
-                let decoded = match entity_buf.as_str() {
-                    "amp" => "&",
-                    "lt" => "<",
-                    "gt" => ">",
-                    "quot" => "\"",
-                    "nbsp" => " ",
-                    "apos" => "'",
-                    _ => "",
-                };
-                result.push_str(decoded);
+                result.push_str(decode_html_entity(&entity_buf));
             }
             _ if in_entity => entity_buf.push(c),
             _ if !in_tag => result.push(c),

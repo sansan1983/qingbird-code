@@ -1,7 +1,7 @@
 use qbird_code_models::{
-    ActionResult, ExecutionPlan, FeedbackRecord, Importance, IntentType, MemoryCategory, Message,
-    MessageRole, ModelTier, PermissionSet, PlannedStep, QualityVerdict, RetryPolicy, RiskLevel,
-    Role, TaskPriority, TaskSpec, ToolCall, ToolCallFunction, ToolCallSummary, UsageStats,
+    ActionResult, FeedbackRecord, Importance, IntentType, MemoryCategory, Message, MessageRole,
+    PermissionSet, PlannedStep, QualityVerdict, RetryPolicy, RiskLevel, Role, TaskPriority,
+    TaskSpec, ToolCall, ToolCallFunction, ToolCallSummary, UsageStats,
 };
 
 // ===== Message =====
@@ -138,14 +138,6 @@ fn test_usage_stats_default() {
     assert_eq!(u.completion_tokens, 0);
 }
 
-// ===== ModelTier =====
-
-#[test]
-fn test_model_tier_serde() {
-    let json = serde_json::to_string(&ModelTier::Strong).unwrap();
-    assert_eq!(json, "\"Strong\"");
-}
-
 // ===== IntentType =====
 
 #[test]
@@ -184,23 +176,6 @@ fn test_planned_step_depends_on() {
         depends_on: Some(1),
     };
     assert_eq!(step.depends_on, Some(1));
-}
-
-#[test]
-fn test_execution_plan() {
-    let plan = ExecutionPlan {
-        step: PlannedStep {
-            order: 1,
-            action: "read".into(),
-            tool: "read_file".into(),
-            params: serde_json::json!({}),
-            depends_on: None,
-        },
-        model_tier: ModelTier::Medium,
-        risk_level: RiskLevel::L1,
-        sub_steps: vec![],
-    };
-    assert_eq!(plan.model_tier, ModelTier::Medium);
 }
 
 // ===== Enum completeness =====
