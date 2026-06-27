@@ -3,8 +3,8 @@ use std::sync::Arc;
 use qbird_code_models::RiskLevel;
 use qbird_code_tools::Tool;
 use qbird_code_tools::{
-    ExecuteCommandTool, GlobTool, ReadFileTool, SearchCodeTool, ToolRegistry, WriteFileTool,
-    glob_match,
+    ExecuteCommandTool, GlobTool, ReadFileTool, SearchCodeTool, ToolRegistry, WebFetchTool,
+    WriteFileTool, glob_match,
 };
 
 // ===== ToolRegistry =====
@@ -31,14 +31,16 @@ fn test_registry_definitions_returns_all() {
     r.register(Arc::new(ExecuteCommandTool));
     r.register(Arc::new(SearchCodeTool));
     r.register(Arc::new(GlobTool));
+    r.register(Arc::new(WebFetchTool));
     let defs = r.definitions();
-    assert_eq!(defs.len(), 5);
+    assert_eq!(defs.len(), 6);
     let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
     assert!(names.contains(&"read_file"));
     assert!(names.contains(&"write_file"));
     assert!(names.contains(&"execute_command"));
     assert!(names.contains(&"search_code"));
     assert!(names.contains(&"glob"));
+    assert!(names.contains(&"web_fetch"));
 }
 
 // ===== Risk levels =====
@@ -50,6 +52,7 @@ fn test_tool_risk_levels() {
     assert_eq!(ExecuteCommandTool.definition().risk_level, RiskLevel::L2);
     assert_eq!(SearchCodeTool.definition().risk_level, RiskLevel::L0);
     assert_eq!(GlobTool.definition().risk_level, RiskLevel::L0);
+    assert_eq!(WebFetchTool.definition().risk_level, RiskLevel::L0);
 }
 
 // ===== Tool definitions =====
@@ -362,4 +365,35 @@ async fn test_glob_double_star_matches_subdirs() {
     assert!(output.content.contains("nested.rs"));
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ===== WebFetchTool =====
+
+#[test]
+fn test_web_fetch_definition() {
+    let def = WebFetchTool.definition();
+    assert_eq!(def.name, "web_fetch");
+    let params = def.parameters.as_object().unwrap();
+    assert!(params["properties"]["url"].is_object());
+    let required: Vec<&str> = params["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(required.contains(&"url"));
+}
+
+#[tokio::test]
+async fn test_web_fetch_missing_url() {
+    let result = WebFetchTool.execute(serde_json::json!({})).await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_web_fetch_invalid_url() {
+    let result = WebFetchTool
+        .execute(serde_json::json!({"url": "not a valid url://"}))
+        .await;
+    assert!(result.is_err());
 }

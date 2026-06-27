@@ -4,7 +4,7 @@ use crate::registry::{Tool, ToolDefinition, ToolOutput};
 use qbird_code_models::{EflowError, Result, RiskLevel};
 use rust_i18n::t;
 
-const MAX_RESPONSE_BYTES: u64 = 2 * 1024 * 1024; // 2 MB
+const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024; // 2 MB
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
 
 pub struct WebFetchTool;
@@ -59,28 +59,23 @@ impl Tool for WebFetchTool {
             ));
         }
 
-        let content_length = response.content_length().unwrap_or(0);
-        if content_length > MAX_RESPONSE_BYTES {
+        let bytes = response.bytes().await.map_err(|e| {
+            EflowError::Tool(
+                t!("err_tool_read_response", url = url, msg = e.to_string()).to_string(),
+            )
+        })?;
+
+        if bytes.len() > MAX_RESPONSE_BYTES {
             return Err(EflowError::Tool(
                 t!(
                     "err_tool_http_too_large",
                     url = url,
-                    size = content_length,
+                    size = bytes.len(),
                     limit = MAX_RESPONSE_BYTES
                 )
                 .to_string(),
             ));
         }
-
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| {
-                EflowError::Tool(
-                    t!("err_tool_read_response", url = url, msg = e.to_string()).to_string(),
-                )
-            })?
-            .to_vec();
 
         let content = match format {
             "html" => String::from_utf8_lossy(&bytes).to_string(),
