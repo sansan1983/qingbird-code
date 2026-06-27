@@ -298,14 +298,15 @@ async fn main() {
 
     // === 6. 交互模式（多轮对话） ===
     if cli.interactive {
-        let react_loop = ReactLoop::new(ReactLoopConfig {
+        const MAX_HISTORY_MSGS: usize = 50;
+        let mut react_loop = ReactLoop::new(ReactLoopConfig {
             model: model.clone(),
             thinking_enabled,
             thinking_effort: thinking_effort.clone(),
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![build_system_message(&tool_registry, &cfg.llm.active)];
-        println!("qingbird interactive mode. Type /quit or /exit to exit.");
+        println!("qingbird interactive mode. Type /help for commands.");
         println!();
 
         let stdin = io::stdin();
@@ -326,8 +327,38 @@ async fn main() {
 
             let line = line.trim().to_string();
 
-            if line == "/quit" || line == "/exit" {
-                break;
+            // === 斜杠命令处理 ===
+            if line.starts_with('/') {
+                let parts: Vec<&str> = line.splitn(2, ' ').collect();
+                let cmd = parts[0];
+                let arg = parts.get(1).copied().unwrap_or("");
+                match cmd {
+                    "/quit" | "/exit" => break,
+                    "/help" => {
+                        println!();
+                        println!("可用命令:");
+                        println!("  /quit             退出");
+                        println!("  /exit             退出");
+                        println!("  /help             显示此帮助");
+                        println!(
+                            "  /model <名称>     切换模型（当前: {}）",
+                            react_loop.config.model
+                        );
+                        println!();
+                    }
+                    "/model" => {
+                        if arg.is_empty() {
+                            println!("当前模型: {}", react_loop.config.model);
+                        } else {
+                            react_loop.config.model = arg.to_string();
+                            println!("模型已切换为: {}", arg);
+                        }
+                    }
+                    _ => {
+                        println!("未知命令: {cmd}，输入 /help 查看可用命令");
+                    }
+                }
+                continue;
             }
 
             if line.is_empty() {
@@ -357,7 +388,16 @@ async fn main() {
                     eprintln!("Error: {}", e);
                 }
             }
-            // messages 保留全量对话历史，下一轮继续追加
+
+            // 上下文窗口管理：超出上限时截断旧消息（保留 system 消息）
+            if messages.len() > MAX_HISTORY_MSGS {
+                let keep = MAX_HISTORY_MSGS / 2;
+                let truncate_start = messages.len() - keep;
+                let system = messages[0].clone();
+                let remaining = messages[truncate_start..].to_vec();
+                messages = std::iter::once(system).chain(remaining).collect();
+                eprintln!("[上下文已截断，保留最近 {} 条消息]", keep);
+            }
         }
 
         return;

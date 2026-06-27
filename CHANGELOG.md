@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.9] - 2026-06-27
+
+### Added
+
+- **交互模式斜杠命令**: 新增 `/help`、`/model <名称>` 命令，可在对话中动态切换模型
+- **上下文窗口管理**: 消息历史超出 50 条时自动截断（保留 system 消息 + 最近一半）
+
+---
+
 ## [0.2.8] - 2026-06-27
 
 ### Added
