@@ -9,7 +9,7 @@ use std::sync::Arc;
 use qbird_code_infra::http_client::HttpLlmClient;
 use qbird_code_infra::memory::ContextManager;
 use qbird_code_infra::providers::{Provider, RequestConfig};
-use qbird_code_models::{EflowError, Message, ToolCall};
+use qbird_code_models::{EflowError, Message, ToolCall, UsageStats};
 use qbird_code_tools::ToolRegistry;
 
 use crate::nudge::NudgeSystem;
@@ -53,7 +53,11 @@ impl ReactLoop {
                 return Ok(AgentResult {
                     content: msg,
                     messages: messages.clone(),
-                    usage: Default::default(),
+                    usage: UsageStats {
+                        prompt_tokens: state.total_prompt_tokens,
+                        completion_tokens: state.total_completion_tokens,
+                        ..Default::default()
+                    },
                 });
             }
 
@@ -107,7 +111,11 @@ impl ReactLoop {
                             return Ok(AgentResult {
                                 content: msg,
                                 messages: messages.clone(),
-                                usage: chat_response.usage.clone(),
+                                usage: UsageStats {
+                                    prompt_tokens: state.total_prompt_tokens,
+                                    completion_tokens: state.total_completion_tokens,
+                                    ..Default::default()
+                                },
                             });
                         }
                         HookAction::Nudge(n) => {

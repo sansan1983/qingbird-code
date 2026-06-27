@@ -40,3 +40,25 @@ fn test_memory_search_empty_query() {
 
     let _ = std::fs::remove_file(&tmp);
 }
+
+#[test]
+fn test_session_store_save_and_load() {
+    let tmp = std::env::temp_dir().join("qbird_session_test.db");
+    let _ = std::fs::remove_file(&tmp);
+
+    let store = qbird_code_infra::memory::SessionStore::open(&tmp).expect("open store");
+    let messages = vec![
+        qbird_code_models::Message::user("Hello"),
+        qbird_code_models::Message::assistant("Hi there", None),
+    ];
+
+    store.save_messages("sess_1", &messages).expect("save");
+    let loaded = store.load_messages("sess_1").expect("load");
+    assert_eq!(loaded.len(), 2);
+    assert_eq!(loaded[0].content, "Hello");
+
+    let sessions = store.list_sessions().expect("list");
+    assert_eq!(sessions.len(), 1);
+
+    let _ = std::fs::remove_file(&tmp);
+}

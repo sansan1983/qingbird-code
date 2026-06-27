@@ -386,7 +386,12 @@ async fn main() {
         std::fs::create_dir_all(&session_dirs).ok();
         let db_path = session_dirs.join("sessions.db");
         let session_store = SessionStore::open(&db_path).ok();
-        let session_id = uuid::Uuid::new_v4().to_string();
+        let mut current_session_id = uuid::Uuid::new_v4().to_string();
+
+        let mut context_manager = qbird_code_infra::memory::ContextManager::new(
+            "interactive".into(),
+            react_loop.config.context_token_limit,
+        );
 
         println!("{}", t!("interactive_banner"));
         println!();
@@ -509,6 +514,7 @@ async fn main() {
                                                     count = messages.len()
                                                 )
                                             );
+                                            current_session_id = sub_arg.to_string();
                                         }
                                         Err(_e) => {
                                             eprintln!(
@@ -633,7 +639,7 @@ async fn main() {
                     &tool_schemas,
                     &tool_registry,
                     None,
-                    None,
+                    Some(&mut context_manager),
                 )
                 .await
             {
@@ -649,6 +655,11 @@ async fn main() {
                 }
             }
 
+            // 每轮对话后保存 session
+            if let Some(ref store) = session_store {
+                let _ = store.save_messages(&current_session_id, &messages);
+            }
+
             // 上下文窗口管理：超出上限时截断旧消息（保留 system 消息）
             if messages.len() > MAX_HISTORY_MSGS {
                 let keep = MAX_HISTORY_MSGS / 2;
@@ -662,7 +673,7 @@ async fn main() {
 
         // 退出前保存
         if let Some(ref store) = session_store {
-            let _ = store.save_messages(&session_id, &messages);
+            let _ = store.save_messages(&current_session_id, &messages);
         }
 
         return;

@@ -1,4 +1,4 @@
-use qbird_code_models::{EflowError, Message, ToolCall, ToolCallFunction};
+use qbird_code_models::{EflowError, Message, ToolCall, ToolCallFunction, UsageStats};
 
 use super::hooks::AgentHooks;
 use super::types::{AgentResult, LoopState, READ_ONLY_TOOLS, Step};
@@ -83,7 +83,11 @@ pub(super) fn process_llm_response(
         return Ok(Step::Done(AgentResult {
             content: response.content.clone(),
             messages: messages.clone(),
-            usage: response.usage.clone(),
+            usage: UsageStats {
+                prompt_tokens: state.total_prompt_tokens,
+                completion_tokens: state.total_completion_tokens,
+                ..Default::default()
+            },
         }));
     }
 
