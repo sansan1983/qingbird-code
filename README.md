@@ -43,21 +43,30 @@ qingbird --interactive                       交互模式（多轮对话）
 qingbird --provider ollama --execute "..."   临时切换 Provider
 qingbird --model deepseek-chat --execute "..."  临时切换模型
 qingbird --temperature 0.3 --execute "..."   临时设置温度
+qingbird --lang zh-CN --execute "..."        指定界面语言（zh-CN / en-US）
+qingbird --profile developer --execute "..." 加载用户级 Profile
 qingbird --help                              查看所有选项
 ```
 
 ## 交互模式命令
 
-进入 `--interactive` 后，支持以下斜杠命令：
+进入 `--interactive` 后，支持以下 7 个斜杠命令（中英双语）：
 
 ```
 /help               显示帮助
-/model <名称>       切换模型（当前: deepseek-v4-pro）
-/temperature <n>    设置温度（当前: Some(0.7)）
+/model <名称>       切换模型
+/temperature <n>    设置温度
+/usage              查看 token 用量与成本
+/sessions           列出历史会话
+/session load <id>  加载指定会话
+/session delete <id> 删除会话
+/sdd run <input>    启动 SDD 工作流
+/sdd confirm        确认 SDD proposal
+/sdd status         查看 SDD 状态
 /quit /exit         退出
 ```
 
-对话历史自动保留，超出 50 条消息时自动截断（保留 system + 最近一半）。
+v0.3.0 计划新增：`/undo` / `/profile` / `/provider`（在 `/help` 中以 `[planned]` 标记）。
 
 ## 支持的 Provider
 
@@ -86,20 +95,21 @@ git clone <repo>
 cd qingbird-code
 cargo build --release
 ./target/release/qingbird --execute "..."
-
-# 或直接 cargo install
-cargo install qingbird-code
 ```
 
 ## 架构
 
 ```
 qingbird (binary CLI)
-  └── qbird-code-agents    — ReactLoop 状态机 + 死循环检测
-  └── qbird-code-tools     — 4 内置工具 (读/写/搜索/命令)
-  └── qbird-code-infra     — 5 LLM Provider + HTTP 客户端
-  └── qbird-code-models    — 核心类型 (Message/Error/RiskLevel)
+  └── qbird-code-agents    — ReactLoop 状态机 + 死循环检测 + Subagent 池
+  └── qbird-code-tools     — 7 内置工具 (读/写/搜索/命令/glob/list_dir/web_fetch)
+  └── qbird-code-infra     — 5 LLM Provider + HTTP 客户端 + Profile + Stream
+  └── qbird-code-models    — 核心类型 (Message/Error/RiskLevel/PermissionSet)
 ```
+
+## 用户文档
+
+详细参考见 `docs/` 目录（v0.3.0 起提供 CLI / Configuration / Profiles 完整文档）。
 
 ## 许可证
 
