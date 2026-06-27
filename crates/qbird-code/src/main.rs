@@ -5,12 +5,13 @@ use clap::Parser;
 use qbird_code_agents::{ReactLoop, ReactLoopConfig};
 use qbird_code_infra::config::{find_config, load_config};
 use qbird_code_infra::http_client::HttpLlmClient;
-use qbird_code_infra::providers::DeepseekProvider;
+use qbird_code_infra::providers::{
+    AnthropicProvider, DeepseekProvider, OllamaProvider, OpenAIProvider,
+};
 use qbird_code_models::Message;
 use qbird_code_tools::{
     ExecuteCommandTool, ReadFileTool, SearchCodeTool, ToolRegistry, WriteFileTool,
 };
-
 /// qingbird — Efficient Flow Agent Collaboration Framework
 #[derive(Parser)]
 #[command(name = "qingbird")]
@@ -62,26 +63,102 @@ async fn main() {
         }
     };
 
-    // === 3. 初始化基础设施 ===
-    let http_client = match HttpLlmClient::new(
-        cfg.llm.deepseek.timeout_secs,
-        cfg.llm.deepseek.max_retries,
-        cfg.llm.deepseek.retry_backoff_ms,
-    ) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Failed to initialize HTTP client: {}", e);
+    // === 3. 初始化基础设施（根据 cfg.llm.active 路由） ===
+    let active = cfg.llm.active.clone();
+    let (http_client, provider): (
+        HttpLlmClient,
+        Box<dyn qbird_code_infra::providers::Provider>,
+    ) = match active.as_str() {
+        "deepseek" => {
+            let h = match HttpLlmClient::new(
+                cfg.llm.deepseek.timeout_secs,
+                cfg.llm.deepseek.max_retries,
+                cfg.llm.deepseek.retry_backoff_ms,
+            ) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Failed to initialize HTTP client: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            let p = match DeepseekProvider::new(cfg.llm.deepseek.clone()) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("Failed to initialize LLM provider: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            (
+                h,
+                Box::new(p) as Box<dyn qbird_code_infra::providers::Provider>,
+            )
+        }
+        "ollama" => {
+            let h = match HttpLlmClient::new(cfg.llm.ollama.timeout_secs, 3, 1000) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Failed to initialize HTTP client: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            let p = match OllamaProvider::new(cfg.llm.ollama.clone()) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("Failed to initialize LLM provider: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            (
+                h,
+                Box::new(p) as Box<dyn qbird_code_infra::providers::Provider>,
+            )
+        }
+        "openai" => {
+            let h = match HttpLlmClient::new(cfg.llm.openai.timeout_secs, 3, 1000) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Failed to initialize HTTP client: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            let p = match OpenAIProvider::new(cfg.llm.openai.clone()) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("Failed to initialize LLM provider: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            (
+                h,
+                Box::new(p) as Box<dyn qbird_code_infra::providers::Provider>,
+            )
+        }
+        "anthropic" => {
+            let h = match HttpLlmClient::new(cfg.llm.anthropic.timeout_secs, 3, 1000) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Failed to initialize HTTP client: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            let p = match AnthropicProvider::new(cfg.llm.anthropic.clone()) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("Failed to initialize LLM provider: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            (
+                h,
+                Box::new(p) as Box<dyn qbird_code_infra::providers::Provider>,
+            )
+        }
+        other => {
+            eprintln!("Unknown provider '{other}', expected deepseek/ollama/openai/anthropic");
             std::process::exit(1);
         }
     };
-
-    let provider = match DeepseekProvider::new(cfg.llm.deepseek.clone()) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("Failed to initialize LLM provider: {}", e);
-            std::process::exit(1);
-        }
-    };
+    drop(active);
 
     // === 4. 初始化工具注册表 ===
     let mut registry = ToolRegistry::new();
@@ -89,6 +166,14 @@ async fn main() {
     registry.register(Arc::new(WriteFileTool));
     registry.register(Arc::new(ExecuteCommandTool));
     registry.register(Arc::new(SearchCodeTool));
+    // 提取 thinking 配置（仅 DeepSeek 支持）
+    let (thinking_enabled, thinking_effort) = match cfg.llm.active.as_str() {
+        "deepseek" => (
+            cfg.llm.deepseek.thinking_enabled,
+            cfg.llm.deepseek.thinking_effort.clone(),
+        ),
+        _ => (true, "high".into()),
+    };
     let tool_registry = Arc::new(registry);
 
     // 将 ToolDefinition 转为 OpenAI 兼容的 JSON schema
@@ -110,15 +195,15 @@ async fn main() {
     // === 5. 单次执行模式 ===
     if let Some(prompt) = cli.execute {
         let react_loop = ReactLoop::new(ReactLoopConfig {
-            thinking_enabled: cfg.llm.deepseek.thinking_enabled,
-            thinking_effort: cfg.llm.deepseek.thinking_effort.clone(),
+            thinking_enabled,
+            thinking_effort: thinking_effort.clone(),
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![build_system_message(&tool_registry), Message::user(&prompt)];
 
         match react_loop
             .run(
-                &provider,
+                provider.as_ref(),
                 &http_client,
                 &mut messages,
                 &tool_schemas,
@@ -141,8 +226,8 @@ async fn main() {
     // === 6. 交互模式（多轮对话） ===
     if cli.interactive {
         let react_loop = ReactLoop::new(ReactLoopConfig {
-            thinking_enabled: cfg.llm.deepseek.thinking_enabled,
-            thinking_effort: cfg.llm.deepseek.thinking_effort.clone(),
+            thinking_enabled,
+            thinking_effort: thinking_effort.clone(),
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![build_system_message(&tool_registry)];
@@ -180,7 +265,7 @@ async fn main() {
 
             match react_loop
                 .run(
-                    &provider,
+                    provider.as_ref(),
                     &http_client,
                     &mut messages,
                     &tool_schemas,

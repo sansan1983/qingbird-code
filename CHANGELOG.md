@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.4] - 2026-06-27
+
+### Changed
+
+- **Provider 路由**: 不再硬编码 DeepseekProvider，根据 `cfg.llm.active` 选择 Provider
+  - 支持 `deepseek` / `ollama` / `openai` / `anthropic` 四种
+  - `HttpLlmClient` 参数从对应 provider 配置读取
+  - `qingbird.yaml` 中 `llm.active` 字段现在实际生效
+
+---
+
 ## [0.2.3] - 2026-06-27
 
 ### Changed

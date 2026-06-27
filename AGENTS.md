@@ -55,6 +55,8 @@ PR 不带无关重构。不重排/重命名/"改进"无关文件。看到 dead c
 - **提交**：Conventional Commits，scope = 模块名（`llm` / `memory` / `react-loop` / `tools` 等）。Subject ≤72 字符，祈使句，末尾无句号。
 - **涉及 LLM 的测试**必须 dummy key + 5s timeout。
 
+- **语言**：所有推理、思考、回复必须使用简体中文。日志（tracing）保持英文。
+
 ## 文件地图（先看这些）
 
 | 关注点 | 位置 |
