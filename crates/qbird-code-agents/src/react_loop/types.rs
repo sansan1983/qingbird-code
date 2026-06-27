@@ -1,29 +1,13 @@
-use qbird_code_models::ToolCall;
+use qbird_code_models::{Message, ToolCall, UsageStats};
 
-/// 每轮迭代后的控制流结果
-#[derive(Debug, Clone)]
-pub enum TurnResult {
-    /// 继续下一轮迭代
-    Continue,
-    /// 需要执行工具调用
-    ToolCalls { tool_calls: Vec<ToolCall> },
-    /// 任务完成
-    Complete {
-        content: String,
-        status: Option<String>,
-    },
-    /// 达到最大迭代次数
-    MaxIterations,
-    /// 用户中断
-    Interrupted,
-}
+// ===== 公开类型 =====
 
 /// Agent 最终结果
 #[derive(Debug, Clone)]
 pub struct AgentResult {
     pub content: String,
-    pub messages: Vec<qbird_code_models::Message>,
-    pub usage: qbird_code_models::UsageStats,
+    pub messages: Vec<Message>,
+    pub usage: UsageStats,
 }
 
 /// 循环中跨迭代保持的可变状态
@@ -55,19 +39,34 @@ impl Default for LoopState {
     }
 }
 
-/// 工具执行策略
-#[derive(Debug)]
-pub enum ExecutionStrategy {
-    ParallelSubagents,
-    BatchedReadonly,
-    Sequential,
+/// 状态机步骤：驱动方根据这个决定做什么
+#[derive(Debug, Clone)]
+pub enum Step {
+    /// 调用 LLM
+    CallLlm,
+    /// 执行工具
+    CallTools { tool_calls: Vec<ToolCall> },
+    /// 完成
+    Done(AgentResult),
 }
 
-/// 只读工具名称集合（用于并行批处理判定）
-///
-/// Note: `glob` and `list_dir` are planned for V0.1.1 and do not yet exist
-/// in the tools crate. They are listed here as forward-looking entries.
-pub(super) static READ_ONLY_TOOLS: &[&str] = &["read_file", "search_code", "glob", "list_dir"];
+/// Hook 对事件的响应
+pub enum HookAction {
+    /// 继续
+    Proceed,
+    /// 注入 nudge 消息后继续
+    Nudge(String),
+    /// 立即终止
+    Halt(String),
+}
+
+/// Agent hook trait — 安全机制通过这个接口注入
+pub trait AgentHook: Send {
+    /// LLM 响应后、状态更新前调用
+    fn on_llm_response(&mut self, state: &LoopState) -> HookAction;
+    /// 工具执行结果处理后调用
+    fn on_tool_results(&mut self, state: &LoopState) -> HookAction;
+}
 
 /// ReAct 循环配置
 #[derive(Debug, Clone)]
@@ -78,8 +77,6 @@ pub struct ReactLoopConfig {
     pub max_tokens: Option<u64>,
     /// 连续只读轮次上限（超过后触发 nudge）
     pub max_consecutive_reads: usize,
-    /// 上下文 token 压缩阈值（百分比，如 0.8 表示 80% 触发压缩）
-    pub compaction_threshold: f32,
 }
 
 impl Default for ReactLoopConfig {
@@ -90,7 +87,11 @@ impl Default for ReactLoopConfig {
             temperature: Some(0.7),
             max_tokens: Some(4096),
             max_consecutive_reads: 5,
-            compaction_threshold: 0.8,
         }
     }
 }
+
+// ===== 内部常量 =====
+
+/// 只读工具名称集合（用于并行批处理判定 + 连续只读检测）
+pub(super) static READ_ONLY_TOOLS: &[&str] = &["read_file", "search_code", "glob", "list_dir"];

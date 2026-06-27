@@ -1,14 +1,18 @@
+pub mod hooks;
+pub mod r#loop;
 pub mod types;
 
-pub use types::{AgentResult, LoopState, ReactLoopConfig, TurnResult};
+pub use types::{AgentHook, AgentResult, HookAction, LoopState, ReactLoopConfig, Step};
 
 use std::sync::Arc;
 
 use qbird_code_infra::http_client::HttpLlmClient;
 use qbird_code_infra::providers::{Provider, RequestConfig};
-use qbird_code_models::{EflowError, Message, ToolCall, ToolCallFunction};
+use qbird_code_models::{EflowError, Message, ToolCall};
 use qbird_code_tools::ToolRegistry;
-use rust_i18n::t;
+
+use crate::nudge::NudgeSystem;
+use hooks::AgentHooks;
 
 pub struct ReactLoop {
     pub config: ReactLoopConfig,
@@ -23,7 +27,7 @@ impl ReactLoop {
         Self::new(ReactLoopConfig::default())
     }
 
-    /// 主入口：运行 ReAct 循环
+    /// 主入口：运行 ReAct 循环（外部接口不变）
     pub async fn run(
         &self,
         provider: &dyn Provider,
@@ -35,25 +39,25 @@ impl ReactLoop {
     ) -> Result<AgentResult, EflowError> {
         let max_iters = max_iterations_override.unwrap_or(self.config.max_iterations);
         let mut state = LoopState::new();
-        let mut doom_detector = crate::doom_loop::DoomLoopDetector::new();
+        let mut hooks = AgentHooks::new(&self.config);
 
         loop {
             state.iteration += 1;
 
-            // === 1. 安全自检 ===
-            if let Some(nudge) = self.check_safety(&state, max_iters) {
-                crate::nudge::NudgeSystem::inject_nudge(messages, &nudge);
+            // === 决策: 超限检查 ===
+            if let Some(msg) = r#loop::check_max_iterations(&state, max_iters) {
+                NudgeSystem::inject_nudge(messages, &msg);
                 return Ok(AgentResult {
-                    content: nudge,
+                    content: msg,
                     messages: messages.clone(),
                     usage: Default::default(),
                 });
             }
 
-            // === 2. Nudge 检测 ===
-            self.check_nudges(&mut state, messages);
+            // === Nudge 检测（连续只读/无工具/接近上限） ===
+            hooks.apply_pre_llm_nudges(&mut state, messages);
 
-            // === 3. LLM 调用 ===
+            // === IO: 调 LLM ===
             let request_config = RequestConfig {
                 temperature: self.config.temperature,
                 max_tokens: self.config.max_tokens,
@@ -67,183 +71,57 @@ impl ReactLoop {
             let response_json = http_client.send(provider, &body).await?;
             let chat_response = provider.parse_response(&response_json).await?;
 
-            // === 4. 响应处理 ===
-            // 提取 reasoning_content (DeepSeek)
-            let reasoning = chat_response.reasoning_content.clone();
+            // === 决策: LLM 说了什么？ ===
+            let step =
+                r#loop::process_llm_response(&mut state, &mut hooks, &chat_response, messages)?;
 
-            // 构建 assistant 消息
-            let assistant_msg = if let Some(ref tool_calls_json) = chat_response.tool_calls {
-                // 有 tool calls: 构建带 tool_calls 的消息
-                let tool_calls: Vec<ToolCall> = tool_calls_json
-                    .iter()
-                    .map(|tc| {
-                        let fc = &tc["function"];
-                        ToolCall {
-                            id: tc["id"].as_str().unwrap_or("").to_string(),
-                            function: ToolCallFunction {
-                                name: fc["name"].as_str().unwrap_or("").to_string(),
-                                arguments: fc["arguments"].as_str().unwrap_or("{}").to_string(),
-                            },
+            match step {
+                Step::CallTools { tool_calls } => {
+                    // === 安全: 死循环检测 ===
+                    let hook_action = hooks.on_llm_response(&state);
+                    match hook_action {
+                        HookAction::Halt(msg) => {
+                            return Ok(AgentResult {
+                                content: msg,
+                                messages: messages.clone(),
+                                usage: chat_response.usage.clone(),
+                            });
                         }
-                    })
-                    .collect();
-
-                let is_read_only = tool_calls
-                    .iter()
-                    .all(|tc| types::READ_ONLY_TOOLS.contains(&tc.function.name.as_str()));
-
-                if is_read_only {
-                    state.consecutive_reads += 1;
-                } else {
-                    state.consecutive_reads = 0;
-                }
-
-                state.consecutive_no_tool_calls = 0;
-
-                Message::assistant_with_tools(
-                    chat_response.content.clone(),
-                    reasoning,
-                    tool_calls.clone(),
-                )
-            } else {
-                // 无 tool calls
-                state.consecutive_no_tool_calls += 1;
-                state.consecutive_reads = 0;
-
-                // 检查是否完成
-                let finish = chat_response.finish_reason.as_deref();
-                if finish == Some("stop") && !chat_response.content.is_empty() {
-                    // LLM 宣布完成
-                    let has_writes = messages.iter().any(|m| {
-                        m.tool_calls
-                            .as_ref()
-                            .map(|tc| {
-                                tc.iter().any(|c| {
-                                    !types::READ_ONLY_TOOLS.contains(&c.function.name.as_str())
-                                })
-                            })
-                            .unwrap_or(false)
-                    });
-
-                    let nudge = crate::nudge::NudgeSystem::check_completion_without_write(
-                        has_writes,
-                        state.completion_nudge_sent,
-                    );
-
-                    if let Some(n) = nudge {
-                        state.completion_nudge_sent = true;
-                        crate::nudge::NudgeSystem::inject_nudge(messages, &n);
-                        messages.push(Message::assistant(chat_response.content.clone(), reasoning));
-                        continue;
-                    }
-
-                    messages.push(Message::assistant(chat_response.content.clone(), reasoning));
-                    return Ok(AgentResult {
-                        content: chat_response.content.clone(),
-                        messages: messages.clone(),
-                        usage: chat_response.usage.clone(),
-                    });
-                }
-
-                // 无工具调用但也没完成 → 继续
-                Message::assistant(chat_response.content.clone(), reasoning)
-            };
-
-            messages.push(assistant_msg);
-
-            // === 5. 死循环检测（仅当有 tool calls 时） ===
-            if let Some(ref tc) = chat_response.tool_calls {
-                let tool_calls: Vec<ToolCall> = tc
-                    .iter()
-                    .map(|t| ToolCall {
-                        id: t["id"].as_str().unwrap_or("").to_string(),
-                        function: ToolCallFunction {
-                            name: t["function"]["name"].as_str().unwrap_or("").to_string(),
-                            arguments: t["function"]["arguments"]
-                                .as_str()
-                                .unwrap_or("{}")
-                                .to_string(),
-                        },
-                    })
-                    .collect();
-
-                let (action, warning) = doom_detector.check(&tool_calls);
-
-                match action {
-                    crate::doom_loop::DoomLoopAction::ForceStop => {
-                        return Ok(AgentResult {
-                            content: format!("任务被终止: {}", warning),
-                            messages: messages.clone(),
-                            usage: chat_response.usage.clone(),
-                        });
-                    }
-                    crate::doom_loop::DoomLoopAction::Redirect
-                    | crate::doom_loop::DoomLoopAction::Notify => {
-                        if let Some(msg) =
-                            crate::doom_loop::DoomLoopDetector::recovery_message(&action)
-                        {
-                            tracing::warn!("Doom loop detected: {}", warning);
-                            crate::nudge::NudgeSystem::inject_nudge(messages, &msg);
+                        HookAction::Nudge(n) => {
+                            NudgeSystem::inject_nudge(messages, &n);
                         }
+                        HookAction::Proceed => {}
                     }
-                    crate::doom_loop::DoomLoopAction::None => {}
-                }
 
-                // === 6. 工具执行 ===
-                let is_all_readonly = tool_calls
-                    .iter()
-                    .all(|tc| types::READ_ONLY_TOOLS.contains(&tc.function.name.as_str()));
+                    // === IO: 执行工具 ===
+                    let is_all_readonly = tool_calls
+                        .iter()
+                        .all(|tc| types::READ_ONLY_TOOLS.contains(&tc.function.name.as_str()));
 
-                if is_all_readonly {
-                    // 批量并行
-                    self.execute_tools_parallel(&tool_calls, tool_registry, messages)
-                        .await?;
-                } else {
-                    // 逐一串行
-                    self.execute_tools_sequential(&tool_calls, tool_registry, messages)
-                        .await?;
+                    if is_all_readonly {
+                        self.execute_tools_parallel(&tool_calls, tool_registry, messages)
+                            .await?;
+                    } else {
+                        self.execute_tools_sequential(&tool_calls, tool_registry, messages)
+                            .await?;
+                    }
+
+                    // === 决策: 工具执行后继续 ===
+                    let next = r#loop::after_tool_execution(&state, &mut hooks);
+                    match next {
+                        Step::CallLlm => continue,
+                        Step::Done(r) => return Ok(r),
+                        _ => continue,
+                    }
                 }
+                Step::Done(result) => return Ok(result),
+                Step::CallLlm => continue,
             }
         }
     }
 
-    /// === 安全自检 ===
-    fn check_safety(&self, state: &LoopState, max_iters: usize) -> Option<String> {
-        if state.iteration > max_iters {
-            Some(t!("nudge_max_iterations").to_string())
-        } else {
-            None
-        }
-    }
+    // ===== 工具执行（内部辅助，带 IO） =====
 
-    /// === Nudge 检测 ===
-    fn check_nudges(&self, state: &mut LoopState, messages: &mut Vec<Message>) {
-        if let Some(n) = crate::nudge::NudgeSystem::check_consecutive_reads(
-            state.consecutive_reads,
-            self.config.max_consecutive_reads,
-            state.read_nudge_sent,
-        ) {
-            state.read_nudge_sent = true;
-            crate::nudge::NudgeSystem::inject_nudge(messages, &n);
-        }
-
-        if let Some(n) = crate::nudge::NudgeSystem::check_no_tool_calls(
-            state.consecutive_no_tool_calls,
-            state.no_tool_nudge_sent,
-        ) {
-            state.no_tool_nudge_sent = true;
-            crate::nudge::NudgeSystem::inject_nudge(messages, &n);
-        }
-
-        if let Some(n) = crate::nudge::NudgeSystem::check_iteration_warning(
-            state.iteration,
-            self.config.max_iterations,
-        ) {
-            crate::nudge::NudgeSystem::inject_nudge(messages, &n);
-        }
-    }
-
-    /// === 工具并行执行（只读） ===
     async fn execute_tools_parallel(
         &self,
         tool_calls: &[ToolCall],
@@ -280,7 +158,6 @@ impl ReactLoop {
         Ok(())
     }
 
-    /// === 工具串行执行（写入） ===
     async fn execute_tools_sequential(
         &self,
         tool_calls: &[ToolCall],

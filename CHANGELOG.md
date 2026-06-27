@@ -7,23 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
-
-### Removed
-
-- **死代码清理 (P0)**: 删除 ~12,000 行未编译的旧 `src/` 和 `tests/` 目录（旧 eflow v1.x 整体架构遗留）
-- **删除废弃备份**: `src.v0.1.bak/`
-- **清理运行时产物**: session JSONL、sessions-index、.qbirdd 等根目录工件
+## [0.2.1] - 2026-06-27
 
 ### Changed
 
-- **文档同步 V0.2.0**: AGENTS.md / CLAUDE.md / README.md 更新为 5-crate workspace 真实路径和测试数
-- **.gitignore 补充**: 添加运行时产物忽略规则
+- **核心循环重构**: ReactLoop 从 120 行内联循环重构为状态机架构
+  - 新增 `Step` 枚举 (`CallLlm` / `CallTools` / `Done`)
+  - 新增 `AgentHook` trait，死循环检测和 Nudge 通过 hook 注入
+  - 新增 `loop.rs` (纯决策函数) + `hooks.rs` (安全机制包装)
+  - 剔除死代码: `TurnResult`, `ExecutionStrategy` 枚举
+  - 外部接口 (`ReactLoop::run()`) 签名不变，所有测试照常通过
 
-### Historical Notes
-
-- v1.0.0 ~ v1.3.3 版本条目为旧 eflow 架构的变更记录，所引用的 `src/` 路径在 V0.2.0 重构后已删除
 ---
+
+## [Unreleased]
 
 ## [1.1.0] - 2026-06-16
 
