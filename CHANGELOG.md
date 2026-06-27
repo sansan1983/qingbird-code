@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.14] - 2026-06-27
+
+### Added
+
+- **3 个新工具**: glob（文件搜索）、list_dir（目录列表）、web_fetch（URL 内容抓取）
+- **流式接口准备**: Provider trait 新增 `stream()` 方法 + SSE 解析器 stub
+- **安全模块接线**: SecurityConfig.allowed_paths 现在实际生效，阻止写入未许可路径
+
+### Fixed
+
+- **Mock 测试 flaky**: 修复 TCP RST 问题 + 增加就绪信号机制，测试稳定通过
+
+---
+
 ## [0.2.13] - 2026-06-27
 
 ### Added
