@@ -22,7 +22,7 @@ use qbird_code_tools::{
 /// qingbird — Efficient Flow Agent Collaboration Framework
 #[derive(Parser)]
 #[command(name = "qingbird")]
-#[command(version = "0.2.17")]
+#[command(version = "0.2.18")]
 #[command(about = "Efficient Flow Agent Collaboration Framework")]
 struct Cli {
     /// 执行单次任务
