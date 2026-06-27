@@ -13,10 +13,16 @@ rust_i18n::i18n!("../../locales", fallback = "en-US");
 
 pub mod command;
 pub mod file;
+pub mod glob;
+pub mod list_dir;
 pub mod registry;
 pub mod search;
+pub mod web_fetch;
 
 pub use command::ExecuteCommandTool;
 pub use file::{ReadFileTool, WriteFileTool};
+pub use glob::{GlobTool, glob_match};
+pub use list_dir::ListDirTool;
 pub use registry::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
 pub use search::SearchCodeTool;
+pub use web_fetch::WebFetchTool;

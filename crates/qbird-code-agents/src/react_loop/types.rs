@@ -18,6 +18,8 @@ pub struct LoopState {
     pub read_nudge_sent: bool,
     pub completion_nudge_sent: bool,
     pub no_tool_nudge_sent: bool,
+    pub total_prompt_tokens: u64,
+    pub total_completion_tokens: u64,
 }
 
 impl LoopState {
@@ -29,6 +31,8 @@ impl LoopState {
             read_nudge_sent: false,
             completion_nudge_sent: false,
             no_tool_nudge_sent: false,
+            total_prompt_tokens: 0,
+            total_completion_tokens: 0,
         }
     }
 }
@@ -81,6 +85,8 @@ pub struct ReactLoopConfig {
     pub thinking_enabled: bool,
     /// thinking effort: "high" | "max"
     pub thinking_effort: String,
+    pub context_token_limit: usize,
+    pub context_checkpoint_threshold: f64,
 }
 
 impl Default for ReactLoopConfig {
@@ -93,6 +99,8 @@ impl Default for ReactLoopConfig {
             max_consecutive_reads: 5,
             thinking_enabled: true,
             thinking_effort: "high".into(),
+            context_token_limit: 32000,
+            context_checkpoint_threshold: 0.8,
         }
     }
 }

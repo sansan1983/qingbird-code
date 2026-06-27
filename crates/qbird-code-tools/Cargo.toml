@@ -15,5 +15,6 @@ tokio.workspace = true
 uuid.workspace = true
 walkdir.workspace = true
 regex-lite.workspace = true
+reqwest.workspace = true
 tracing.workspace = true
 rust-i18n.workspace = true

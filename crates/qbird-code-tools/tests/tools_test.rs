@@ -3,7 +3,8 @@ use std::sync::Arc;
 use qbird_code_models::RiskLevel;
 use qbird_code_tools::Tool;
 use qbird_code_tools::{
-    ExecuteCommandTool, ReadFileTool, SearchCodeTool, ToolRegistry, WriteFileTool,
+    ExecuteCommandTool, GlobTool, ReadFileTool, SearchCodeTool, ToolRegistry, WebFetchTool,
+    WriteFileTool, glob_match,
 };
 
 // ===== ToolRegistry =====
@@ -29,13 +30,17 @@ fn test_registry_definitions_returns_all() {
     r.register(Arc::new(WriteFileTool));
     r.register(Arc::new(ExecuteCommandTool));
     r.register(Arc::new(SearchCodeTool));
+    r.register(Arc::new(GlobTool));
+    r.register(Arc::new(WebFetchTool));
     let defs = r.definitions();
-    assert_eq!(defs.len(), 4);
+    assert_eq!(defs.len(), 6);
     let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
     assert!(names.contains(&"read_file"));
     assert!(names.contains(&"write_file"));
     assert!(names.contains(&"execute_command"));
     assert!(names.contains(&"search_code"));
+    assert!(names.contains(&"glob"));
+    assert!(names.contains(&"web_fetch"));
 }
 
 // ===== Risk levels =====
@@ -46,6 +51,8 @@ fn test_tool_risk_levels() {
     assert_eq!(WriteFileTool.definition().risk_level, RiskLevel::L1);
     assert_eq!(ExecuteCommandTool.definition().risk_level, RiskLevel::L2);
     assert_eq!(SearchCodeTool.definition().risk_level, RiskLevel::L0);
+    assert_eq!(GlobTool.definition().risk_level, RiskLevel::L0);
+    assert_eq!(WebFetchTool.definition().risk_level, RiskLevel::L0);
 }
 
 // ===== Tool definitions =====
@@ -232,4 +239,161 @@ async fn test_registry_execute_unknown_tool() {
 fn test_registry_default() {
     let r: ToolRegistry = Default::default();
     assert!(r.definitions().is_empty());
+}
+
+// ===== GlobTool =====
+
+#[test]
+fn test_glob_match_success() {
+    assert!(glob_match("*.rs", "lib.rs"));
+    assert!(glob_match("**/*.rs", "src/lib.rs"));
+    assert!(glob_match("foo?", "food"));
+    assert!(glob_match("[abc]*", "apple"));
+}
+
+#[test]
+fn test_glob_match_no_match() {
+    assert!(!glob_match("*.rs", "lib.txt"));
+    assert!(!glob_match("**/*.rs", "src/lib.txt"));
+}
+
+#[test]
+fn test_glob_match_regex_meta_chars() {
+    assert!(glob_match("foo(1).txt", "foo(1).txt"));
+    assert!(glob_match("foo+bar.txt", "foo+bar.txt"));
+    assert!(glob_match("foo^bar.txt", "foo^bar.txt"));
+    assert!(glob_match("foo$bar.txt", "foo$bar.txt"));
+    assert!(glob_match("foo|bar.txt", "foo|bar.txt"));
+    assert!(glob_match("foo\\bar.txt", "foo\\bar.txt"));
+}
+
+#[test]
+fn test_glob_match_braces_are_literal() {
+    assert!(glob_match("foo{1}.txt", "foo{1}.txt"));
+}
+
+#[test]
+fn test_glob_match_char_class() {
+    assert!(glob_match("foo[1].txt", "foo1.txt"));
+    assert!(glob_match("foo[!1].txt", "foo2.txt"));
+}
+
+#[test]
+fn test_glob_match_invalid_pattern_does_not_panic() {
+    assert!(!glob_match("[invalid", "anything"));
+}
+
+#[tokio::test]
+async fn test_glob_missing_param() {
+    let r = GlobTool.execute(serde_json::json!({})).await;
+    assert!(r.is_err());
+}
+
+#[tokio::test]
+async fn test_glob_invalid_path() {
+    let r = GlobTool
+        .execute(serde_json::json!({
+            "pattern": "*.rs",
+            "path": "/nonexistent_qbird_test_path_xyz"
+        }))
+        .await;
+    assert!(r.is_err());
+}
+
+#[tokio::test]
+async fn test_glob_success() {
+    let dir = std::env::temp_dir().join("qbird_test_glob");
+    let _ = std::fs::create_dir_all(&dir);
+    std::fs::write(dir.join("test.rs"), "").unwrap();
+    std::fs::write(dir.join("test.txt"), "").unwrap();
+
+    let result = GlobTool
+        .execute(serde_json::json!({
+            "pattern": "*.rs",
+            "path": dir.to_str().unwrap()
+        }))
+        .await;
+    assert!(result.is_ok());
+    let output = result.unwrap();
+    assert!(output.success);
+    assert!(output.content.contains("test.rs"));
+    assert!(!output.content.contains("test.txt"));
+    assert_eq!(output.metadata.as_ref().unwrap()["matches"], 1);
+    assert_eq!(output.metadata.as_ref().unwrap()["truncated"], false);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn test_glob_no_match() {
+    let dir = std::env::temp_dir().join("qbird_test_glob_nomatch");
+    let _ = std::fs::create_dir_all(&dir);
+    std::fs::write(dir.join("test.txt"), "").unwrap();
+
+    let result = GlobTool
+        .execute(serde_json::json!({
+            "pattern": "*.rs",
+            "path": dir.to_str().unwrap()
+        }))
+        .await;
+    assert!(result.is_ok());
+    let output = result.unwrap();
+    assert!(output.success);
+    assert_eq!(output.metadata.as_ref().unwrap()["matches"], 0);
+    assert_eq!(output.metadata.as_ref().unwrap()["truncated"], false);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn test_glob_double_star_matches_subdirs() {
+    let dir = std::env::temp_dir().join("qbird_test_glob_ds");
+    let _ = std::fs::create_dir_all(&dir);
+    std::fs::write(dir.join("root.rs"), "").unwrap();
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("sub").join("nested.rs"), "").unwrap();
+
+    let result = GlobTool
+        .execute(serde_json::json!({
+            "pattern": "**/*.rs",
+            "path": dir.to_str().unwrap()
+        }))
+        .await;
+    assert!(result.is_ok());
+    let output = result.unwrap();
+    assert!(output.success);
+    assert!(output.content.contains("nested.rs"));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ===== WebFetchTool =====
+
+#[test]
+fn test_web_fetch_definition() {
+    let def = WebFetchTool.definition();
+    assert_eq!(def.name, "web_fetch");
+    let params = def.parameters.as_object().unwrap();
+    assert!(params["properties"]["url"].is_object());
+    let required: Vec<&str> = params["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(required.contains(&"url"));
+}
+
+#[tokio::test]
+async fn test_web_fetch_missing_url() {
+    let result = WebFetchTool.execute(serde_json::json!({})).await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_web_fetch_invalid_url() {
+    let result = WebFetchTool
+        .execute(serde_json::json!({"url": "not a valid url://"}))
+        .await;
+    assert!(result.is_err());
 }

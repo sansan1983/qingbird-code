@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.17] - 2026-06-27
+
+### Added
+
+- **Token 用量追踪和展示**（`/usage` 命令）
+- **对话历史持久化**（SQLite 存储，`/sessions` / `/session load` 命令）
+- **工具输出大小限制**（防止撑爆上下文，最大 ~4000 tokens）
+- **Subagent 基础并发池**（`SubagentPool` + `execute_parallel`）
+
+### Fixed
+
+- **全量 i18n 审计**：确保所有用户面向字符串走 `t!()`
+
+---
+
+## [0.2.16] - 2026-06-27
+
+### Added
+
+- **Skill 插件体系**: SkillRegistry + Skill trait 注册表
+- **SDD 四阶段工作流**: Proposal（含 HARD-GATE）/ Spec Review / Quality Review / Archive
+- **CLI 集成**: `/sdd` 斜杠命令组
+
+---
+
+## [0.2.15] - 2026-06-27
+
+### Added
+
+- **记忆系统**: SQLite + FTS5 记忆管理器（增量同步、全文搜索、预算化读取）
+- **上下文管理**: Token 预算化窗口、溢出检测（4 级压力）、自动检查点
+- **ReactLoop 集成**: ContextManager 可选接入，替代粗暴 50 条截断
+
+---
+
+## [0.2.14] - 2026-06-27
+
+### Added
+
+- **3 个新工具**: glob（文件搜索）、list_dir（目录列表）、web_fetch（URL 内容抓取）
+- **流式接口准备**: Provider trait 新增 `stream()` 方法 + SSE 解析器 stub
+- **安全模块接线**: SecurityConfig.allowed_paths 现在实际生效，阻止写入未许可路径
+
+### Fixed
+
+- **Mock 测试 flaky**: 修复 TCP RST 问题 + 增加就绪信号机制，测试稳定通过
+
+---
+
 ## [0.2.13] - 2026-06-27
 
 ### Added

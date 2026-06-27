@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.13"
+version = "0.2.17"
 edition = "2024"
 license = "MIT"
 authors = ["sansan1983"]
@@ -51,6 +51,9 @@ walkdir = "2"
 
 # i18n
 rust-i18n = "3"
+
+# database
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [workspace.dependencies.qbird-code-models]
 path = "crates/qbird-code-models"
