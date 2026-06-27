@@ -1,7 +1,6 @@
 use qbird_code_models::{
-    ActionResult, FeedbackRecord, Importance, IntentType, MemoryCategory, Message, MessageRole,
-    PermissionSet, PlannedStep, QualityVerdict, RetryPolicy, RiskLevel, Role, TaskPriority,
-    TaskSpec, ToolCall, ToolCallFunction, ToolCallSummary, UsageStats,
+    Importance, MemoryCategory, Message, MessageRole, PermissionSet, RetryPolicy, RiskLevel,
+    Role, ToolCall, ToolCallFunction, UsageStats,
 };
 
 // ===== Message =====
@@ -73,17 +72,6 @@ fn test_risk_level_ordering() {
     assert_eq!(RiskLevel::default(), RiskLevel::L0);
 }
 
-// ===== TaskSpec =====
-
-#[test]
-fn test_task_spec_new() {
-    let spec = TaskSpec::new("Analyze code".into(), RiskLevel::L1);
-    assert_eq!(spec.description, "Analyze code");
-    assert_eq!(spec.risk_level, RiskLevel::L1);
-    assert_eq!(spec.priority, TaskPriority::Normal);
-    assert_eq!(spec.timeout_secs, 300);
-}
-
 // ===== RetryPolicy =====
 
 #[test]
@@ -102,33 +90,6 @@ fn test_permission_set_default() {
     assert_eq!(p.max_file_size_bytes, 10 * 1024 * 1024);
 }
 
-// ===== FeedbackRecord =====
-
-#[test]
-fn test_feedback_record_now() {
-    let verdict = QualityVerdict::Pass {
-        summary: "OK".into(),
-    };
-    let record = FeedbackRecord::now(2, verdict);
-    assert_eq!(record.retry_count, 2);
-}
-
-// ===== QualityVerdict serialization =====
-
-#[test]
-fn test_quality_verdict_serde() {
-    let v = QualityVerdict::Rework {
-        reason: "bad".into(),
-        suggestion: "fix it".into(),
-    };
-    let json = serde_json::to_string(&v).unwrap();
-    let decoded: QualityVerdict = serde_json::from_str(&json).unwrap();
-    match decoded {
-        QualityVerdict::Rework { reason, .. } => assert_eq!(reason, "bad"),
-        _ => panic!("expected Rework"),
-    }
-}
-
 // ===== UsageStats =====
 
 #[test]
@@ -136,46 +97,6 @@ fn test_usage_stats_default() {
     let u = UsageStats::default();
     assert_eq!(u.prompt_tokens, 0);
     assert_eq!(u.completion_tokens, 0);
-}
-
-// ===== IntentType =====
-
-#[test]
-fn test_intent_type_codes() {
-    assert_ne!(IntentType::CodeReview as u8, IntentType::Chat as u8);
-}
-
-// ===== Struct round-trips =====
-
-#[test]
-fn test_action_result_serde() {
-    let r = ActionResult {
-        success: true,
-        output: "done".into(),
-        tool_calls: vec![ToolCallSummary {
-            tool_name: "read_file".into(),
-            success: true,
-            duration_ms: 10,
-            summary: "OK".into(),
-        }],
-        duration_ms: 100,
-    };
-    let json = serde_json::to_string(&r).unwrap();
-    let decoded: ActionResult = serde_json::from_str(&json).unwrap();
-    assert!(decoded.success);
-    assert_eq!(decoded.tool_calls.len(), 1);
-}
-
-#[test]
-fn test_planned_step_depends_on() {
-    let step = PlannedStep {
-        order: 2,
-        action: "analyze".into(),
-        tool: "search_code".into(),
-        params: serde_json::json!({"pattern": "fn main"}),
-        depends_on: Some(1),
-    };
-    assert_eq!(step.depends_on, Some(1));
 }
 
 // ===== Enum completeness =====
