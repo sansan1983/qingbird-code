@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde_json::json;
 
@@ -16,6 +16,7 @@ fn start_mock_server() -> (String, Arc<AtomicUsize>) {
     let c = counter.clone();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind mock server");
     let addr = listener.local_addr().unwrap();
+    let addr_str = format!("http://{}", addr);
 
     std::thread::spawn(move || {
         for stream in listener.incoming() {
@@ -23,21 +24,46 @@ fn start_mock_server() -> (String, Arc<AtomicUsize>) {
                 Ok(s) => s,
                 Err(_) => break,
             };
-            stream.set_read_timeout(Some(std::time::Duration::from_secs(1))).ok();
-            stream.set_write_timeout(Some(std::time::Duration::from_secs(1))).ok();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(1)))
+                .ok();
+            stream
+                .set_write_timeout(Some(std::time::Duration::from_secs(1)))
+                .ok();
 
-            // 读取完整 HTTP 请求
+            // 读取完整 HTTP 请求（含 body），防止 drop 时残余数据导致 RST
             let mut buf = Vec::new();
+            let mut content_length: Option<usize> = None;
             loop {
-                let mut chunk = [0u8; 1024];
+                let mut chunk = [0u8; 4096];
                 match stream.read(&mut chunk) {
                     Ok(0) => break,
                     Ok(n) => {
                         buf.extend_from_slice(&chunk[..n]);
-                        // 检测请求结束（Content-Length 或 chunked）
-                        if buf.windows(4).any(|w| w == b"\r\n\r\n") {
-                            // 尝试读取 body（简化处理）
-                            break;
+                        // 检测请求结束
+                        if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                            // 解析 Content-Length
+                            if content_length.is_none() {
+                                let header = String::from_utf8_lossy(&buf[..pos]);
+                                for line in header.lines() {
+                                    if let Some(len_str) = line
+                                        .strip_prefix("Content-Length:")
+                                        .or_else(|| line.strip_prefix("content-length:"))
+                                    {
+                                        content_length = len_str.trim().parse::<usize>().ok();
+                                    }
+                                }
+                            }
+                            let header_end = pos + 4;
+                            let body_len = buf.len().saturating_sub(header_end);
+                            if let Some(cl) = content_length {
+                                if body_len >= cl {
+                                    break;
+                                }
+                            } else {
+                                // 没有 Content-Length 就假定 headers 读完
+                                break;
+                            }
                         }
                     }
                     Err(_) => break,
@@ -45,7 +71,7 @@ fn start_mock_server() -> (String, Arc<AtomicUsize>) {
             }
 
             let count = c.fetch_add(1, Ordering::SeqCst);
-            let body = match count {
+            let response_body = match count {
                 0 => json!({
                     "id": "chatcmpl-001",
                     "object": "chat.completion",
@@ -82,17 +108,18 @@ fn start_mock_server() -> (String, Arc<AtomicUsize>) {
                 }),
             };
 
-            let body_str = body.to_string();
+            let body_str = response_body.to_string();
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 body_str.len(),
                 body_str
             );
             let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
         }
     });
 
-    (format!("http://{}", addr), counter)
+    (addr_str, counter)
 }
 
 #[tokio::test]
