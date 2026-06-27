@@ -1,57 +1,105 @@
 # qingbird (青鸟)
 
-> 高效 Rust 多层 Agent 协作框架 · 5-crate workspace, ReAct 循环, 多 Provider
-
-[![Rust](https://img.shields.io/badge/rust-2024-orange)]()
-[![License: MIT/Apache-2.0](https://img.shields.io/badge/license-MIT%20%7C%20Apache--2.0-blue)]()
-
-**一键**完成复杂任务：ReAct 循环 + 工具调用，Agent 团队式协作。
+> 高效 Rust Agent 协作框架 · 单二进制，多 Provider，ReAct 循环
 
 ## 快速开始
 
 ```bash
-# 安装
-cargo install qingbird-code
+# 1. 构建
+cargo build --release
 
-# 配置——只需一行环境变量
+# 2. 设置 API Key
 export DEEPSEEK_API_KEY="sk-..."
 
-# 执行
-qingbird --execute "分析当前目录结构并总结项目"
-
-# 交互模式
-qingbird --interactive
+# 3. 运行
+./target/release/qingbird --execute "分析当前目录结构"
 ```
 
-配置文件（可选）`~/.qingbird/config.yaml`：
+## 配置
+
+配置文件位置：`qingbird.yaml`（当前目录）或 `~/.qingbird/config.yaml`
 
 ```yaml
 llm:
+  active: deepseek                    # 默认 Provider
   deepseek:
-    api_key: "${DEEPSEEK_API_KEY}"
+    api_key: "${DEEPSEEK_API_KEY}"    # 支持环境变量引用
+    base_url: "https://api.deepseek.com"
     default_model: "deepseek-chat"
+    thinking_enabled: true
+    thinking_effort: "high"
+    timeout_secs: 30
+    max_retries: 3
+    retry_backoff_ms: 1000
+```
+
+不配置也行，只要设置了对应环境变量（`DEEPSEEK_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`）即可运行。
+
+## CLI 用法
+
+```
+qingbird --execute "提示词"                 单次执行
+qingbird --interactive                       交互模式（多轮对话）
+qingbird --provider ollama --execute "..."   临时切换 Provider
+qingbird --model deepseek-chat --execute "..."  临时切换模型
+qingbird --temperature 0.3 --execute "..."   临时设置温度
+qingbird --help                              查看所有选项
+```
+
+## 交互模式命令
+
+进入 `--interactive` 后，支持以下斜杠命令：
+
+```
+/help               显示帮助
+/model <名称>       切换模型（当前: deepseek-v4-pro）
+/temperature <n>    设置温度（当前: Some(0.7)）
+/quit /exit         退出
+```
+
+对话历史自动保留，超出 50 条消息时自动截断（保留 system + 最近一半）。
+
+## 支持的 Provider
+
+| Provider | 配置 active 值 | 环境变量 |
+|----------|---------------|---------|
+| DeepSeek（OpenAI 协议） | `deepseek` | `DEEPSEEK_API_KEY` |
+| DeepSeek（Anthropic 协议） | `deepseek-anthropic` | `DEEPSEEK_API_KEY` |
+| Ollama（本地） | `ollama` | 不需要 |
+| OpenAI | `openai` | `OPENAI_API_KEY` |
+| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` |
+
+```bash
+# 例子：用 Ollama 本地模型
+qingbird --provider ollama --interactive
+
+# 例子：用 GPT-4o
+export OPENAI_API_KEY="sk-..."
+qingbird --provider openai --model gpt-4o --execute "Hello"
+```
+
+## 安装
+
+```bash
+# 从源码
+git clone <repo>
+cd qingbird-code
+cargo build --release
+./target/release/qingbird --execute "..."
+
+# 或直接 cargo install
+cargo install qingbird-code
 ```
 
 ## 架构
 
 ```
-qingbird (binary)
-  └── qbird-code-agents    — ReAct 循环 + Subagent + 死循环检测
-  └── qbird-code-tools     — 工具系统 (读/写/搜索/命令)
-  └── qbird-code-infra     — 4 家 LLM Provider + 配置 + HTTP 客户端
-  └── qbird-code-models    — 核心类型 (Message/Error/ProviderKind)
+qingbird (binary CLI)
+  └── qbird-code-agents    — ReactLoop 状态机 + 死循环检测
+  └── qbird-code-tools     — 4 内置工具 (读/写/搜索/命令)
+  └── qbird-code-infra     — 5 LLM Provider + HTTP 客户端
+  └── qbird-code-models    — 核心类型 (Message/Error/RiskLevel)
 ```
-
-严格依赖方向：下层禁止引用上层。
-
-## 支持的 Provider
-
-| Provider | 协议 | 状态 |
-|----------|------|------|
-| DeepSeek | OpenAI + Anthropic 双协议 | ✅ 完整 |
-| Ollama | OpenAI 兼容 | ✅ 完整 |
-| OpenAI | OpenAI | ✅ 骨架 |
-| Anthropic | Anthropic | ✅ 骨架 |
 
 ## 许可证
 
