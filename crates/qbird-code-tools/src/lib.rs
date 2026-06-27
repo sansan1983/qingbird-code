@@ -19,6 +19,6 @@ pub mod search;
 
 pub use command::ExecuteCommandTool;
 pub use file::{ReadFileTool, WriteFileTool};
-pub use glob::GlobTool;
+pub use glob::{GlobTool, glob_match};
 pub use registry::{Tool, ToolDefinition, ToolOutput, ToolRegistry};
 pub use search::SearchCodeTool;
