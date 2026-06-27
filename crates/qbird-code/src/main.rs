@@ -6,7 +6,7 @@ use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
 use clap::Parser;
-use qbird_code_agents::skill::{SkillContext, SkillRegistry};
+use qbird_code_agents::skill::{SddProposal, SkillContext, SkillRegistry};
 use qbird_code_agents::{ReactLoop, ReactLoopConfig};
 use qbird_code_infra::config::{find_config, load_config};
 use qbird_code_infra::http_client::HttpLlmClient;
@@ -337,6 +337,12 @@ async fn main() {
         let stdin = io::stdin();
         let mut lines = stdin.lock().lines();
 
+        // SDD proposal state machine:
+        //   /sdd run <input>   → store proposal here, hard_gate_blocked = true
+        //   /sdd confirm       → if Some, hard_gate_blocked = false, clear
+        //   /sdd status        → show pending + blocked status
+        let mut pending_proposal: Option<SddProposal> = None;
+
         loop {
             print!("> ");
             let _ = io::stdout().flush();
@@ -515,6 +521,14 @@ async fn main() {
                                         .await
                                     {
                                         Ok(result) => {
+                                            // Store proposal in REPL state for /sdd confirm.
+                                            if let Ok(proposal) =
+                                                serde_json::from_value::<SddProposal>(
+                                                    result.output["proposal"].clone(),
+                                                )
+                                            {
+                                                pending_proposal = Some(proposal);
+                                            }
                                             println!("{}", result.output);
                                         }
                                         Err(e) => {
@@ -523,7 +537,24 @@ async fn main() {
                                     }
                                 }
                                 "confirm" => {
-                                    println!("{}", t!("interactive_sdd_confirm_placeholder"));
+                                    if let Some(mut p) = pending_proposal.take() {
+                                        p.hard_gate_blocked = false;
+                                        p.status = "confirmed".into();
+                                        p.updated_at = std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .map(|d| d.as_millis() as i64)
+                                            .unwrap_or_default();
+                                        println!(
+                                            "{}",
+                                            t!(
+                                                "interactive_sdd_confirmed",
+                                                id = p.id,
+                                                goal = p.goal
+                                            )
+                                        );
+                                    } else {
+                                        eprintln!("{}", t!("interactive_sdd_no_pending"));
+                                    }
                                 }
                                 "status" => {
                                     let skills = skill_registry.list();
@@ -538,6 +569,22 @@ async fn main() {
                                                 name = s.name
                                             )
                                         );
+                                    }
+                                    match &pending_proposal {
+                                        Some(p) => {
+                                            println!(
+                                                "{}",
+                                                t!(
+                                                    "interactive_sdd_status_pending",
+                                                    id = p.id,
+                                                    status = p.status,
+                                                    hard_gate_blocked = p.hard_gate_blocked
+                                                )
+                                            );
+                                        }
+                                        None => {
+                                            println!("{}", t!("interactive_sdd_status_idle"));
+                                        }
                                     }
                                 }
                                 _ => {
