@@ -154,6 +154,8 @@ fn html_to_markdown(html: &str) -> String {
     let cleaned = strip_style_script(html);
 
     let mut in_tag = false;
+    let mut in_attribute = false;
+    let mut attr_quote = None;
     let mut in_entity = false;
     let mut entity_buf = String::new();
     let mut tag_name = String::new();
@@ -163,15 +165,20 @@ fn html_to_markdown(html: &str) -> String {
         match c {
             '<' if !in_tag => {
                 in_tag = true;
+                in_attribute = false;
+                attr_quote = None;
                 tag_name.clear();
                 is_closing = false;
             }
-            '>' if in_tag => {
+            '>' if in_tag && !in_attribute => {
                 in_tag = false;
                 match tag_name.as_str() {
                     "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
                         result.push('\n');
-                        result.push_str(&"#".repeat(tag_name[1..].parse::<usize>().unwrap_or(1)));
+                        let level = tag_name[1..].parse::<usize>().unwrap_or(1);
+                        for _ in 0..level {
+                            result.push('#');
+                        }
                         result.push(' ');
                     }
                     "br" | "hr" => result.push('\n'),
@@ -183,14 +190,23 @@ fn html_to_markdown(html: &str) -> String {
                     _ => {}
                 }
             }
-            '/' if in_tag && tag_name.is_empty() => {
+            '"' | '\'' if in_tag && !tag_name.is_empty() => {
+                if attr_quote == Some(c) {
+                    in_attribute = false;
+                    attr_quote = None;
+                } else if attr_quote.is_none() {
+                    in_attribute = true;
+                    attr_quote = Some(c);
+                }
+            }
+            '/' if in_tag && tag_name.is_empty() && !in_attribute => {
                 is_closing = true;
             }
-            ' ' | '\t' | '\n' if in_tag && !tag_name.is_empty() => {
-                // skip whitespace inside tag
+            ' ' | '\t' | '\n' if in_tag && !tag_name.is_empty() && !in_attribute => {
+                // start of attribute; stay in_tag
             }
             _ if in_tag => {
-                if c.is_ascii_alphabetic() || c == '-' {
+                if !in_attribute && (c.is_ascii_alphabetic() || c == '-') {
                     tag_name.push(c.to_ascii_lowercase());
                 }
             }

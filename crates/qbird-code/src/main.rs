@@ -516,7 +516,12 @@ async fn main() {
                                             );
                                             current_session_id = sub_arg.to_string();
                                         }
-                                        Err(_e) => {
+                                        Err(e) => {
+                                            tracing::warn!(
+                                                "Failed to load session {}: {}",
+                                                sub_arg,
+                                                e
+                                            );
                                             eprintln!(
                                                 "{}",
                                                 t!("interactive_session_not_found", id = sub_arg)
