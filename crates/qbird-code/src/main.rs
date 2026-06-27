@@ -15,7 +15,7 @@ use qbird_code_infra::providers::{
 use qbird_code_models::Message;
 use qbird_code_tools::{
     ExecuteCommandTool, GlobTool, ListDirTool, ReadFileTool, SearchCodeTool, ToolRegistry,
-    WriteFileTool,
+    WebFetchTool, WriteFileTool,
 };
 /// qingbird — Efficient Flow Agent Collaboration Framework
 #[derive(Parser)]
@@ -293,6 +293,7 @@ async fn main() {
     registry.register(Arc::new(SearchCodeTool));
     registry.register(Arc::new(GlobTool));
     registry.register(Arc::new(ListDirTool));
+    registry.register(Arc::new(WebFetchTool));
     // 提取 thinking 配置（仅 DeepSeek 支持）
     let (thinking_enabled, thinking_effort) = match cfg.llm.active.as_str() {
         "deepseek" | "deepseek-anthropic" => (
