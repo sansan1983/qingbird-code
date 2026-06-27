@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.12] - 2026-06-27
+
+### Changed
+
+- **i18n 补齐**: 所有交互模式用户字符串走 `t!()`，支持中英双语
+  - 系统提示词、斜杠命令说明、模型/温度切换提示、上下文截断提示等
+  - 新增 16 个 i18n key（zh-CN + en-US）
+- **二进制 crate 接入 i18n**: 添加 `rust-i18n` 依赖，`main.rs` 调用 `rust_i18n::i18n!()`
+
+---
+
 ## [0.2.11] - 2026-06-27
 
 ### Added

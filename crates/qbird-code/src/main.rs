@@ -1,3 +1,7 @@
+rust_i18n::i18n!("../../locales", fallback = "en-US");
+
+use rust_i18n::t;
+
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
@@ -47,11 +51,14 @@ struct Cli {
 fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message {
     let defs = registry.definitions();
     let tool_names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
-    Message::system(format!(
-        "你是 qingbird，一个高效的编码助手。当前 LLM Provider：{}。\n\n可用工具：{}\n\n请通过调用工具来完成任务。每次调用工具后会得到执行结果，根据结果决定下一步。任务完成时给出总结。",
-        provider_name,
-        tool_names.join(", ")
-    ))
+    Message::system(
+        t!(
+            "system_prompt",
+            provider = provider_name,
+            tools = tool_names.join(", ")
+        )
+        .to_string(),
+    )
 }
 
 #[tokio::main]
@@ -69,14 +76,14 @@ async fn main() {
 
     // === 2. 加载配置 ===
     let config_path = find_config().unwrap_or_else(|| {
-        eprintln!("No config file found. Place qingbird.yaml in current directory or ~/.qingbird/config.yaml");
+        eprintln!("{}", t!("status_no_config"));
         std::process::exit(1);
     });
 
     let mut cfg = match load_config(&config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("Failed to load config: {}", e);
+            eprintln!("{}", t!("status_config_load_fail", msg = e.to_string()));
             std::process::exit(1);
         }
     };
@@ -226,7 +233,12 @@ async fn main() {
         }
         other => {
             eprintln!(
-                "Unknown provider '{other}', expected deepseek/deepseek-anthropic/ollama/openai/anthropic"
+                "{}",
+                t!(
+                    "status_unknown_provider",
+                    provider = other,
+                    list = "deepseek/deepseek-anthropic/ollama/openai/anthropic"
+                )
             );
             std::process::exit(1);
         }
@@ -234,9 +246,12 @@ async fn main() {
     drop(active);
 
     tracing::info!(
-        "qingbird started — provider: {}, model: {}",
-        cfg.llm.active,
-        model
+        "{}",
+        t!(
+            "status_startup_info",
+            provider = cfg.llm.active,
+            model = model
+        )
     );
 
     // === 4. 初始化工具注册表 ===
@@ -300,7 +315,7 @@ async fn main() {
                 println!("{}", result.content);
             }
             Err(e) => {
-                eprintln!("Task failed: {}", e);
+                eprintln!("{}", t!("status_task_failed", msg = e.to_string()));
                 std::process::exit(1);
             }
         }
@@ -318,7 +333,7 @@ async fn main() {
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![build_system_message(&tool_registry, &cfg.llm.active)];
-        println!("qingbird interactive mode. Type /help for commands.");
+        println!("{}", t!("interactive_banner"));
         println!();
 
         let stdin = io::stdin();
@@ -348,43 +363,55 @@ async fn main() {
                     "/quit" | "/exit" => break,
                     "/help" => {
                         println!();
-                        println!("可用命令:");
-                        println!("  /quit             退出");
-                        println!("  /exit             退出");
-                        println!("  /help             显示此帮助");
+                        println!("{}", t!("interactive_help_title"));
+                        println!("{}", t!("interactive_help_quit"));
+                        println!("{}", t!("interactive_help_exit"));
+                        println!("{}", t!("interactive_help_help"));
                         println!(
-                            "  /model <名称>     切换模型（当前: {}）",
-                            react_loop.config.model
+                            "{}",
+                            t!("interactive_help_model", name = react_loop.config.model)
                         );
                         println!(
-                            "  /temperature <n>  设置温度（当前: {:?}）",
-                            react_loop.config.temperature
+                            "{}",
+                            t!(
+                                "interactive_help_temp",
+                                value = format!("{:?}", react_loop.config.temperature)
+                            )
                         );
                         println!();
                     }
                     "/model" => {
                         if arg.is_empty() {
-                            println!("当前模型: {}", react_loop.config.model);
+                            println!(
+                                "{}",
+                                t!("interactive_model_current", name = react_loop.config.model)
+                            );
                         } else {
                             react_loop.config.model = arg.to_string();
-                            println!("模型已切换为: {}", arg);
+                            println!("{}", t!("interactive_model_switched", name = arg));
                         }
                     }
                     "/temperature" => {
                         if arg.is_empty() {
-                            println!("当前温度: {:?}", react_loop.config.temperature);
+                            println!(
+                                "{}",
+                                t!(
+                                    "interactive_temp_current",
+                                    value = format!("{:?}", react_loop.config.temperature)
+                                )
+                            );
                         } else {
                             match arg.parse::<f64>() {
                                 Ok(t) if (0.0..=2.0).contains(&t) => {
                                     react_loop.config.temperature = Some(t);
-                                    println!("温度已设置为: {}", t);
+                                    println!("{}", t!("interactive_temp_set", value = t));
                                 }
-                                _ => println!("无效温度，请输入 0.0 ~ 2.0 之间的数值"),
+                                _ => println!("{}", t!("interactive_temp_invalid")),
                             }
                         }
                     }
                     _ => {
-                        println!("未知命令: {cmd}，输入 /help 查看可用命令");
+                        println!("{}", t!("interactive_unknown_cmd", cmd = cmd));
                     }
                 }
                 continue;
@@ -425,7 +452,7 @@ async fn main() {
                 let system = messages[0].clone();
                 let remaining = messages[truncate_start..].to_vec();
                 messages = std::iter::once(system).chain(remaining).collect();
-                eprintln!("[上下文已截断，保留最近 {} 条消息]", keep);
+                eprintln!("{}", t!("interactive_ctx_truncated", count = keep));
             }
         }
 
@@ -433,6 +460,6 @@ async fn main() {
     }
 
     // === 7. 无有效子命令 ===
-    eprintln!("Usage: qingbird --execute \"prompt\" | qingbird --interactive");
+    eprintln!("{}", t!("status_usage"));
     std::process::exit(1);
 }
