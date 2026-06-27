@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.6] - 2026-06-27
+
+### Added
+
+- **`--provider` CLI 参数**: 支持 `qingbird --provider ollama --execute "..."` 临时切换 Provider，不修改配置文件
+
+---
+
 ## [0.2.5] - 2026-06-27
 
 ### Added

@@ -25,6 +25,10 @@ struct Cli {
     /// 交互模式（REPL）
     #[arg(long, short = 'i')]
     interactive: bool,
+
+    /// LLM Provider（覆盖 config 中的 llm.active）
+    #[arg(long)]
+    provider: Option<String>,
 }
 
 fn build_system_message(registry: &ToolRegistry) -> Message {
@@ -55,7 +59,7 @@ async fn main() {
         std::process::exit(1);
     });
 
-    let cfg = match load_config(&config_path) {
+    let mut cfg = match load_config(&config_path) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Failed to load config: {}", e);
@@ -63,6 +67,10 @@ async fn main() {
         }
     };
 
+    // --provider 命令行参数覆盖 config 中的 llm.active
+    if let Some(ref provider) = cli.provider {
+        cfg.llm.active = provider.clone();
+    }
     // === 3. 初始化基础设施（根据 cfg.llm.active 路由） ===
     let active = cfg.llm.active.clone();
     let (http_client, provider): (
