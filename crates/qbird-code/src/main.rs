@@ -121,7 +121,7 @@ async fn main() {
     let mut cfg = match load_config(&config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("{}", t!("status_config_load_fail", msg = e.to_string()));
+            eprintln!("{}", e.user_message());
             std::process::exit(1);
         }
     };
@@ -296,7 +296,7 @@ async fn main() {
                 println!("{}", result.content);
             }
             Err(e) => {
-                eprintln!("{}", t!("status_task_failed", msg = e.to_string()));
+                eprintln!("{}", e.user_message());
                 std::process::exit(1);
             }
         }

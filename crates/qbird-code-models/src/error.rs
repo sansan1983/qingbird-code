@@ -52,32 +52,39 @@ pub type Result<T> = std::result::Result<T, EflowError>;
 impl EflowError {
     /// Localized user-facing message.
     ///
-    /// For variants that have a matching `err_*` i18n key, this looks up the
-    /// active locale via `rust_i18n::t!`. For internal-facing variants
-    /// (`Io`, `Internal`, `Serialization`, `Tool`, `RateLimited`, `TaskCancelled`,
-    /// `RiskEscalated`) it falls back to `Display` — these are normally surfaced
-    /// through tracing logs (English) and not directly to end users.
-    ///
-    /// The `Display` strings above are in English to match the AGENTS.md rule
-    /// that tracing logs stay in English; user-facing paths should call
+    /// Every variant goes through a matching `err_*` i18n key, looked up via
+    /// `rust_i18n::t!` in the active locale. The `Display` strings on the
+    /// enum variants are kept in English to match the AGENTS.md rule that
+    /// tracing logs stay in English; user-facing paths should call
     /// `user_message()` so the message tracks the active locale.
     #[must_use]
     pub fn user_message(&self) -> String {
         match self {
             Self::Config(msg) => t!("err_config_load", msg = msg.as_str()).into_owned(),
             Self::LlmProvider(msg) => t!("err_llm_provider_init", msg = msg.as_str()).into_owned(),
+            Self::RateLimited(msg) => t!("err_rate_limited_msg", msg = msg.as_str()).into_owned(),
+            Self::LlmAuthFailed(msg) => t!("err_llm_auth_failed", msg = msg.as_str()).into_owned(),
             Self::Memory(msg) => t!("err_memory_init", msg = msg.as_str()).into_owned(),
+            Self::Tool(msg) => t!("err_tool", msg = msg.as_str()).into_owned(),
+            Self::RiskEscalated { task_id, reason } => t!(
+                "err_risk_escalated",
+                task_id = task_id.as_str(),
+                reason = reason.as_str()
+            )
+            .into_owned(),
+            Self::TaskCancelled(id) => t!("err_task_cancelled", id = id.as_str()).into_owned(),
             Self::ProfileNotFound(name) => {
                 t!("err_profile_not_found", name = name.as_str()).into_owned()
             }
-            Self::LlmAuthFailed(msg) => t!("err_llm_auth_failed", msg = msg.as_str()).into_owned(),
             Self::SkillNotFound(name) => {
                 t!("err_skill_not_found", name = name.as_str()).into_owned()
             }
             Self::PermissionDenied(msg) => {
                 t!("err_permission_denied", msg = msg.as_str()).into_owned()
             }
-            _ => self.to_string(),
+            Self::Io(err) => t!("err_io", msg = &err.to_string()).into_owned(),
+            Self::Serialization(msg) => t!("err_serialization", msg = msg.as_str()).into_owned(),
+            Self::Internal(msg) => t!("err_internal", msg = msg.as_str()).into_owned(),
         }
     }
 }
