@@ -38,6 +38,10 @@ struct Cli {
     /// LLM 模型名称（覆盖 config 中当前 provider 的 default_model）
     #[arg(long)]
     model: Option<String>,
+
+    /// LLM 温度参数（0.0 ~ 2.0，覆盖 config 中的 temperature）
+    #[arg(long)]
+    temperature: Option<f64>,
 }
 
 fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message {
@@ -229,6 +233,12 @@ async fn main() {
     };
     drop(active);
 
+    tracing::info!(
+        "qingbird started — provider: {}, model: {}",
+        cfg.llm.active,
+        model
+    );
+
     // === 4. 初始化工具注册表 ===
     let mut registry = ToolRegistry::new();
     registry.register(Arc::new(ReadFileTool));
@@ -265,6 +275,7 @@ async fn main() {
     if let Some(prompt) = cli.execute {
         let react_loop = ReactLoop::new(ReactLoopConfig {
             model: model.clone(),
+            temperature: cli.temperature,
             thinking_enabled,
             thinking_effort: thinking_effort.clone(),
             ..ReactLoopConfig::default()
@@ -301,6 +312,7 @@ async fn main() {
         const MAX_HISTORY_MSGS: usize = 50;
         let mut react_loop = ReactLoop::new(ReactLoopConfig {
             model: model.clone(),
+            temperature: cli.temperature,
             thinking_enabled,
             thinking_effort: thinking_effort.clone(),
             ..ReactLoopConfig::default()

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.10] - 2026-06-27
+
+### Added
+
+- **`--temperature` CLI 参数**: 覆盖 temperature 配置（0.0 ~ 2.0）
+- **启动日志**: 启动时打印 provider + model 信息
+
+---
+
 ## [0.2.9] - 2026-06-27
 
 ### Added
