@@ -7,18 +7,14 @@ use qbird_code_models::{Message, UsageStats};
 
 use super::{ChatResponse, ProtocolKind, Provider, ProviderKind, RequestConfig};
 use crate::config::OpenaiConfig;
-use crate::http_client::HttpLlmClient;
 
 pub struct OpenAIProvider {
     config: OpenaiConfig,
-    #[allow(dead_code)]
-    http: HttpLlmClient,
 }
 
 impl OpenAIProvider {
     pub fn new(config: OpenaiConfig) -> qbird_code_models::Result<Self> {
-        let http = HttpLlmClient::new(config.timeout_secs, 3, 1000)?;
-        Ok(Self { config, http })
+        Ok(Self { config })
     }
 }
 

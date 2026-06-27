@@ -14,3 +14,12 @@ Cargo.lock
 .cc-connect/
 .claude/
 .reasonix/
+
+# Runtime session artifacts
+*.events.jsonl
+*.jsonl
+*.debug
+sessions-index.json
+file-history.json
+.qbirdd/
+QINGBIRDD_PROJECT_PATH

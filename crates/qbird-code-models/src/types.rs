@@ -55,7 +55,7 @@ impl TaskSpec {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskPriority {
     Low,
     Normal,
@@ -240,7 +240,7 @@ pub enum IntentType {
 
 // ========== 记忆类型 ==========
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MemoryCategory {
     TaskResult,
     Decision,

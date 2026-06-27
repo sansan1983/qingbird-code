@@ -7,22 +7,14 @@ use qbird_code_models::{Message, UsageStats};
 
 use super::{ChatResponse, ProtocolKind, Provider, ProviderKind, RequestConfig};
 use crate::config::DeepseekConfig;
-use crate::http_client::HttpLlmClient;
 
 pub struct DeepseekProvider {
     config: DeepseekConfig,
-    #[allow(dead_code)]
-    http: HttpLlmClient,
 }
 
 impl DeepseekProvider {
     pub fn new(config: DeepseekConfig) -> qbird_code_models::Result<Self> {
-        let http = HttpLlmClient::new(
-            config.timeout_secs,
-            config.max_retries,
-            config.retry_backoff_ms,
-        )?;
-        Ok(Self { config, http })
+        Ok(Self { config })
     }
 
     /// 将统一 Message 转为 OpenAI 格式的消息
@@ -56,16 +48,6 @@ impl DeepseekProvider {
                 obj
             })
             .collect()
-    }
-
-    /// 提取 thinking 参数（用于 extra_body / Anthropic thinking 块）
-    #[allow(dead_code)]
-    fn thinking_params(&self) -> Value {
-        json!({
-            "thinking": {
-                "type": if self.config.thinking_enabled { "enabled" } else { "disabled" }
-            }
-        })
     }
 }
 

@@ -9,36 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added (TUI 交互)
+### Removed
 
-- **TUI 交互层** (F1-F6): ratatui + crossterm 异步终端 UI，事件流实时刷新，prompt 异步输入（设计 §14.3）
-- **InteractionLayer trait** (F2): 核心层与交互层解耦，未来 GUI / Web 接入零侵入
-- **TUI 默认启动** (F6): 无参数启动进入 TUI；`--execute` / `--show-config` / `--list-profiles` 保留 CLI 直输出
-
-### Added (并行派发)
-
-- **Orchestrator 真正并行派发** (E4): `compute_step_layers` 把 TaskPlan 按依赖分层，每层内步骤用 `FuturesUnordered` 并发执行（设计 §5.1）
-- **SubagentHandle 暴露 pool active map guard** (E1): 调度方能拿到 agent 角色 / 能力做决策
-- **SubagentPool.list_active** (E2): 暴露活跃 agent 元数据给 Orchestrator
-- **SubagentPool timeout-based cleanup_idle** (E5): 5min 默认 idle timeout（v1.1 行为兼容），超时未活动的 agent 自动回收（设计 §13.3）
-- **LlmRouter 测试 helper** (E6): `placeholder` / `inject_test_provider` / `inject_test_routing` — `#[doc(hidden)]` 标"非测试代码不应调用"
+- **死代码清理 (P0)**: 删除 ~12,000 行未编译的旧 `src/` 和 `tests/` 目录（旧 eflow v1.x 整体架构遗留）
+- **删除废弃备份**: `src.v0.1.bak/`
+- **清理运行时产物**: session JSONL、sessions-index、.qbirdd 等根目录工件
 
 ### Changed
 
-- **Subagent 加 `created_at` 字段** (E5): 用于 idle cleanup 计算
-- **Parallel execution 集成测试** (E6): `tests/parallel_execution_test.rs` 验证 E4 分层派发 + D→E→F 集成不破
+- **文档同步 V0.2.0**: AGENTS.md / CLAUDE.md / README.md 更新为 5-crate workspace 真实路径和测试数
+- **.gitignore 补充**: 添加运行时产物忽略规则
 
-### Changed (P1 债务清理)
+### Historical Notes
 
-- **L2 cache key 规范化** (D1): `decisioner`/`executor`/`feedbacker` 三处 CacheKey 构造抽到 `cache_key_for_step` helper；signature 只含 action+tool+intent，不含 params（params 变化不再破 cache 命中）
-- **Feedbacker cache key 行为变化** (D1): 之前 `feedback:retry={N}:op={summary}` 每次 retry 都换 key；改为 `{intent}:{tool}:{summary}`，retry 期间稳定 → 命中率提升
-- **Concierge 真接入 active_profile** (D3): `ProfileSwitch` 意图从"只发提示"升级为真切换，`concierge.active_profile()` getter 可读
-- **Concierge 派发前 recall 历史** (D4): `TaskDispatch` 派发前 recall 项目记忆（关键词取 description 前 32 字符）
-
-### Planned
-
-- Additional LLM providers (per design doc v4.0 §10)
-
+- v1.0.0 ~ v1.3.3 版本条目为旧 eflow 架构的变更记录，所引用的 `src/` 路径在 V0.2.0 重构后已删除
 ---
 
 ## [1.1.0] - 2026-06-16

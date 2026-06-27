@@ -28,23 +28,16 @@ serde_yaml = "0.9"
 clap = { version = "4", features = ["derive"] }
 
 # HTTP
-reqwest = { version = "0.12", features = ["json", "blocking"] }
-
-# database
-rusqlite = { version = "0.32", features = ["bundled"] }
+reqwest = { version = "0.12", features = ["json"] }
 
 # async tools
 async-trait = "0.1"
-
-# crypto
-sha2 = "0.10"
 
 # observability
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # data types
-indexmap = "2"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
@@ -52,18 +45,12 @@ uuid = { version = "1", features = ["v4", "serde"] }
 thiserror = "2"
 
 # utilities
-once_cell = "1"
 regex-lite = "0.1.9"
 dirs = "6.0.0"
-lru = "0.12"
 walkdir = "2"
 
 # i18n
 rust-i18n = "3"
-
-# TUI
-ratatui = "0.29"
-crossterm = "0.28"
 
 [workspace.dependencies.qbird-code-models]
 path = "crates/qbird-code-models"
@@ -76,16 +63,6 @@ path = "crates/qbird-code-tools"
 
 [workspace.dependencies.qbird-code-agents]
 path = "crates/qbird-code-agents"
-
-# dev dependencies
-[workspace.dependencies.tempfile]
-version = "3"
-
-[workspace.dependencies.tokio-test]
-version = "0.4"
-
-[workspace.dependencies.serial_test]
-version = "3"
 
 [profile.release]
 opt-level = 3

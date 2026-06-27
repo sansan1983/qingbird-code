@@ -7,22 +7,14 @@ use qbird_code_models::{Message, MessageRole, UsageStats};
 
 use super::{ChatResponse, ProtocolKind, Provider, ProviderKind, RequestConfig};
 use crate::config::DeepseekConfig;
-use crate::http_client::HttpLlmClient;
 
 pub struct DeepseekAnthropicProvider {
     config: DeepseekConfig,
-    #[allow(dead_code)]
-    http: HttpLlmClient,
 }
 
 impl DeepseekAnthropicProvider {
     pub fn new(config: DeepseekConfig) -> qbird_code_models::Result<Self> {
-        let http = HttpLlmClient::new(
-            config.timeout_secs,
-            config.max_retries,
-            config.retry_backoff_ms,
-        )?;
-        Ok(Self { config, http })
+        Ok(Self { config })
     }
 
     /// 将工具定义从 OpenAI 格式转为 Anthropic 格式

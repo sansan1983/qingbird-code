@@ -7,18 +7,14 @@ use qbird_code_models::{Message, UsageStats};
 
 use super::{ChatResponse, ProtocolKind, Provider, ProviderKind, RequestConfig};
 use crate::config::OllamaConfig;
-use crate::http_client::HttpLlmClient;
 
 pub struct OllamaProvider {
     config: OllamaConfig,
-    #[allow(dead_code)]
-    http: HttpLlmClient,
 }
 
 impl OllamaProvider {
     pub fn new(config: OllamaConfig) -> qbird_code_models::Result<Self> {
-        let http = HttpLlmClient::new(config.timeout_secs, 3, 1000)?;
-        Ok(Self { config, http })
+        Ok(Self { config })
     }
 
     fn to_openai_messages(messages: &[Message]) -> Vec<Value> {

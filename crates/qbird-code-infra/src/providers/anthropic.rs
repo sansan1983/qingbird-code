@@ -7,18 +7,14 @@ use qbird_code_models::{Message, MessageRole, UsageStats};
 
 use super::{ChatResponse, ProtocolKind, Provider, ProviderKind, RequestConfig};
 use crate::config::AnthropicConfig;
-use crate::http_client::HttpLlmClient;
 
 pub struct AnthropicProvider {
     config: AnthropicConfig,
-    #[allow(dead_code)]
-    http: HttpLlmClient,
 }
 
 impl AnthropicProvider {
     pub fn new(config: AnthropicConfig) -> qbird_code_models::Result<Self> {
-        let http = HttpLlmClient::new(config.timeout_secs, 3, 1000)?;
-        Ok(Self { config, http })
+        Ok(Self { config })
     }
 }
 

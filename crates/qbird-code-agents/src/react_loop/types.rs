@@ -55,13 +55,6 @@ impl Default for LoopState {
     }
 }
 
-/// Loop 内部控制流信号
-#[allow(dead_code)]
-pub(super) enum LoopAction {
-    Continue,
-    Return(Result<AgentResult, qbird_code_models::EflowError>),
-}
-
 /// 工具执行策略
 #[derive(Debug)]
 pub enum ExecutionStrategy {
