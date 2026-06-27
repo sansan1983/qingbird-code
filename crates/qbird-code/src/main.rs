@@ -245,6 +245,36 @@ async fn main() {
     };
     drop(active);
 
+    // 检查 API Key 是否已配置（仅远程 Provider）
+    let env_var = match cfg.llm.active.as_str() {
+        "deepseek" | "deepseek-anthropic" => {
+            if cfg.llm.deepseek.api_key.is_none() && std::env::var("DEEPSEEK_API_KEY").is_err() {
+                Some("DEEPSEEK_API_KEY")
+            } else {
+                None
+            }
+        }
+        "openai" => {
+            if cfg.llm.openai.api_key.is_none() && std::env::var("OPENAI_API_KEY").is_err() {
+                Some("OPENAI_API_KEY")
+            } else {
+                None
+            }
+        }
+        "anthropic" => {
+            if cfg.llm.anthropic.api_key.is_none() && std::env::var("ANTHROPIC_API_KEY").is_err() {
+                Some("ANTHROPIC_API_KEY")
+            } else {
+                None
+            }
+        }
+        _ => None,
+    };
+    if let Some(var) = env_var {
+        eprintln!("{}", t!("err_api_key_missing", env_var = var));
+        std::process::exit(1);
+    }
+
     tracing::info!(
         "{}",
         t!(

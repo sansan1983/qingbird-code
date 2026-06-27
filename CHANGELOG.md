@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.13] - 2026-06-27
+
+### Added
+
+- **API Key 启动检查**: 启动时检查当前 Provider 的 API Key 是否已配置，未配置时给出明确的环境变量名称提示
+
+---
+
 ## [0.2.12] - 2026-06-27
 
 ### Changed

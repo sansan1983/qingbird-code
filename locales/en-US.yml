@@ -6,6 +6,8 @@ err_config_parse: "Failed to parse config: %{msg}"
 err_read_profiles_dir: "Failed to read profiles dir: %{msg}"
 err_read_entry: "Failed to read directory entry: %{msg}"
 err_read_file: "Failed to read file %{path}: %{msg}"
+err_api_key_missing: "API Key not configured. Set api_key in qingbird.yaml, or set the %{env_var} environment variable"
+
 err_parse_file: "Failed to parse file %{path}: %{msg}"
 err_no_provider: "No provider for tier %{tier}"
 err_provider_not_found: "Provider not found: %{name}"
