@@ -391,6 +391,11 @@ async fn main() {
                         println!("{}", t!("interactive_help_sdd_confirm"));
                         println!("{}", t!("interactive_help_sdd_status"));
                         println!();
+                        println!("{}", t!("interactive_help_undo_planned"));
+                        println!("{}", t!("interactive_help_profile_planned"));
+                        println!("{}", t!("interactive_help_provider_planned"));
+                        println!("{}", t!("interactive_help_session_delete_planned"));
+                        println!();
                     }
                     "/usage" => {
                         println!("{}", t!("interactive_usage_title"));
