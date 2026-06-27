@@ -380,6 +380,11 @@ async fn main() {
                         println!("{}", t!("interactive_help_sessions"));
                         println!("{}", t!("interactive_help_session_load"));
                         println!();
+                        println!("{}", t!("interactive_help_sdd_title"));
+                        println!("{}", t!("interactive_help_sdd_run"));
+                        println!("{}", t!("interactive_help_sdd_confirm"));
+                        println!("{}", t!("interactive_help_sdd_status"));
+                        println!();
                     }
                     "/usage" => {
                         println!("{}", t!("interactive_usage_title"));
