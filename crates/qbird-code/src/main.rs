@@ -6,7 +6,7 @@ use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
 use clap::Parser;
-use qbird_code_agents::skill::{SkillContext, SkillRegistry};
+use qbird_code_agents::skill::{SddProposal, SkillContext, SkillRegistry};
 use qbird_code_agents::{ReactLoop, ReactLoopConfig};
 use qbird_code_infra::config::{find_config, load_config};
 use qbird_code_infra::http_client::HttpLlmClient;
@@ -22,7 +22,7 @@ use qbird_code_tools::{
 /// qingbird — Efficient Flow Agent Collaboration Framework
 #[derive(Parser)]
 #[command(name = "qingbird")]
-#[command(version = "0.2.17")]
+#[command(version = "0.2.18")]
 #[command(about = "Efficient Flow Agent Collaboration Framework")]
 struct Cli {
     /// 执行单次任务
@@ -49,6 +49,13 @@ struct Cli {
     /// LLM 温度参数（0.0 ~ 2.0，覆盖 config 中的 temperature）
     #[arg(long)]
     temperature: Option<f64>,
+
+    /// 界面 locale（覆盖 yaml `core.language`）
+    #[arg(
+        long,
+        value_parser = clap::builder::PossibleValuesParser::new(["zh-CN", "en-US"])
+    )]
+    lang: Option<String>,
 }
 
 fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message {
@@ -114,10 +121,15 @@ async fn main() {
     let mut cfg = match load_config(&config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("{}", t!("status_config_load_fail", msg = e.to_string()));
+            eprintln!("{}", e.user_message());
             std::process::exit(1);
         }
     };
+
+    // === 2.5. 初始化 locale（CLI --lang > yaml core.language > 默认） ===
+    let resolved_locale_input = cli.lang.as_deref().unwrap_or(cfg.core.language.as_str());
+    let active_locale = qbird_code_infra::locale::init(resolved_locale_input);
+    tracing::info!(locale = active_locale, "locale activated");
 
     // --provider 命令行参数覆盖 config 中的 llm.active
     if let Some(ref provider) = cli.provider {
@@ -284,7 +296,7 @@ async fn main() {
                 println!("{}", result.content);
             }
             Err(e) => {
-                eprintln!("{}", t!("status_task_failed", msg = e.to_string()));
+                eprintln!("{}", e.user_message());
                 std::process::exit(1);
             }
         }
@@ -324,6 +336,12 @@ async fn main() {
 
         let stdin = io::stdin();
         let mut lines = stdin.lock().lines();
+
+        // SDD proposal state machine:
+        //   /sdd run <input>   → store proposal here, hard_gate_blocked = true
+        //   /sdd confirm       → if Some, hard_gate_blocked = false, clear
+        //   /sdd status        → show pending + blocked status
+        let mut pending_proposal: Option<SddProposal> = None;
 
         loop {
             print!("> ");
@@ -367,6 +385,16 @@ async fn main() {
                         println!("{}", t!("interactive_help_usage"));
                         println!("{}", t!("interactive_help_sessions"));
                         println!("{}", t!("interactive_help_session_load"));
+                        println!();
+                        println!("{}", t!("interactive_help_sdd_title"));
+                        println!("{}", t!("interactive_help_sdd_run"));
+                        println!("{}", t!("interactive_help_sdd_confirm"));
+                        println!("{}", t!("interactive_help_sdd_status"));
+                        println!();
+                        println!("{}", t!("interactive_help_undo_planned"));
+                        println!("{}", t!("interactive_help_profile_planned"));
+                        println!("{}", t!("interactive_help_provider_planned"));
+                        println!("{}", t!("interactive_help_session_delete_planned"));
                         println!();
                     }
                     "/usage" => {
@@ -417,7 +445,7 @@ async fn main() {
                                 }
                             }
                         } else {
-                            eprintln!("Session store not available");
+                            eprintln!("{}", t!("err_session_store_unavailable"));
                         }
                     }
                     "/session" => {
@@ -498,6 +526,14 @@ async fn main() {
                                         .await
                                     {
                                         Ok(result) => {
+                                            // Store proposal in REPL state for /sdd confirm.
+                                            if let Ok(proposal) =
+                                                serde_json::from_value::<SddProposal>(
+                                                    result.output["proposal"].clone(),
+                                                )
+                                            {
+                                                pending_proposal = Some(proposal);
+                                            }
                                             println!("{}", result.output);
                                         }
                                         Err(e) => {
@@ -506,7 +542,24 @@ async fn main() {
                                     }
                                 }
                                 "confirm" => {
-                                    println!("{}", t!("interactive_sdd_confirm_placeholder"));
+                                    if let Some(mut p) = pending_proposal.take() {
+                                        p.hard_gate_blocked = false;
+                                        p.status = "confirmed".into();
+                                        p.updated_at = std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .map(|d| d.as_millis() as i64)
+                                            .unwrap_or_default();
+                                        println!(
+                                            "{}",
+                                            t!(
+                                                "interactive_sdd_confirmed",
+                                                id = p.id,
+                                                goal = p.goal
+                                            )
+                                        );
+                                    } else {
+                                        eprintln!("{}", t!("interactive_sdd_no_pending"));
+                                    }
                                 }
                                 "status" => {
                                     let skills = skill_registry.list();
@@ -521,6 +574,22 @@ async fn main() {
                                                 name = s.name
                                             )
                                         );
+                                    }
+                                    match &pending_proposal {
+                                        Some(p) => {
+                                            println!(
+                                                "{}",
+                                                t!(
+                                                    "interactive_sdd_status_pending",
+                                                    id = p.id,
+                                                    status = p.status,
+                                                    hard_gate_blocked = p.hard_gate_blocked
+                                                )
+                                            );
+                                        }
+                                        None => {
+                                            println!("{}", t!("interactive_sdd_status_idle"));
+                                        }
                                     }
                                 }
                                 _ => {

@@ -1,6 +1,4 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 // ========== 风险等级 ==========
 
@@ -15,61 +13,7 @@ pub enum RiskLevel {
     L3, // 高危操作 — 人工确认
 }
 
-// ========== 意图 ==========
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Intent {
-    Chat { content: String },
-    TaskDispatch { spec: TaskSpec },
-    TaskInterrupt { task_id: Uuid },
-    TaskCancel { task_id: Uuid },
-    SkillQuery { keyword: String },
-    ProfileSwitch { industry: String },
-}
-
-// ========== 任务规范 ==========
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskSpec {
-    pub id: Uuid,
-    pub description: String,
-    pub risk_level: RiskLevel,
-    pub priority: TaskPriority,
-    pub steps: Vec<TaskStep>,
-    pub timeout_secs: u64,
-    pub retry_policy: RetryPolicy,
-}
-
-impl TaskSpec {
-    #[must_use]
-    pub fn new(description: String, risk_level: RiskLevel) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            description,
-            risk_level,
-            priority: TaskPriority::Normal,
-            steps: vec![],
-            timeout_secs: 300,
-            retry_policy: RetryPolicy::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum TaskPriority {
-    Low,
-    Normal,
-    High,
-    Critical,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskStep {
-    pub action: String,
-    pub tool: String,
-    pub params: serde_json::Value,
-    pub expected_output: Option<String>,
-}
+// ========== 重试策略 ==========
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetryPolicy {
@@ -84,82 +28,6 @@ impl Default for RetryPolicy {
             backoff_ms: 1000,
         }
     }
-}
-
-// ========== 任务计划 ==========
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskPlan {
-    pub task_id: Uuid,
-    pub steps: Vec<PlannedStep>,
-    pub estimated_steps: u8,
-    pub risk_level: RiskLevel,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlannedStep {
-    pub order: u8,
-    pub action: String,
-    pub tool: String,
-    pub params: serde_json::Value,
-    pub depends_on: Option<u8>, // 依赖的前置步骤序号
-}
-
-// ========== 执行结果 ==========
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActionResult {
-    pub success: bool,
-    pub output: String,
-    pub tool_calls: Vec<ToolCallSummary>,
-    pub duration_ms: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolCallSummary {
-    pub tool_name: String,
-    pub success: bool,
-    pub duration_ms: u64,
-    pub summary: String,
-}
-
-// ========== 操作记录 ==========
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActionRecord {
-    pub timestamp: DateTime<Utc>,
-    pub action: String,
-    pub tool: String,
-    pub success: bool,
-    pub summary: String,
-}
-
-// ========== 反馈 ==========
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FeedbackRecord {
-    pub timestamp: DateTime<Utc>,
-    pub verdict: QualityVerdict,
-    pub retry_count: u8,
-}
-
-impl FeedbackRecord {
-    /// 构造一个时间戳为 now 的反馈记录（fix v1.0.3 R8 抽离）
-    #[must_use]
-    pub fn now(retry_count: u8, verdict: QualityVerdict) -> Self {
-        Self {
-            timestamp: Utc::now(),
-            verdict,
-            retry_count,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum QualityVerdict {
-    Pass { summary: String },
-    Rework { reason: String, suggestion: String },
-    Escalate { reason: String, new_risk: RiskLevel },
 }
 
 // ========== 角色/能力 ==========
@@ -205,21 +73,6 @@ impl Default for PermissionSet {
 
 /// 默认文件大小上限 10MB（fix v1.0.3 M2 抽离）
 pub const DEFAULT_MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
-
-// ========== 意图类型（缓存 Key 用）==========
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum IntentType {
-    CodeReview,
-    BugFix,
-    DataQuery,
-    FileRead,
-    FileWrite,
-    CommandExecute,
-    WebFetch,
-    Chat,
-    Unknown,
-}
 
 // ========== 记忆类型 ==========
 

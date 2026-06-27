@@ -1,3 +1,9 @@
+// EventChannel is currently unused at runtime. The struct is kept for the
+// future v0.4+ event-bus integration (subagent-driven-development direction);
+// see the v0.3 cleanup + daily-usable design doc for context. Until then we
+// do not exercise publish/subscribe paths in production code, and no unit
+// tests live here yet.
+
 use qbird_code_models::RiskLevel;
 use tokio::sync::broadcast;
 use uuid::Uuid;
@@ -69,6 +75,3 @@ impl Clone for EventChannel {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {}
