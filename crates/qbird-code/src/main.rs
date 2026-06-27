@@ -6,7 +6,7 @@ use qbird_code_agents::{ReactLoop, ReactLoopConfig};
 use qbird_code_infra::config::{find_config, load_config};
 use qbird_code_infra::http_client::HttpLlmClient;
 use qbird_code_infra::providers::{
-    AnthropicProvider, DeepseekProvider, OllamaProvider, OpenAIProvider,
+    AnthropicProvider, DeepseekAnthropicProvider, DeepseekProvider, OllamaProvider, OpenAIProvider,
 };
 use qbird_code_models::Message;
 use qbird_code_tools::{
@@ -93,6 +93,30 @@ async fn main() {
                 Box::new(p) as Box<dyn qbird_code_infra::providers::Provider>,
             )
         }
+        "deepseek-anthropic" => {
+            let h = match HttpLlmClient::new(
+                cfg.llm.deepseek.timeout_secs,
+                cfg.llm.deepseek.max_retries,
+                cfg.llm.deepseek.retry_backoff_ms,
+            ) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Failed to initialize HTTP client: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            let p = match DeepseekAnthropicProvider::new(cfg.llm.deepseek.clone()) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("Failed to initialize LLM provider: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            (
+                h,
+                Box::new(p) as Box<dyn qbird_code_infra::providers::Provider>,
+            )
+        }
         "ollama" => {
             let h = match HttpLlmClient::new(cfg.llm.ollama.timeout_secs, 3, 1000) {
                 Ok(c) => c,
@@ -154,7 +178,9 @@ async fn main() {
             )
         }
         other => {
-            eprintln!("Unknown provider '{other}', expected deepseek/ollama/openai/anthropic");
+            eprintln!(
+                "Unknown provider '{other}', expected deepseek/deepseek-anthropic/ollama/openai/anthropic"
+            );
             std::process::exit(1);
         }
     };
@@ -168,7 +194,7 @@ async fn main() {
     registry.register(Arc::new(SearchCodeTool));
     // 提取 thinking 配置（仅 DeepSeek 支持）
     let (thinking_enabled, thinking_effort) = match cfg.llm.active.as_str() {
-        "deepseek" => (
+        "deepseek" | "deepseek-anthropic" => (
             cfg.llm.deepseek.thinking_enabled,
             cfg.llm.deepseek.thinking_effort.clone(),
         ),

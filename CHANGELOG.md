@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.5] - 2026-06-27
+
+### Added
+
+- **DeepSeek Anthropic 协议路由**: `llm.active: deepseek-anthropic` 现在使用 `DeepseekAnthropicProvider`（通过 Anthropic 兼容协议调用 DeepSeek）
+
+---
+
 ## [0.2.4] - 2026-06-27
 
 ### Changed
