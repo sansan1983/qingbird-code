@@ -3,6 +3,7 @@ pub mod deepseek;
 pub mod deepseek_anthropic;
 pub mod ollama;
 pub mod openai;
+pub mod stream;
 
 pub use anthropic::AnthropicProvider;
 pub use deepseek::DeepseekProvider;
@@ -13,6 +14,8 @@ pub use openai::OpenAIProvider;
 use async_trait::async_trait;
 use qbird_code_models::{Message, Result, UsageStats};
 use serde::{Deserialize, Serialize};
+
+use crate::http_client::HttpLlmClient;
 
 /// Provider 标识
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -102,4 +105,21 @@ pub trait Provider: Send + Sync {
 
     /// 构建 HTTP 请求 headers
     fn build_headers(&self) -> std::collections::HashMap<String, String>;
+
+    /// 发送流式请求。返回完整响应（默认回退到非流式）
+    async fn stream(
+        &self,
+        http_client: &HttpLlmClient,
+        messages: &[Message],
+        config: &RequestConfig,
+    ) -> Result<ChatResponse>
+    where
+        Self: Sized,
+    {
+        let mut req_config = config.clone();
+        req_config.stream = true;
+        let body = self.build_request_body(messages, &req_config);
+        let response_json = http_client.send(self, &body).await?;
+        self.parse_response(&response_json).await
+    }
 }
