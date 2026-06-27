@@ -6,9 +6,11 @@ use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
 use clap::Parser;
+use qbird_code_agents::skill::{SkillContext, SkillRegistry};
 use qbird_code_agents::{ReactLoop, ReactLoopConfig};
 use qbird_code_infra::config::{find_config, load_config};
 use qbird_code_infra::http_client::HttpLlmClient;
+use qbird_code_infra::memory::SessionStore;
 use qbird_code_infra::providers::{
     AnthropicProvider, DeepseekAnthropicProvider, DeepseekProvider, OllamaProvider, OpenAIProvider,
 };
@@ -20,7 +22,7 @@ use qbird_code_tools::{
 /// qingbird — Efficient Flow Agent Collaboration Framework
 #[derive(Parser)]
 #[command(name = "qingbird")]
-#[command(version = "0.2.0")]
+#[command(version = "0.2.17")]
 #[command(about = "Efficient Flow Agent Collaboration Framework")]
 struct Cli {
     /// 执行单次任务
@@ -120,14 +122,14 @@ async fn main() {
             ) {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("Failed to initialize HTTP client: {}", e);
+                    eprintln!("{}", t!("err_http_client_init", msg = e));
                     std::process::exit(1);
                 }
             };
             let p = match DeepseekProvider::new(cfg.llm.deepseek.clone()) {
                 Ok(p) => p,
                 Err(e) => {
-                    eprintln!("Failed to initialize LLM provider: {}", e);
+                    eprintln!("{}", t!("err_llm_provider_init", msg = e));
                     std::process::exit(1);
                 }
             };
@@ -144,14 +146,14 @@ async fn main() {
             ) {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("Failed to initialize HTTP client: {}", e);
+                    eprintln!("{}", t!("err_http_client_init", msg = e));
                     std::process::exit(1);
                 }
             };
             let p = match DeepseekAnthropicProvider::new(cfg.llm.deepseek.clone()) {
                 Ok(p) => p,
                 Err(e) => {
-                    eprintln!("Failed to initialize LLM provider: {}", e);
+                    eprintln!("{}", t!("err_llm_provider_init", msg = e));
                     std::process::exit(1);
                 }
             };
@@ -168,14 +170,14 @@ async fn main() {
             ) {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("Failed to initialize HTTP client: {}", e);
+                    eprintln!("{}", t!("err_http_client_init", msg = e));
                     std::process::exit(1);
                 }
             };
             let p = match OllamaProvider::new(cfg.llm.ollama.clone()) {
                 Ok(p) => p,
                 Err(e) => {
-                    eprintln!("Failed to initialize LLM provider: {}", e);
+                    eprintln!("{}", t!("err_llm_provider_init", msg = e));
                     std::process::exit(1);
                 }
             };
@@ -192,14 +194,14 @@ async fn main() {
             ) {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("Failed to initialize HTTP client: {}", e);
+                    eprintln!("{}", t!("err_http_client_init", msg = e));
                     std::process::exit(1);
                 }
             };
             let p = match OpenAIProvider::new(cfg.llm.openai.clone()) {
                 Ok(p) => p,
                 Err(e) => {
-                    eprintln!("Failed to initialize LLM provider: {}", e);
+                    eprintln!("{}", t!("err_llm_provider_init", msg = e));
                     std::process::exit(1);
                 }
             };
@@ -216,14 +218,14 @@ async fn main() {
             ) {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("Failed to initialize HTTP client: {}", e);
+                    eprintln!("{}", t!("err_http_client_init", msg = e));
                     std::process::exit(1);
                 }
             };
             let p = match AnthropicProvider::new(cfg.llm.anthropic.clone()) {
                 Ok(p) => p,
                 Err(e) => {
-                    eprintln!("Failed to initialize LLM provider: {}", e);
+                    eprintln!("{}", t!("err_llm_provider_init", msg = e));
                     std::process::exit(1);
                 }
             };
@@ -305,6 +307,11 @@ async fn main() {
     };
     let tool_registry = Arc::new(registry);
 
+    // === 4b. 初始化技能注册表 ===
+    let mut skill_registry = SkillRegistry::new();
+    qbird_code_agents::skill::sdd::register_all(&mut skill_registry);
+    let skill_registry = Arc::new(skill_registry);
+
     // 将 ToolDefinition 转为 OpenAI 兼容的 JSON schema
     let tool_schemas: Vec<serde_json::Value> = tool_registry
         .definitions()
@@ -369,6 +376,18 @@ async fn main() {
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![build_system_message(&tool_registry, &cfg.llm.active)];
+        let mut cumulative_prompt: u64 = 0;
+        let mut cumulative_completion: u64 = 0;
+
+        // 初始化 SessionStore
+        let session_dirs = dirs::data_dir()
+            .map(|p| p.join("qingbird"))
+            .unwrap_or_else(|| std::path::PathBuf::from(".qingbird"));
+        std::fs::create_dir_all(&session_dirs).ok();
+        let db_path = session_dirs.join("sessions.db");
+        let session_store = SessionStore::open(&db_path).ok();
+        let session_id = uuid::Uuid::new_v4().to_string();
+
         println!("{}", t!("interactive_banner"));
         println!();
 
@@ -382,7 +401,7 @@ async fn main() {
             let line = match lines.next() {
                 Some(Ok(line)) => line,
                 Some(Err(e)) => {
-                    eprintln!("Read error: {}", e);
+                    eprintln!("{}", t!("interactive_read_error", msg = e));
                     break;
                 }
                 None => break,
@@ -414,7 +433,96 @@ async fn main() {
                                 value = format!("{:?}", react_loop.config.temperature)
                             )
                         );
+                        println!("{}", t!("interactive_help_usage"));
+                        println!("{}", t!("interactive_help_sessions"));
+                        println!("{}", t!("interactive_help_session_load"));
                         println!();
+                    }
+                    "/usage" => {
+                        println!("{}", t!("interactive_usage_title"));
+                        println!(
+                            "{}",
+                            t!("interactive_usage_prompt", count = cumulative_prompt)
+                        );
+                        println!(
+                            "{}",
+                            t!(
+                                "interactive_usage_completion",
+                                count = cumulative_completion
+                            )
+                        );
+                        println!(
+                            "{}",
+                            t!(
+                                "interactive_usage_total",
+                                count = cumulative_prompt + cumulative_completion
+                            )
+                        );
+                    }
+                    "/sessions" => {
+                        if let Some(ref store) = session_store {
+                            match store.list_sessions() {
+                                Ok(list) => {
+                                    println!("{}", t!("interactive_session_list_title"));
+                                    for (id, name, _created, updated, count) in &list {
+                                        let time =
+                                            chrono::DateTime::from_timestamp_millis(*updated)
+                                                .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+                                                .unwrap_or_default();
+                                        println!(
+                                            "{}",
+                                            t!(
+                                                "interactive_session_entry",
+                                                id = id,
+                                                name = name,
+                                                messages = count,
+                                                time = time
+                                            )
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("{}", t!("interactive_error_prefix", msg = e));
+                                }
+                            }
+                        } else {
+                            eprintln!("Session store not available");
+                        }
+                    }
+                    "/session" => {
+                        let sub_parts: Vec<&str> = arg.splitn(2, ' ').collect();
+                        let sub_cmd = sub_parts.first().copied().unwrap_or("");
+                        let sub_arg = sub_parts.get(1).copied().unwrap_or("");
+                        match sub_cmd {
+                            "load" => {
+                                if sub_arg.is_empty() {
+                                    println!("{}", t!("interactive_session_usage"));
+                                } else if let Some(ref store) = session_store {
+                                    match store.load_messages(sub_arg) {
+                                        Ok(loaded) => {
+                                            messages = loaded;
+                                            println!(
+                                                "{}",
+                                                t!(
+                                                    "interactive_session_loaded",
+                                                    id = sub_arg,
+                                                    count = messages.len()
+                                                )
+                                            );
+                                        }
+                                        Err(_e) => {
+                                            eprintln!(
+                                                "{}",
+                                                t!("interactive_session_not_found", id = sub_arg)
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {
+                                println!("{}", t!("interactive_session_usage"));
+                            }
+                        }
                     }
                     "/model" => {
                         if arg.is_empty() {
@@ -425,6 +533,63 @@ async fn main() {
                         } else {
                             react_loop.config.model = arg.to_string();
                             println!("{}", t!("interactive_model_switched", name = arg));
+                        }
+                    }
+                    "/sdd" => {
+                        if arg.is_empty() {
+                            println!("{}", t!("interactive_help_sdd_title"));
+                            println!("{}", t!("interactive_help_sdd_run"));
+                            println!("{}", t!("interactive_help_sdd_confirm"));
+                            println!("{}", t!("interactive_help_sdd_status"));
+                        } else {
+                            let sub_parts: Vec<&str> = arg.splitn(2, ' ').collect();
+                            let sub_cmd = sub_parts[0];
+                            let sub_arg = sub_parts.get(1).copied().unwrap_or("");
+                            match sub_cmd {
+                                "run" => {
+                                    let ctx = SkillContext {
+                                        session_id: "interactive".into(),
+                                        project_path: None,
+                                        budget_remaining: None,
+                                    };
+                                    match skill_registry
+                                        .execute(
+                                            "sdd-proposal",
+                                            serde_json::json!({"userInput": sub_arg}),
+                                            ctx,
+                                        )
+                                        .await
+                                    {
+                                        Ok(result) => {
+                                            println!("{}", result.output);
+                                        }
+                                        Err(e) => {
+                                            eprintln!("{}", t!("interactive_sdd_error", msg = e));
+                                        }
+                                    }
+                                }
+                                "confirm" => {
+                                    println!("{}", t!("interactive_sdd_confirm_placeholder"));
+                                }
+                                "status" => {
+                                    let skills = skill_registry.list();
+                                    println!("{}", t!("sdd_skills_header", count = skills.len()));
+                                    for s in &skills {
+                                        println!(
+                                            "{}",
+                                            t!(
+                                                "sdd_skill_entry",
+                                                level = s.level,
+                                                id = s.id,
+                                                name = s.name
+                                            )
+                                        );
+                                    }
+                                }
+                                _ => {
+                                    println!("{}", t!("interactive_unknown_cmd", cmd = line));
+                                }
+                            }
                         }
                     }
                     "/temperature" => {
@@ -473,12 +638,14 @@ async fn main() {
                 .await
             {
                 Ok(result) => {
+                    cumulative_prompt += result.usage.prompt_tokens;
+                    cumulative_completion += result.usage.completion_tokens;
                     println!();
                     println!("{}", result.content);
                     println!();
                 }
                 Err(e) => {
-                    eprintln!("Error: {}", e);
+                    eprintln!("{}", t!("interactive_error_prefix", msg = e));
                 }
             }
 
@@ -491,6 +658,11 @@ async fn main() {
                 messages = std::iter::once(system).chain(remaining).collect();
                 eprintln!("{}", t!("interactive_ctx_truncated", count = keep));
             }
+        }
+
+        // 退出前保存
+        if let Some(ref store) = session_store {
+            let _ = store.save_messages(&session_id, &messages);
         }
 
         return;

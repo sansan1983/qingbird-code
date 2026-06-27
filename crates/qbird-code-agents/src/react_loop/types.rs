@@ -18,6 +18,8 @@ pub struct LoopState {
     pub read_nudge_sent: bool,
     pub completion_nudge_sent: bool,
     pub no_tool_nudge_sent: bool,
+    pub total_prompt_tokens: u64,
+    pub total_completion_tokens: u64,
 }
 
 impl LoopState {
@@ -29,6 +31,8 @@ impl LoopState {
             read_nudge_sent: false,
             completion_nudge_sent: false,
             no_tool_nudge_sent: false,
+            total_prompt_tokens: 0,
+            total_completion_tokens: 0,
         }
     }
 }

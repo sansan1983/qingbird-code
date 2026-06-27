@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.17] - 2026-06-27
+
+### Added
+
+- **Token 用量追踪和展示**（`/usage` 命令）
+- **对话历史持久化**（SQLite 存储，`/sessions` / `/session load` 命令）
+- **工具输出大小限制**（防止撑爆上下文，最大 ~4000 tokens）
+- **Subagent 基础并发池**（`SubagentPool` + `execute_parallel`）
+
+### Fixed
+
+- **全量 i18n 审计**：确保所有用户面向字符串走 `t!()`
+
+---
+
+## [0.2.16] - 2026-06-27
+
+### Added
+
+- **Skill 插件体系**: SkillRegistry + Skill trait 注册表
+- **SDD 四阶段工作流**: Proposal（含 HARD-GATE）/ Spec Review / Quality Review / Archive
+- **CLI 集成**: `/sdd` 斜杠命令组
+
+---
+
 ## [0.2.15] - 2026-06-27
 
 ### Added

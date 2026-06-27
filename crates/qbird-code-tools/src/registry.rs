@@ -106,9 +106,32 @@ impl ToolRegistry {
             }
         }
 
-        tool.execute(params).await
+        let mut output = tool.execute(params).await?;
+
+        let estimated_tokens = output.content.len() / 3;
+        if estimated_tokens > MAX_OUTPUT_TOKENS {
+            let max_chars = MAX_OUTPUT_TOKENS * 3;
+            let truncated = output
+                .content
+                .char_indices()
+                .nth(max_chars)
+                .map(|(i, _)| i)
+                .unwrap_or(output.content.len());
+            output.content = format!(
+                "{}...[Output truncated at ~{} tokens]",
+                &output.content[..truncated],
+                MAX_OUTPUT_TOKENS
+            );
+            if let Some(ref mut meta) = output.metadata {
+                meta["truncated"] = serde_json::json!(true);
+            }
+        }
+
+        Ok(output)
     }
 }
+
+pub const MAX_OUTPUT_TOKENS: usize = 4000;
 
 impl Default for ToolRegistry {
     fn default() -> Self {

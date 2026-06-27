@@ -78,6 +78,15 @@ impl ReactLoop {
             let response_json = http_client.send(provider, &body).await?;
             let chat_response = provider.parse_response(&response_json).await?;
 
+            state.total_prompt_tokens += chat_response.usage.prompt_tokens;
+            state.total_completion_tokens += chat_response.usage.completion_tokens;
+            tracing::info!(
+                "Token usage: prompt={}, completion={}, total={}",
+                chat_response.usage.prompt_tokens,
+                chat_response.usage.completion_tokens,
+                chat_response.usage.prompt_tokens + chat_response.usage.completion_tokens,
+            );
+
             // === 决策: LLM 说了什么？ ===
             let step =
                 r#loop::process_llm_response(&mut state, &mut hooks, &chat_response, messages)?;
