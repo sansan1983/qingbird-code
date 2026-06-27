@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.15] - 2026-06-27
+
+### Added
+
+- **记忆系统**: SQLite + FTS5 记忆管理器（增量同步、全文搜索、预算化读取）
+- **上下文管理**: Token 预算化窗口、溢出检测（4 级压力）、自动检查点
+- **ReactLoop 集成**: ContextManager 可选接入，替代粗暴 50 条截断
+
+---
+
 ## [0.2.14] - 2026-06-27
 
 ### Added
