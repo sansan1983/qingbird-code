@@ -109,7 +109,11 @@ async fn main() {
 
     // === 5. 单次执行模式 ===
     if let Some(prompt) = cli.execute {
-        let react_loop = ReactLoop::new(ReactLoopConfig::default());
+        let react_loop = ReactLoop::new(ReactLoopConfig {
+            thinking_enabled: cfg.llm.deepseek.thinking_enabled,
+            thinking_effort: cfg.llm.deepseek.thinking_effort.clone(),
+            ..ReactLoopConfig::default()
+        });
         let mut messages = vec![build_system_message(&tool_registry), Message::user(&prompt)];
 
         match react_loop
@@ -136,7 +140,11 @@ async fn main() {
 
     // === 6. 交互模式（多轮对话） ===
     if cli.interactive {
-        let react_loop = ReactLoop::new(ReactLoopConfig::default());
+        let react_loop = ReactLoop::new(ReactLoopConfig {
+            thinking_enabled: cfg.llm.deepseek.thinking_enabled,
+            thinking_effort: cfg.llm.deepseek.thinking_effort.clone(),
+            ..ReactLoopConfig::default()
+        });
         let mut messages = vec![build_system_message(&tool_registry)];
         println!("qingbird interactive mode. Type /quit or /exit to exit.");
         println!();

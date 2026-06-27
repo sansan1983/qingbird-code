@@ -77,6 +77,10 @@ pub struct ReactLoopConfig {
     pub max_tokens: Option<u64>,
     /// 连续只读轮次上限（超过后触发 nudge）
     pub max_consecutive_reads: usize,
+    /// thinking mode 开关（DeepSeek）
+    pub thinking_enabled: bool,
+    /// thinking effort: "high" | "max"
+    pub thinking_effort: String,
 }
 
 impl Default for ReactLoopConfig {
@@ -87,6 +91,8 @@ impl Default for ReactLoopConfig {
             temperature: Some(0.7),
             max_tokens: Some(4096),
             max_consecutive_reads: 5,
+            thinking_enabled: true,
+            thinking_effort: "high".into(),
         }
     }
 }

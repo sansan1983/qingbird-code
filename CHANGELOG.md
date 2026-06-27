@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.3] - 2026-06-27
+
+### Changed
+
+- **thinking 配置从 config 读取**: `ReactLoopConfig` 新增 `thinking_enabled`/`thinking_effort` 字段
+  - `ReactLoop::run()` 不再硬编码 `thinking_enabled: true`，改为使用配置值
+  - binary main.rs 从 `cfg.llm.deepseek` 传入 thinking 配置
+  - `qingbird.yaml` 中 `llm.deepseek.thinking_enabled` / `thinking_effort` 现在实际生效
+
+---
+
 ## [0.2.2] - 2026-06-27
 
 ### Changed

@@ -62,8 +62,12 @@ impl ReactLoop {
                 temperature: self.config.temperature,
                 max_tokens: self.config.max_tokens,
                 stream: false,
-                thinking_enabled: true,
-                thinking_effort: Some("high".into()),
+                thinking_enabled: self.config.thinking_enabled,
+                thinking_effort: if self.config.thinking_effort.is_empty() {
+                    None
+                } else {
+                    Some(self.config.thinking_effort.clone())
+                },
                 tools: tool_schemas.to_vec(),
             };
 
