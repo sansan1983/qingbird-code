@@ -18,7 +18,10 @@ fn start_mock_server() -> (String, Arc<AtomicUsize>) {
     let addr = listener.local_addr().unwrap();
     let addr_str = format!("http://{}", addr);
 
+    let (tx, rx) = std::sync::mpsc::channel();
+
     std::thread::spawn(move || {
+        let _ = tx.send(());
         for stream in listener.incoming() {
             let mut stream = match stream {
                 Ok(s) => s,
@@ -118,6 +121,8 @@ fn start_mock_server() -> (String, Arc<AtomicUsize>) {
             let _ = stream.flush();
         }
     });
+
+    rx.recv().expect("mock server should start");
 
     (addr_str, counter)
 }
