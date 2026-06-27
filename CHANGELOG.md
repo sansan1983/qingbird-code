@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.11] - 2026-06-27
+
+### Added
+
+- **交互模式 `/temperature`**: 可在对话中动态设置温度参数（0.0 ~ 2.0）
+
+---
+
 ## [0.2.10] - 2026-06-27
 
 ### Added

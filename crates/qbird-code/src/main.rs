@@ -356,6 +356,10 @@ async fn main() {
                             "  /model <名称>     切换模型（当前: {}）",
                             react_loop.config.model
                         );
+                        println!(
+                            "  /temperature <n>  设置温度（当前: {:?}）",
+                            react_loop.config.temperature
+                        );
                         println!();
                     }
                     "/model" => {
@@ -364,6 +368,19 @@ async fn main() {
                         } else {
                             react_loop.config.model = arg.to_string();
                             println!("模型已切换为: {}", arg);
+                        }
+                    }
+                    "/temperature" => {
+                        if arg.is_empty() {
+                            println!("当前温度: {:?}", react_loop.config.temperature);
+                        } else {
+                            match arg.parse::<f64>() {
+                                Ok(t) if (0.0..=2.0).contains(&t) => {
+                                    react_loop.config.temperature = Some(t);
+                                    println!("温度已设置为: {}", t);
+                                }
+                                _ => println!("无效温度，请输入 0.0 ~ 2.0 之间的数值"),
+                            }
                         }
                     }
                     _ => {
