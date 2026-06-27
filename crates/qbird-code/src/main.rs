@@ -34,6 +34,10 @@ struct Cli {
         ])
     )]
     provider: Option<String>,
+
+    /// LLM 模型名称（覆盖 config 中当前 provider 的 default_model）
+    #[arg(long)]
+    model: Option<String>,
 }
 
 fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message {
@@ -77,6 +81,19 @@ async fn main() {
     if let Some(ref provider) = cli.provider {
         cfg.llm.active = provider.clone();
     }
+
+    // 解析当前 provider 的默认模型，--model 可覆盖
+    let default_model = match cfg.llm.active.as_str() {
+        "deepseek" | "deepseek-anthropic" => &cfg.llm.deepseek.default_model,
+        "ollama" => &cfg.llm.ollama.default_model,
+        "openai" => &cfg.llm.openai.default_model,
+        "anthropic" => &cfg.llm.anthropic.default_model,
+        _ => "",
+    };
+    let model = cli
+        .model
+        .clone()
+        .unwrap_or_else(|| default_model.to_string());
     // === 3. 初始化基础设施（根据 cfg.llm.active 路由） ===
     let active = cfg.llm.active.clone();
     let (http_client, provider): (
@@ -247,6 +264,7 @@ async fn main() {
     // === 5. 单次执行模式 ===
     if let Some(prompt) = cli.execute {
         let react_loop = ReactLoop::new(ReactLoopConfig {
+            model: model.clone(),
             thinking_enabled,
             thinking_effort: thinking_effort.clone(),
             ..ReactLoopConfig::default()
@@ -281,6 +299,7 @@ async fn main() {
     // === 6. 交互模式（多轮对话） ===
     if cli.interactive {
         let react_loop = ReactLoop::new(ReactLoopConfig {
+            model: model.clone(),
             thinking_enabled,
             thinking_effort: thinking_effort.clone(),
             ..ReactLoopConfig::default()

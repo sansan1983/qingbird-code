@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.8] - 2026-06-27
+
+### Added
+
+- **`--model` CLI 参数**: 覆盖当前 provider 的 `default_model`，支持 `qingbird --model gpt-4o --execute "..."` 临时切换模型
+- **自动模型解析**: ReactLoopConfig 现在从活跃 provider 的配置中读取 `default_model`，不再固定 `deepseek-v4-pro`
+
+---
+
 ## [0.2.7] - 2026-06-27
 
 ### Added
