@@ -134,9 +134,10 @@ async fn main() {
         return;
     }
 
-    // === 6. 交互模式（简单 REPL） ===
+    // === 6. 交互模式（多轮对话） ===
     if cli.interactive {
         let react_loop = ReactLoop::new(ReactLoopConfig::default());
+        let mut messages = vec![build_system_message(&tool_registry)];
         println!("qingbird interactive mode. Type /quit or /exit to exit.");
         println!();
 
@@ -166,7 +167,8 @@ async fn main() {
                 continue;
             }
 
-            let mut messages = vec![build_system_message(&tool_registry), Message::user(&line)];
+            // 追加用户消息到已有对话历史
+            messages.push(Message::user(&line));
 
             match react_loop
                 .run(
@@ -188,6 +190,7 @@ async fn main() {
                     eprintln!("Error: {}", e);
                 }
             }
+            // messages 保留全量对话历史，下一轮继续追加
         }
 
         return;

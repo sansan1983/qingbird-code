@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.2] - 2026-06-27
+
+### Changed
+
+- **交互模式改为多轮对话**: `--interactive` 不再每轮重建 messages，改为追加用户消息到已有对话历史
+  - messages 在循环外初始化一次（system prompt），每轮 push user message
+  - ReactLoop 返回后 messages 保留全量对话，下一轮直接复用
+
+---
+
 ## [0.2.1] - 2026-06-27
 
 ### Changed
