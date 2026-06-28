@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 // ========== 风险等级 ==========
@@ -17,79 +20,131 @@ pub enum RiskLevel {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetryPolicy {
-    pub max_retries: u8,
-    pub backoff_ms: u64,
+    pub max_retries: u32,
+    pub initial_backoff_ms: u64,
+    pub backoff_multiplier: f64,
+    pub max_backoff_ms: u64,
 }
 
 impl Default for RetryPolicy {
     fn default() -> Self {
         Self {
             max_retries: 3,
-            backoff_ms: 1000,
+            initial_backoff_ms: 1000,
+            backoff_multiplier: 2.0,
+            max_backoff_ms: 30_000,
         }
     }
 }
 
-// ========== 角色/能力 ==========
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Role {
-    FileAssistant,
-    CodeAssistant,
-    DataAnalyst,
-    Generalist,
+impl RetryPolicy {
+    /// Calculate the backoff delay for a given retry attempt (0-indexed).
+    /// Capped at `max_backoff_ms`.
+    #[must_use]
+    pub fn backoff_for_attempt(&self, attempt: u32) -> u64 {
+        let base = self.initial_backoff_ms as f64;
+        let delay = base * self.backoff_multiplier.powi(attempt as i32);
+        (delay as u64).min(self.max_backoff_ms)
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Capability {
-    ReadFile,
-    WriteFile,
-    ExecuteCommand,
-    SearchCode,
-    WebFetch,
-    LlmReasoning,
+// ========== 角色 / 能力 ==========
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Role {
+    pub name: String,
+    pub permissions: PermissionSet,
+}
+
+impl Role {
+    #[must_use]
+    pub fn new(name: impl Into<String>, permissions: PermissionSet) -> Self {
+        Self {
+            name: name.into(),
+            permissions,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Capability {
+    pub name: String,
+    pub description: String,
+}
+
+impl Capability {
+    #[must_use]
+    pub fn new(name: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+        }
+    }
 }
 
 // ========== 权限 ==========
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PermissionSet {
-    pub allowed_paths: Vec<String>,
-    pub allowed_commands: Vec<String>,
-    pub max_file_size_bytes: u64,
-    pub network_enabled: bool,
+    /// Empty set = allow all tools (whitelist disabled).
+    pub allowed_tools: HashSet<String>,
+    /// Empty set = allow all paths (path check disabled).
+    pub allowed_paths: HashSet<PathBuf>,
+    /// Maximum risk level allowed; higher attempts are blocked.
+    pub max_risk: RiskLevel,
 }
 
 impl Default for PermissionSet {
     fn default() -> Self {
         Self {
-            allowed_paths: vec![],
-            allowed_commands: vec![],
-            max_file_size_bytes: DEFAULT_MAX_FILE_SIZE,
-            network_enabled: false,
+            allowed_tools: HashSet::new(),
+            allowed_paths: HashSet::new(),
+            max_risk: RiskLevel::L3,
         }
     }
 }
 
-/// 默认文件大小上限 10MB（fix v1.0.3 M2 抽离）
-pub const DEFAULT_MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
+impl PermissionSet {
+    /// `true` when the tool is allowed (whitelist empty or contains it).
+    #[must_use]
+    pub fn allows_tool(&self, tool_name: &str) -> bool {
+        self.allowed_tools.is_empty() || self.allowed_tools.contains(tool_name)
+    }
+
+    /// `true` when the path is allowed (whitelist empty or contains it).
+    #[must_use]
+    pub fn allows_path(&self, path: &PathBuf) -> bool {
+        self.allowed_paths.is_empty() || self.allowed_paths.contains(path)
+    }
+
+    /// `true` when the given risk level is at or below `max_risk`.
+    #[must_use]
+    pub fn allows_risk(&self, risk: RiskLevel) -> bool {
+        risk <= self.max_risk
+    }
+}
 
 // ========== 记忆类型 ==========
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MemoryCategory {
-    TaskResult,
-    Decision,
-    Feedback,
-    UserPreference,
-    LearnedPattern,
-    ManualNote,
+    /// Project-scoped memory shared across sessions for a project.
+    Project,
+    /// User-scoped memory persisted across all projects.
+    User,
+    /// Re-usable code snippet or template.
+    Snippet,
+    /// Tool invocation history / output.
+    Tool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub enum Importance {
     Low,
+    #[default]
     Normal,
     High,
-    Pinned,
+    Critical,
 }
