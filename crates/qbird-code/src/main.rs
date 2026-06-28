@@ -247,6 +247,8 @@ async fn main() {
     registry.register(Arc::new(ListDirTool));
     registry.register(Arc::new(WebFetchTool));
     registry.set_allowed_paths(cfg.security.allowed_paths.clone());
+    // 19-07: 风险阈值从 yaml 读，替代历史硬编码 L3
+    registry.set_risk_threshold(cfg.security.risk_threshold);
     // 提取 thinking 配置（仅 DeepSeek 支持）
     let (thinking_enabled, thinking_effort) = match active.as_str() {
         "deepseek" | "deepseek-anthropic" => (
@@ -328,6 +330,7 @@ async fn main() {
         let mut messages = vec![build_system_message(&tool_registry, &active)];
         let mut cumulative_prompt: u64 = 0;
         let mut cumulative_completion: u64 = 0;
+        let mut cumulative_cache_hit: u64 = 0;
 
         // 初始化 SessionStore
         let session_dirs = dirs::data_dir()
@@ -435,6 +438,13 @@ async fn main() {
                                 count = cumulative_prompt + cumulative_completion
                             )
                         );
+                        // 19-07: L1 cache hit 显示（仅当 yaml cache.l1_enabled = true）
+                        if cfg.llm.cache.l1_enabled {
+                            println!(
+                                "{}",
+                                t!("interactive_usage_cache_hit", count = cumulative_cache_hit)
+                            );
+                        }
                     }
                     "/sessions" => {
                         if let Some(ref store) = session_store {
@@ -698,6 +708,7 @@ async fn main() {
                 Ok(result) => {
                     cumulative_prompt += result.usage.prompt_tokens;
                     cumulative_completion += result.usage.completion_tokens;
+                    cumulative_cache_hit += result.usage.cache_hit_tokens;
                     println!();
                     println!("{}", result.content);
                     println!();

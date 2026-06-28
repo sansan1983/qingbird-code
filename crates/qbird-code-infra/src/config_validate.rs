@@ -92,11 +92,7 @@ fn check_api_key(cfg: &EflowConfig, errors: &mut Vec<ConfigError>) {
             "DEEPSEEK_API_KEY",
         ),
         "openai" => (
-            cfg.llm
-                .openai
-                .api_key
-                .as_deref()
-                .is_none_or(str::is_empty),
+            cfg.llm.openai.api_key.as_deref().is_none_or(str::is_empty),
             "OPENAI_API_KEY",
         ),
         "anthropic" => (
@@ -129,8 +125,11 @@ fn check_profiles_default(cfg: &EflowConfig, errors: &mut Vec<ConfigError>) {
     if std::path::Path::new(&cfg.profiles.default).exists() {
         return;
     }
-    let msg =
-        rust_i18n::t!("cfg_err_profile_not_found", path = cfg.profiles.default.as_str()).into_owned();
+    let msg = rust_i18n::t!(
+        "cfg_err_profile_not_found",
+        path = cfg.profiles.default.as_str()
+    )
+    .into_owned();
     errors.push(ConfigError {
         field: "profiles.default".into(),
         message: msg,

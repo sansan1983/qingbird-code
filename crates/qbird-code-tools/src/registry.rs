@@ -33,6 +33,9 @@ pub trait Tool: Send + Sync {
 pub struct ToolRegistry {
     tools: HashMap<String, Arc<dyn Tool>>,
     allowed_paths: Vec<String>,
+    /// Maximum risk level allowed. Tools with `risk_level >= risk_threshold`
+    /// are rejected. Default `L3` (allow everything), historically.
+    risk_threshold: RiskLevel,
 }
 
 impl ToolRegistry {
@@ -41,11 +44,24 @@ impl ToolRegistry {
         Self {
             tools: HashMap::new(),
             allowed_paths: Vec::new(),
+            risk_threshold: RiskLevel::L3,
         }
     }
 
     pub fn set_allowed_paths(&mut self, paths: Vec<String>) {
         self.allowed_paths = paths;
+    }
+
+    /// Set the maximum allowed risk level. Tools at or above this level
+    /// will be rejected at execution time. Default is `L3` (allow all).
+    pub fn set_risk_threshold(&mut self, threshold: RiskLevel) {
+        self.risk_threshold = threshold;
+    }
+
+    /// Current risk threshold (default `L3`).
+    #[must_use]
+    pub fn risk_threshold(&self) -> RiskLevel {
+        self.risk_threshold
     }
 
     pub fn register(&mut self, tool: Arc<dyn Tool>) {
@@ -79,9 +95,9 @@ impl ToolRegistry {
             .get(name)
             .ok_or_else(|| EflowError::Tool(t!("err_tool_not_found", name = name).to_string()))?;
 
-        // 风险检查
+        // 风险检查（threshold 来自 yaml `security.risk_threshold`，默认 L3）
         let def = tool.definition();
-        if def.risk_level >= RiskLevel::L3 {
+        if def.risk_level >= self.risk_threshold {
             return Err(EflowError::RiskEscalated {
                 task_id: task_id.to_string(),
                 reason: t!("err_tool_l3_required", name = name).to_string(),

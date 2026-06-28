@@ -1,5 +1,5 @@
 use qbird_code_infra::config::{AnthropicConfig, EflowConfig, OpenaiConfig};
-use qbird_code_infra::config_validate::{validate_config, ConfigError};
+use qbird_code_infra::config_validate::{ConfigError, validate_config};
 
 // ===== Rule 1: llm.active is valid =====
 
@@ -144,7 +144,9 @@ fn test_rule4_zero_memory_limit_errors() {
     };
     let errors = validate_config(&cfg);
     assert!(
-        errors.iter().any(|e| e.field == "memory.working_memory_limit"),
+        errors
+            .iter()
+            .any(|e| e.field == "memory.working_memory_limit"),
         "expected memory.working_memory_limit error, got: {errors:?}"
     );
 }
@@ -159,7 +161,11 @@ fn test_rule4_positive_memory_limit_passes() {
         ..Default::default()
     };
     let errors = validate_config(&cfg);
-    assert!(errors.iter().all(|e| !e.field.contains("working_memory_limit")));
+    assert!(
+        errors
+            .iter()
+            .all(|e| !e.field.contains("working_memory_limit"))
+    );
 }
 
 // ===== Aggregation behavior =====
@@ -182,7 +188,10 @@ fn test_validate_aggregates_all_errors() {
         ..Default::default()
     };
     let errors = validate_config(&cfg);
-    assert!(errors.len() >= 3, "expected at least 3 errors, got {errors:?}");
+    assert!(
+        errors.len() >= 3,
+        "expected at least 3 errors, got {errors:?}"
+    );
 }
 
 #[test]
