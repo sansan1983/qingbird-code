@@ -1,5 +1,5 @@
 use rusqlite::{Connection, params};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use super::types::{MemoryEntry, MemoryResult};
@@ -10,6 +10,25 @@ pub struct MemoryManager {
 }
 
 impl MemoryManager {
+    /// Default DB location: `$XDG_DATA_HOME/qingbird/memory.db`
+    /// (Windows: `%APPDATA%/qingbird/memory.db`).
+    /// Creates the parent directory if it does not exist.
+    pub fn default_db_path() -> Result<PathBuf> {
+        let dir = dirs::data_dir()
+            .ok_or_else(|| {
+                EflowError::Internal("could not resolve $XDG_DATA_HOME (or %APPDATA%)".into())
+            })?
+            .join("qingbird");
+        std::fs::create_dir_all(&dir).map_err(|e| {
+            EflowError::Internal(format!(
+                "failed to create data dir {}: {}",
+                dir.display(),
+                e
+            ))
+        })?;
+        Ok(dir.join("memory.db"))
+    }
+
     pub fn open(db_path: &Path) -> Result<Self> {
         let conn = Connection::open(db_path)
             .map_err(|e| EflowError::Memory(format!("Failed to open DB: {}", e)))?;

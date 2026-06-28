@@ -158,10 +158,6 @@ pub struct CacheConfig {
 pub struct MemoryConfig {
     #[serde(default = "default_1000")]
     pub working_memory_limit: usize,
-    #[serde(default = "default_project_db")]
-    pub project_db_path: String,
-    #[serde(default = "default_user_db")]
-    pub user_db_path: String,
     #[serde(default = "default_24")]
     pub cleanup_interval_hours: u64,
 }
@@ -170,8 +166,6 @@ impl Default for MemoryConfig {
     fn default() -> Self {
         Self {
             working_memory_limit: default_1000(),
-            project_db_path: default_project_db(),
-            user_db_path: default_user_db(),
             cleanup_interval_hours: default_24(),
         }
     }
@@ -309,12 +303,6 @@ fn default_1000() -> usize {
 }
 fn default_24() -> u64 {
     24
-}
-fn default_project_db() -> String {
-    "./data/project.db".into()
-}
-fn default_user_db() -> String {
-    "./data/user.db".into()
 }
 
 // ===== 配置加载 =====
