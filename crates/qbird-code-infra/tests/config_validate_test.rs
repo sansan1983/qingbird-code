@@ -196,8 +196,20 @@ fn test_validate_aggregates_all_errors() {
 
 #[test]
 fn test_default_config_passes_all() {
+    // Ensure the active provider's env var is set so rule 2 passes.
+    // SAFETY: test-only; DEEPSEEK_API_KEY restored at end.
+    let key = "DEEPSEEK_API_KEY";
+    let original = std::env::var(key).ok();
+    unsafe {
+        std::env::set_var(key, "sk-test-dummy");
+    }
     let cfg = EflowConfig::default();
     let errors = validate_config(&cfg);
+    // Restore
+    match original {
+        Some(v) => unsafe { std::env::set_var(key, v) },
+        None => unsafe { std::env::remove_var(key) },
+    }
     assert!(
         errors.is_empty(),
         "default config should pass all rules, got: {errors:?}"
