@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use qbird_code_infra::http_client::HttpLlmClient;
-use qbird_code_infra::providers::{ProtocolKind, Provider, ProviderKind};
+use qbird_code_infra::providers::{ProtocolKind, Provider, ProviderKind, StreamEvent};
 use qbird_code_models::RetryPolicy;
 use serde_json::Value;
 
@@ -49,6 +49,18 @@ impl Provider for MockProvider {
         let mut h = std::collections::HashMap::new();
         h.insert("authorization".into(), "Bearer test".into());
         h
+    }
+    async fn stream(
+        &self,
+        _http_client: &HttpLlmClient,
+        _messages: &[qbird_code_models::Message],
+        _config: &qbird_code_infra::providers::RequestConfig,
+    ) -> qbird_code_models::Result<tokio::sync::mpsc::Receiver<StreamEvent>> {
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let _ = tx
+            .send(StreamEvent::Error("mock: streaming not supported".into()))
+            .await;
+        Ok(rx)
     }
 }
 

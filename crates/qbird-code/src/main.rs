@@ -57,6 +57,14 @@ struct Cli {
         value_parser = clap::builder::PossibleValuesParser::new(["zh-CN", "en-US"])
     )]
     lang: Option<String>,
+
+    /// Enable streaming mode (typewriter output)
+    #[arg(long, default_value = "false")]
+    stream: bool,
+
+    /// Disable streaming mode (overrides --stream)
+    #[arg(long, default_value = "false")]
+    no_stream: bool,
 }
 
 fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message {
@@ -253,6 +261,9 @@ async fn main() {
 
     tracing::info!("Startup: provider={}, model={}", active, model);
 
+    // Streaming mode: --stream enables, --no-stream disables (default: off)
+    let stream_enabled = cli.stream && !cli.no_stream;
+
     // === 4. 初始化工具注册表 ===
     let mut registry = ToolRegistry::new();
     registry.register(Arc::new(ReadFileTool));
@@ -303,6 +314,7 @@ async fn main() {
             temperature: cli.temperature,
             thinking_enabled,
             thinking_effort: thinking_effort.clone(),
+            stream_enabled,
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![
@@ -342,6 +354,7 @@ async fn main() {
             temperature: cli.temperature,
             thinking_enabled,
             thinking_effort: thinking_effort.clone(),
+            stream_enabled,
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![build_system_message(&tool_registry, &active)];

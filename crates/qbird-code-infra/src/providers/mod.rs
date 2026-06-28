@@ -4,6 +4,8 @@ pub mod deepseek_anthropic;
 pub mod ollama;
 pub mod openai;
 pub mod stream;
+pub mod stream_format;
+pub mod stream_parser;
 
 pub use anthropic::AnthropicProvider;
 pub use deepseek::DeepseekProvider;
@@ -16,6 +18,8 @@ use qbird_code_models::{Message, Result, UsageStats};
 use serde::{Deserialize, Serialize};
 
 use crate::http_client::HttpLlmClient;
+
+pub use stream_format::{StreamEvent, StreamFormat, ToolCallDelta};
 
 /// Provider 标识
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -101,6 +105,14 @@ pub trait Provider: Send + Sync {
         }
     }
 
+    /// SSE format used by this provider's streaming API.
+    fn stream_format(&self) -> StreamFormat {
+        match self.protocol() {
+            ProtocolKind::OpenAICompatible => StreamFormat::OpenAICompatible,
+            ProtocolKind::Anthropic => StreamFormat::Anthropic,
+        }
+    }
+
     /// 构建 HTTP 请求体 (JSON)
     fn build_request_body(&self, messages: &[Message], config: &RequestConfig)
     -> serde_json::Value;
@@ -111,20 +123,11 @@ pub trait Provider: Send + Sync {
     /// 构建 HTTP 请求 headers
     fn build_headers(&self) -> std::collections::HashMap<String, String>;
 
-    /// 发送流式请求。返回完整响应（默认回退到非流式）
+    /// 发送流式请求。返回事件接收器。
     async fn stream(
         &self,
         http_client: &HttpLlmClient,
         messages: &[Message],
         config: &RequestConfig,
-    ) -> Result<ChatResponse>
-    where
-        Self: Sized,
-    {
-        let mut req_config = config.clone();
-        req_config.stream = true;
-        let body = self.build_request_body(messages, &req_config);
-        let response_json = http_client.send(self, &body).await?;
-        self.parse_response(&response_json).await
-    }
+    ) -> Result<tokio::sync::mpsc::Receiver<StreamEvent>>;
 }

@@ -97,4 +97,34 @@ impl HttpLlmClient {
 
         Err(qbird_code_models::EflowError::LlmProvider(last_error))
     }
+
+    /// Send a streaming HTTP request and return the response as a byte stream.
+    /// Caller is responsible for SSE parsing.
+    pub async fn send_streaming(
+        &self,
+        provider: &dyn Provider,
+        body: &Value,
+    ) -> Result<reqwest::Response> {
+        let endpoint = provider.endpoint();
+        let headers = provider.build_headers();
+
+        let mut req = self.client.post(&endpoint).json(body);
+        for (k, v) in &headers {
+            req = req.header(k.as_str(), v.as_str());
+        }
+
+        let resp = req.send().await.map_err(|e| {
+            qbird_code_models::EflowError::LlmProvider(format!("Stream request failed: {e}"))
+        })?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(qbird_code_models::EflowError::LlmProvider(format!(
+                "Stream HTTP {status}: {text}"
+            )));
+        }
+
+        Ok(resp)
+    }
 }

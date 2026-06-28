@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use qbird_code_infra::http_client::HttpLlmClient;
 use qbird_code_infra::memory::{ContextManager, MemoryManager};
-use qbird_code_infra::providers::{Provider, RequestConfig};
+use qbird_code_infra::providers::{Provider, RequestConfig, StreamEvent};
 use qbird_code_models::{EflowError, Message, ToolCall, UsageStats};
 use qbird_code_tools::ToolRegistry;
 
@@ -85,12 +85,12 @@ impl ReactLoop {
             // === Nudge 检测（连续只读/无工具/接近上限） ===
             hooks.apply_pre_llm_nudges(&mut state, messages);
 
-            // === IO: 调 LLM ===
+            // === IO: 调 LLM（流式或非流式） ===
             let request_config = RequestConfig {
                 model: self.config.model.clone(),
                 temperature: self.config.temperature,
                 max_tokens: self.config.max_tokens,
-                stream: false,
+                stream: self.config.stream_enabled,
                 thinking_enabled: self.config.thinking_enabled,
                 thinking_effort: if self.config.thinking_effort.is_empty() {
                     None
@@ -100,9 +100,109 @@ impl ReactLoop {
                 tools: tool_schemas.to_vec(),
             };
 
-            let body = provider.build_request_body(messages, &request_config);
-            let response_json = http_client.send(provider, &body).await?;
-            let chat_response = provider.parse_response(&response_json).await?;
+            let chat_response = if self.config.stream_enabled {
+                // Streaming path: try stream, fallback to non-streaming
+                match provider
+                    .stream(http_client, messages, &request_config)
+                    .await
+                {
+                    Ok(mut rx) => {
+                        let mut accumulated_content = String::new();
+                        let mut accumulated_reasoning = String::new();
+                        let mut tool_call_buffers: std::collections::HashMap<
+                            usize,
+                            (Option<String>, Option<String>, String),
+                        > = std::collections::HashMap::new();
+                        let mut final_resp = None;
+
+                        while let Some(event) = rx.recv().await {
+                            match event {
+                                StreamEvent::TextDelta(text) => {
+                                    print!("{}", text);
+                                    use std::io::Write;
+                                    let _ = std::io::stdout().flush();
+                                    accumulated_content.push_str(&text);
+                                }
+                                StreamEvent::ReasoningDelta(text) => {
+                                    accumulated_reasoning.push_str(&text);
+                                }
+                                StreamEvent::ToolCallDelta { index, delta } => {
+                                    let entry = tool_call_buffers.entry(index).or_default();
+                                    if let Some(id) = delta.id {
+                                        entry.0 = Some(id);
+                                    }
+                                    if let Some(name) = delta.name {
+                                        entry.1 = Some(name);
+                                    }
+                                    entry.2.push_str(&delta.arguments_delta);
+                                }
+                                StreamEvent::Done(mut resp) => {
+                                    // Fill accumulated content into response
+                                    resp.content = accumulated_content.clone();
+                                    if !accumulated_reasoning.is_empty() {
+                                        resp.reasoning_content =
+                                            Some(accumulated_reasoning.clone());
+                                    }
+                                    // Build tool_calls from buffers
+                                    if !tool_call_buffers.is_empty() {
+                                        let mut sorted: Vec<_> = tool_call_buffers.iter().collect();
+                                        sorted.sort_by_key(|(i, _)| **i);
+                                        let calls: Vec<serde_json::Value> = sorted
+                                            .iter()
+                                            .map(|(_, (id, name, args))| {
+                                                serde_json::json!({
+                                                    "id": id.clone().unwrap_or_default(),
+                                                    "type": "function",
+                                                    "function": {
+                                                        "name": name.clone().unwrap_or_default(),
+                                                        "arguments": args,
+                                                    }
+                                                })
+                                            })
+                                            .collect();
+                                        resp.tool_calls = Some(calls);
+                                    }
+                                    final_resp = Some(resp);
+                                    break;
+                                }
+                                StreamEvent::Error(e) => {
+                                    tracing::warn!(
+                                        "Stream error, falling back to non-streaming: {}",
+                                        e
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+                        println!(); // newline after streaming
+
+                        match final_resp {
+                            Some(r) => r,
+                            None => {
+                                // Fallback to non-streaming
+                                tracing::warn!(
+                                    "Streaming incomplete, falling back to non-streaming"
+                                );
+                                let body = provider.build_request_body(messages, &request_config);
+                                let response_json = http_client.send(provider, &body).await?;
+                                provider.parse_response(&response_json).await?
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // Stream init failed, fallback to non-streaming
+                        tracing::warn!("Stream init failed ({}), falling back to non-streaming", e);
+                        let body = provider.build_request_body(messages, &request_config);
+                        let response_json = http_client.send(provider, &body).await?;
+                        provider.parse_response(&response_json).await?
+                    }
+                }
+            } else {
+                // Non-streaming path (existing)
+                let body = provider.build_request_body(messages, &request_config);
+                let response_json = http_client.send(provider, &body).await?;
+                provider.parse_response(&response_json).await?
+            };
 
             state.total_prompt_tokens += chat_response.usage.prompt_tokens;
             state.total_completion_tokens += chat_response.usage.completion_tokens;
