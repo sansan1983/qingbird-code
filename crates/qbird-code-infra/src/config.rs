@@ -35,10 +35,10 @@ fn default_timezone() -> String {
 
 // ===== LLM 配置 =====
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     /// 当前激活的 provider
-    #[serde(default)]
+    #[serde(default = "default_active_provider")]
     pub active: String,
     #[serde(default)]
     pub deepseek: DeepseekConfig,
@@ -50,6 +50,23 @@ pub struct LlmConfig {
     pub anthropic: AnthropicConfig,
     #[serde(default)]
     pub cache: CacheConfig,
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            active: default_active_provider(),
+            deepseek: DeepseekConfig::default(),
+            ollama: OllamaConfig::default(),
+            openai: OpenaiConfig::default(),
+            anthropic: AnthropicConfig::default(),
+            cache: CacheConfig::default(),
+        }
+    }
+}
+
+fn default_active_provider() -> String {
+    "deepseek".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,7 +154,7 @@ pub struct CacheConfig {
 
 // ===== Memory/Security/Profiles =====
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryConfig {
     #[serde(default = "default_1000")]
     pub working_memory_limit: usize,
@@ -147,6 +164,17 @@ pub struct MemoryConfig {
     pub user_db_path: String,
     #[serde(default = "default_24")]
     pub cleanup_interval_hours: u64,
+}
+
+impl Default for MemoryConfig {
+    fn default() -> Self {
+        Self {
+            working_memory_limit: default_1000(),
+            project_db_path: default_project_db(),
+            user_db_path: default_user_db(),
+            cleanup_interval_hours: default_24(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

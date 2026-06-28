@@ -2,6 +2,9 @@ _system_prompt: |
   你是 qingbird，一个高效的多层 Agent 协作框架的入口。
 err_config_load: "加载配置失败: %{msg}"
 err_api_key_missing: "未配置 API Key。请在 qingbird.yaml 中设置 api_key，或设置 %{env_var} 环境变量"
+cfg_err_invalid_active: "llm.active 无效: '%{value}'，合法值: %{valid}"
+cfg_err_profile_not_found: "profile 文件不存在: %{path}"
+cfg_err_zero_mem_limit: "memory.working_memory_limit 必须大于 0"
 err_profile_not_found: "未找到 profile: %{name}"
 
 err_tool_not_found: "未找到工具: %{name}"

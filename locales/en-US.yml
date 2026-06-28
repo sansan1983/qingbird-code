@@ -2,6 +2,9 @@ _system_prompt: |
   You are qingbird, the entry point of an efficient multi-layer Agent collaboration framework.
 err_config_load: "Failed to load config: %{msg}"
 err_api_key_missing: "API Key not configured. Set api_key in qingbird.yaml, or set the %{env_var} environment variable"
+cfg_err_invalid_active: "Invalid llm.active: '%{value}'. Valid values: %{valid}"
+cfg_err_profile_not_found: "Profile file not found: %{path}"
+cfg_err_zero_mem_limit: "memory.working_memory_limit must be greater than 0"
 err_profile_not_found: "Profile not found: %{name}"
 
 err_tool_not_found: "Tool not found: %{name}"
