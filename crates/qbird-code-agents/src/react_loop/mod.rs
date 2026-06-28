@@ -66,6 +66,7 @@ impl ReactLoop {
 
             // === IO: 调 LLM ===
             let request_config = RequestConfig {
+                model: self.config.model.clone(),
                 temperature: self.config.temperature,
                 max_tokens: self.config.max_tokens,
                 stream: false,

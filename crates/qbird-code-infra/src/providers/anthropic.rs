@@ -84,8 +84,13 @@ impl Provider for AnthropicProvider {
             })
             .collect();
 
+        let model = if config.model.is_empty() {
+            self.config.default_model.clone()
+        } else {
+            config.model.clone()
+        };
         let mut body = json!({
-            "model": self.config.default_model,
+            "model": model,
             "max_tokens": config.max_tokens.unwrap_or(4096),
             "messages": anthropic_msgs,
         });
@@ -409,6 +414,7 @@ mod tests {
             }
         });
         let req_cfg = RequestConfig {
+            model: String::new(),
             temperature: Some(0.5),
             max_tokens: Some(2048),
             stream: false,

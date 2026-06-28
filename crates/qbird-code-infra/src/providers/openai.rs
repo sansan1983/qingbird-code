@@ -34,8 +34,13 @@ impl Provider for OpenAIProvider {
     }
 
     fn build_request_body(&self, messages: &[Message], config: &RequestConfig) -> Value {
+        let model = if config.model.is_empty() {
+            self.config.default_model.clone()
+        } else {
+            config.model.clone()
+        };
         let mut body = serde_json::json!({
-            "model": self.config.default_model,
+            "model": model,
             "messages": messages.iter().map(|m| serde_json::json!({
                 "role": m.role_str(),
                 "content": m.content,
@@ -155,6 +160,7 @@ mod tests {
             }
         });
         let req_cfg = RequestConfig {
+            model: String::new(),
             temperature: Some(0.5),
             max_tokens: Some(2048),
             stream: false,

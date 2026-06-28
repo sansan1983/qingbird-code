@@ -126,8 +126,13 @@ impl Provider for DeepseekAnthropicProvider {
             })
             .collect();
 
+        let model = if config.model.is_empty() {
+            self.config.default_model.clone()
+        } else {
+            config.model.clone()
+        };
         let mut body = json!({
-            "model": self.config.default_model,
+            "model": model,
             "max_tokens": config.max_tokens.unwrap_or(4096),
             "messages": anthropic_msgs,
         });
@@ -305,6 +310,7 @@ mod tests {
             name: None,
         }];
         let req_cfg = RequestConfig {
+            model: String::new(),
             temperature: None,
             max_tokens: Some(8192),
             stream: false,

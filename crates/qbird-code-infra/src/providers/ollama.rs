@@ -46,10 +46,15 @@ impl Provider for OllamaProvider {
     }
 
     fn build_request_body(&self, messages: &[Message], config: &RequestConfig) -> Value {
+        let model = if config.model.is_empty() {
+            self.config.default_model.clone()
+        } else {
+            config.model.clone()
+        };
         let mut body = json!({
-            "model": self.config.default_model,
+            "model": model,
             "messages": Self::to_openai_messages(messages),
-            "stream": false,
+            "stream": config.stream,
         });
 
         if !config.tools.is_empty() {
@@ -183,6 +188,7 @@ mod tests {
             }
         });
         let req_cfg = RequestConfig {
+            model: String::new(),
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -252,6 +258,7 @@ mod tests {
             name: None,
         }];
         let req_cfg = RequestConfig {
+            model: String::new(),
             temperature: Some(0.5),
             max_tokens: Some(2048),
             stream: false,

@@ -14,6 +14,7 @@ use qbird_code_infra::memory::SessionStore;
 use qbird_code_infra::providers::{
     AnthropicProvider, DeepseekAnthropicProvider, DeepseekProvider, OllamaProvider, OpenAIProvider,
 };
+use qbird_code_infra::runtime_overrides::{CliOverrides, RuntimeOverrides};
 use qbird_code_models::Message;
 use qbird_code_tools::{
     ExecuteCommandTool, GlobTool, ListDirTool, ReadFileTool, SearchCodeTool, ToolRegistry,
@@ -118,7 +119,7 @@ async fn main() {
         std::process::exit(1);
     });
 
-    let mut cfg = match load_config(&config_path) {
+    let cfg = match load_config(&config_path) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("{}", e.user_message());
@@ -131,25 +132,18 @@ async fn main() {
     let active_locale = qbird_code_infra::locale::init(resolved_locale_input);
     tracing::info!(locale = active_locale, "locale activated");
 
-    // --provider 命令行参数覆盖 config 中的 llm.active
-    if let Some(ref provider) = cli.provider {
-        cfg.llm.active = provider.clone();
-    }
-
-    // 解析当前 provider 的默认模型，--model 可覆盖
-    let default_model = match cfg.llm.active.as_str() {
-        "deepseek" | "deepseek-anthropic" => &cfg.llm.deepseek.default_model,
-        "ollama" => &cfg.llm.ollama.default_model,
-        "openai" => &cfg.llm.openai.default_model,
-        "anthropic" => &cfg.llm.anthropic.default_model,
-        _ => "",
-    };
-    let model = cli
-        .model
-        .clone()
-        .unwrap_or_else(|| default_model.to_string());
-    // === 3. 初始化基础设施（根据 cfg.llm.active 路由） ===
-    let active = cfg.llm.active.clone();
+    // --provider/--model/--temperature 命令行参数 → RuntimeOverrides（不 mutate cfg）
+    let mut overrides = RuntimeOverrides::from_cli(
+        &CliOverrides {
+            provider: cli.provider.clone(),
+            model: cli.model.clone(),
+            temperature: cli.temperature,
+        },
+        &cfg,
+    );
+    let model = overrides.resolved_model(&cfg);
+    // === 3. 初始化基础设施（根据 overrides.provider 路由） ===
+    let active = overrides.current_provider().to_string();
     let (http_client, provider) = match active.as_str() {
         "deepseek" => init_llm(
             cfg.llm.deepseek.timeout_secs,
@@ -194,7 +188,7 @@ async fn main() {
         }
     };
     // 检查 API Key 是否已配置（仅远程 Provider）
-    let env_var = match cfg.llm.active.as_str() {
+    let env_var = match active.as_str() {
         "deepseek" | "deepseek-anthropic" => {
             let key_empty = cfg
                 .llm
@@ -241,7 +235,7 @@ async fn main() {
         std::process::exit(1);
     }
 
-    tracing::info!("Startup: provider={}, model={}", cfg.llm.active, model);
+    tracing::info!("Startup: provider={}, model={}", active, model);
 
     // === 4. 初始化工具注册表 ===
     let mut registry = ToolRegistry::new();
@@ -254,7 +248,7 @@ async fn main() {
     registry.register(Arc::new(WebFetchTool));
     registry.set_allowed_paths(cfg.security.allowed_paths.clone());
     // 提取 thinking 配置（仅 DeepSeek 支持）
-    let (thinking_enabled, thinking_effort) = match cfg.llm.active.as_str() {
+    let (thinking_enabled, thinking_effort) = match active.as_str() {
         "deepseek" | "deepseek-anthropic" => (
             cfg.llm.deepseek.thinking_enabled,
             cfg.llm.deepseek.thinking_effort.clone(),
@@ -294,7 +288,7 @@ async fn main() {
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![
-            build_system_message(&tool_registry, &cfg.llm.active),
+            build_system_message(&tool_registry, &active),
             Message::user(&prompt),
         ];
 
@@ -331,7 +325,7 @@ async fn main() {
             thinking_effort: thinking_effort.clone(),
             ..ReactLoopConfig::default()
         });
-        let mut messages = vec![build_system_message(&tool_registry, &cfg.llm.active)];
+        let mut messages = vec![build_system_message(&tool_registry, &active)];
         let mut cumulative_prompt: u64 = 0;
         let mut cumulative_completion: u64 = 0;
 
@@ -400,6 +394,13 @@ async fn main() {
                                 value = format!("{:?}", react_loop.config.temperature)
                             )
                         );
+                        println!(
+                            "{}",
+                            t!(
+                                "interactive_help_provider",
+                                name = overrides.current_provider()
+                            )
+                        );
                         println!("{}", t!("interactive_help_usage"));
                         println!("{}", t!("interactive_help_sessions"));
                         println!("{}", t!("interactive_help_session_load"));
@@ -411,7 +412,6 @@ async fn main() {
                         println!();
                         println!("{}", t!("interactive_help_undo_planned"));
                         println!("{}", t!("interactive_help_profile_planned"));
-                        println!("{}", t!("interactive_help_provider_planned"));
                         println!("{}", t!("interactive_help_session_delete_planned"));
                         println!();
                     }
@@ -514,8 +514,10 @@ async fn main() {
                                 t!("interactive_model_current", name = react_loop.config.model)
                             );
                         } else {
-                            react_loop.config.model = arg.to_string();
-                            println!("{}", t!("interactive_model_switched", name = arg));
+                            overrides.set_model(arg.to_string());
+                            let resolved = overrides.resolved_model(&cfg);
+                            react_loop.config.model = resolved.clone();
+                            println!("{}", t!("interactive_model_switched", name = resolved));
                         }
                     }
                     "/sdd" => {
@@ -628,10 +630,42 @@ async fn main() {
                         } else {
                             match arg.parse::<f64>() {
                                 Ok(t) if (0.0..=2.0).contains(&t) => {
+                                    overrides.set_temperature(t);
                                     react_loop.config.temperature = Some(t);
                                     println!("{}", t!("interactive_temp_set", value = t));
                                 }
                                 _ => println!("{}", t!("interactive_temp_invalid")),
+                            }
+                        }
+                    }
+                    "/provider" => {
+                        const SUPPORTED: &[&str] = &[
+                            "deepseek",
+                            "deepseek-anthropic",
+                            "ollama",
+                            "openai",
+                            "anthropic",
+                        ];
+                        if arg.is_empty() {
+                            println!(
+                                "{}",
+                                t!(
+                                    "interactive_provider_current",
+                                    name = overrides.current_provider()
+                                )
+                            );
+                        } else if !SUPPORTED.contains(&arg) {
+                            println!("{}", t!("interactive_provider_invalid", name = arg));
+                        } else {
+                            let new = arg.to_string();
+                            let needs_model_reset =
+                                overrides.model.is_some() && overrides.current_provider() != new;
+                            overrides.set_provider(new.clone());
+                            let resolved = overrides.resolved_model(&cfg);
+                            react_loop.config.model = resolved;
+                            println!("{}", t!("interactive_provider_switched", name = new));
+                            if needs_model_reset {
+                                println!("{}", t!("interactive_provider_reset_model"));
                             }
                         }
                     }

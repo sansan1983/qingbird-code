@@ -39,6 +39,10 @@ pub enum ProtocolKind {
 /// 请求配置
 #[derive(Debug, Clone)]
 pub struct RequestConfig {
+    /// Model name to use for this request. Providers should use this
+    /// (resolved at startup from `RuntimeOverrides`) rather than their
+    /// own `default_model`, so `--model fast` and `/model` actually take effect.
+    pub model: String,
     pub temperature: Option<f64>,
     pub max_tokens: Option<u64>,
     pub stream: bool,
@@ -53,6 +57,7 @@ pub struct RequestConfig {
 impl Default for RequestConfig {
     fn default() -> Self {
         Self {
+            model: String::new(),
             temperature: Some(0.7),
             max_tokens: Some(4096),
             stream: false,

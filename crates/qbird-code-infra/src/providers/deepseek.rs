@@ -67,8 +67,13 @@ impl Provider for DeepseekProvider {
     }
 
     fn build_request_body(&self, messages: &[Message], config: &RequestConfig) -> Value {
+        let model = if config.model.is_empty() {
+            self.config.default_model.clone()
+        } else {
+            config.model.clone()
+        };
         let mut body = json!({
-            "model": self.config.default_model,
+            "model": model,
             "messages": Self::to_openai_messages(messages),
             "stream": config.stream,
         });
@@ -337,6 +342,7 @@ mod tests {
             }
         });
         let req_cfg = RequestConfig {
+            model: String::new(),
             temperature: None,
             max_tokens: None,
             stream: false,
