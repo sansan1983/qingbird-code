@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use qbird_code_models::Result;
+use qbird_code_models::{Result, RetryPolicy};
 use reqwest::Client;
 use serde_json::Value;
 
@@ -9,12 +9,13 @@ use crate::providers::Provider;
 /// 统一 HTTP 客户端 — 支持 OpenAI 和 Anthropic 两种协议
 pub struct HttpLlmClient {
     client: Client,
-    max_retries: u8,
-    retry_backoff_ms: u64,
+    /// Retry policy (max retries, exponential backoff with max cap).
+    /// Defaults to `RetryPolicy::default()` (3 retries, 1s → 2s → 4s, capped at 30s).
+    retry_policy: RetryPolicy,
 }
 
 impl HttpLlmClient {
-    pub fn new(timeout_secs: u64, max_retries: u8, retry_backoff_ms: u64) -> Result<Self> {
+    pub fn new(timeout_secs: u64, retry_policy: RetryPolicy) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
             .build()
@@ -22,8 +23,7 @@ impl HttpLlmClient {
 
         Ok(Self {
             client,
-            max_retries,
-            retry_backoff_ms,
+            retry_policy,
         })
     }
 
@@ -34,7 +34,7 @@ impl HttpLlmClient {
 
         let mut last_error = String::new();
 
-        for attempt in 0..=self.max_retries {
+        for attempt in 0..=self.retry_policy.max_retries {
             let mut req = self.client.post(&endpoint).json(body);
 
             for (k, v) in &headers {
@@ -69,7 +69,7 @@ impl HttpLlmClient {
                             .get("retry-after")
                             .and_then(|v| v.to_str().ok())
                             .and_then(|v| v.parse::<u64>().ok())
-                            .unwrap_or(self.retry_backoff_ms / 1000);
+                            .unwrap_or(self.retry_policy.initial_backoff_ms / 1000);
                         tokio::time::sleep(Duration::from_secs(retry_after)).await;
                         continue;
                     }
@@ -89,8 +89,8 @@ impl HttpLlmClient {
                 }
             }
 
-            if attempt < self.max_retries {
-                let backoff = self.retry_backoff_ms * 2u64.pow(attempt as u32);
+            if attempt < self.retry_policy.max_retries {
+                let backoff = self.retry_policy.backoff_for_attempt(attempt);
                 tokio::time::sleep(Duration::from_millis(backoff)).await;
             }
         }

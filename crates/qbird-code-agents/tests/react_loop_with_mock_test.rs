@@ -140,8 +140,16 @@ async fn test_agent_full_react_loop() {
         ..Default::default()
     };
 
-    let http_client = HttpLlmClient::new(cfg.timeout_secs, cfg.max_retries, cfg.retry_backoff_ms)
-        .expect("Failed to create HTTP client");
+    let http_client = HttpLlmClient::new(
+        cfg.timeout_secs,
+        qbird_code_models::RetryPolicy {
+            max_retries: u32::from(cfg.max_retries),
+            initial_backoff_ms: cfg.retry_backoff_ms,
+            backoff_multiplier: 2.0,
+            max_backoff_ms: 30_000,
+        },
+    )
+    .expect("Failed to create HTTP client");
     let provider = DeepseekProvider::new(cfg).expect("Failed to create provider");
 
     let mut registry = ToolRegistry::new();

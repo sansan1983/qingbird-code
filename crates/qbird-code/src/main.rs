@@ -15,7 +15,7 @@ use qbird_code_infra::providers::{
     AnthropicProvider, DeepseekAnthropicProvider, DeepseekProvider, OllamaProvider, OpenAIProvider,
 };
 use qbird_code_infra::runtime_overrides::{CliOverrides, RuntimeOverrides};
-use qbird_code_models::Message;
+use qbird_code_models::{Message, RetryPolicy};
 use qbird_code_tools::{
     ExecuteCommandTool, GlobTool, ListDirTool, ReadFileTool, SearchCodeTool, ToolRegistry,
     WebFetchTool, WriteFileTool,
@@ -74,8 +74,7 @@ fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message
 
 fn init_llm(
     timeout_secs: u64,
-    max_retries: u8,
-    retry_backoff_ms: u64,
+    retry_policy: RetryPolicy,
     provider_result: qbird_code_models::Result<
         impl qbird_code_infra::providers::Provider + 'static,
     >,
@@ -83,7 +82,7 @@ fn init_llm(
     HttpLlmClient,
     Box<dyn qbird_code_infra::providers::Provider>,
 ) {
-    let http = match HttpLlmClient::new(timeout_secs, max_retries, retry_backoff_ms) {
+    let http = match HttpLlmClient::new(timeout_secs, retry_policy) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("{}", t!("err_http_client_init", msg = e));
@@ -98,6 +97,19 @@ fn init_llm(
         }
     };
     (http, Box::new(provider))
+}
+
+/// Map a provider's legacy (max_retries, retry_backoff_ms) pair onto the
+/// plan-shape `RetryPolicy`. Used during 19-09 transition; later (when
+/// cfg adds a top-level `retry_policy` block) this helper will read that
+/// block directly.
+fn legacy_retry_policy(max_retries: u8, retry_backoff_ms: u64) -> RetryPolicy {
+    RetryPolicy {
+        max_retries: u32::from(max_retries),
+        initial_backoff_ms: retry_backoff_ms,
+        backoff_multiplier: 2.0,
+        max_backoff_ms: 30_000,
+    }
 }
 
 #[tokio::main]
@@ -147,32 +159,36 @@ async fn main() {
     let (http_client, provider) = match active.as_str() {
         "deepseek" => init_llm(
             cfg.llm.deepseek.timeout_secs,
-            cfg.llm.deepseek.max_retries,
-            cfg.llm.deepseek.retry_backoff_ms,
+            legacy_retry_policy(
+                cfg.llm.deepseek.max_retries,
+                cfg.llm.deepseek.retry_backoff_ms,
+            ),
             DeepseekProvider::new(cfg.llm.deepseek.clone()),
         ),
         "deepseek-anthropic" => init_llm(
             cfg.llm.deepseek.timeout_secs,
-            cfg.llm.deepseek.max_retries,
-            cfg.llm.deepseek.retry_backoff_ms,
+            legacy_retry_policy(
+                cfg.llm.deepseek.max_retries,
+                cfg.llm.deepseek.retry_backoff_ms,
+            ),
             DeepseekAnthropicProvider::new(cfg.llm.deepseek.clone()),
         ),
         "ollama" => init_llm(
             cfg.llm.ollama.timeout_secs,
-            cfg.llm.ollama.max_retries,
-            cfg.llm.ollama.retry_backoff_ms,
+            legacy_retry_policy(cfg.llm.ollama.max_retries, cfg.llm.ollama.retry_backoff_ms),
             OllamaProvider::new(cfg.llm.ollama.clone()),
         ),
         "openai" => init_llm(
             cfg.llm.openai.timeout_secs,
-            cfg.llm.openai.max_retries,
-            cfg.llm.openai.retry_backoff_ms,
+            legacy_retry_policy(cfg.llm.openai.max_retries, cfg.llm.openai.retry_backoff_ms),
             OpenAIProvider::new(cfg.llm.openai.clone()),
         ),
         "anthropic" => init_llm(
             cfg.llm.anthropic.timeout_secs,
-            cfg.llm.anthropic.max_retries,
-            cfg.llm.anthropic.retry_backoff_ms,
+            legacy_retry_policy(
+                cfg.llm.anthropic.max_retries,
+                cfg.llm.anthropic.retry_backoff_ms,
+            ),
             AnthropicProvider::new(cfg.llm.anthropic.clone()),
         ),
         other => {
