@@ -186,6 +186,7 @@ async fn test_agent_full_react_loop() {
             &tool_registry,
             Some(10),
             None,
+            None,
         )
         .await
         .expect("Agent loop should succeed");

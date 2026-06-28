@@ -7,7 +7,7 @@ pub use types::{AgentHook, AgentResult, HookAction, LoopState, ReactLoopConfig, 
 use std::sync::Arc;
 
 use qbird_code_infra::http_client::HttpLlmClient;
-use qbird_code_infra::memory::ContextManager;
+use qbird_code_infra::memory::{ContextManager, MemoryManager};
 use qbird_code_infra::providers::{Provider, RequestConfig};
 use qbird_code_models::{EflowError, Message, ToolCall, UsageStats};
 use qbird_code_tools::ToolRegistry;
@@ -39,13 +39,34 @@ impl ReactLoop {
         tool_registry: &Arc<ToolRegistry>,
         max_iterations_override: Option<usize>,
         mut context_manager: Option<&mut ContextManager>,
+        memory_manager: Option<Arc<MemoryManager>>,
     ) -> Result<AgentResult, EflowError> {
         let max_iters = max_iterations_override.unwrap_or(self.config.max_iterations);
         let mut state = LoopState::new();
         let mut hooks = AgentHooks::new(&self.config);
+        let mut memory_injected_this_turn = false;
 
         loop {
             state.iteration += 1;
+
+            // === 19-02: MemoryManager recall — inject once per user turn ===
+            if let Some(ref mm) = memory_manager
+                && !memory_injected_this_turn
+            {
+                if let Some(last_user) = messages.iter().rev().find(|m| m.role_str() == "user") {
+                    let recalled = mm.recall(&last_user.content, 500).await;
+                    if !recalled.is_empty() {
+                        let mut prefix = String::from("[memory]\n");
+                        for r in &recalled {
+                            prefix.push_str(&r.entry.body);
+                            prefix.push('\n');
+                        }
+                        messages.push(Message::system(prefix));
+                        tracing::info!("Memory recall: {} entries injected", recalled.len());
+                    }
+                }
+                memory_injected_this_turn = true;
+            }
 
             // === 决策: 超限检查 ===
             if let Some(msg) = r#loop::check_max_iterations(&state, max_iters) {
@@ -105,6 +126,25 @@ impl ReactLoop {
                 }
                 if let Some(event) = cm.checkpoint_if_needed() {
                     tracing::info!("Context checkpoint: {:?}", event);
+                }
+            }
+
+            // 19-02: save assistant content to memory (async, fire-and-forget)
+            if let Some(ref mm) = memory_manager
+                && let Some(assistant_msg) =
+                    messages.iter().rev().find(|m| m.role_str() == "assistant")
+            {
+                let content = assistant_msg.content.clone();
+                let path = format!("turn-{}", state.iteration);
+                if let Ok(handle) =
+                    mm.clone()
+                        .save_with_summarization(content, "user".into(), Some(&path))
+                {
+                    tokio::spawn(async move {
+                        if let Err(e) = handle.await {
+                            tracing::warn!("Memory save failed: {}", e);
+                        }
+                    });
                 }
             }
 

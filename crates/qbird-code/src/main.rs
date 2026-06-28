@@ -10,7 +10,7 @@ use qbird_code_agents::skill::{SddProposal, SkillContext, SkillRegistry};
 use qbird_code_agents::{ReactLoop, ReactLoopConfig};
 use qbird_code_infra::config::{find_config, load_config};
 use qbird_code_infra::http_client::HttpLlmClient;
-use qbird_code_infra::memory::SessionStore;
+use qbird_code_infra::memory::{MemoryManager, SessionStore};
 use qbird_code_infra::providers::{
     AnthropicProvider, DeepseekAnthropicProvider, DeepseekProvider, OllamaProvider, OpenAIProvider,
 };
@@ -319,6 +319,7 @@ async fn main() {
                 &tool_registry,
                 None,
                 None,
+                None, // no memory manager in --execute mode
             )
             .await
         {
@@ -361,6 +362,24 @@ async fn main() {
             "interactive".into(),
             react_loop.config.context_token_limit,
         );
+
+        // 19-02: init MemoryManager (XDG default path, auto-create parent)
+        let memory_manager = match MemoryManager::default_db_path() {
+            Ok(db_path) => match MemoryManager::open(&db_path) {
+                Ok(mm) => {
+                    tracing::info!("MemoryManager opened: {}", db_path.display());
+                    Some(Arc::new(mm))
+                }
+                Err(e) => {
+                    tracing::warn!("MemoryManager open failed (disabled): {}", e);
+                    None
+                }
+            },
+            Err(e) => {
+                tracing::warn!("MemoryManager path unavailable (disabled): {}", e);
+                None
+            }
+        };
 
         println!("{}", t!("interactive_banner"));
         println!();
@@ -718,6 +737,7 @@ async fn main() {
                     &tool_registry,
                     None,
                     Some(&mut context_manager),
+                    memory_manager.clone(),
                 )
                 .await
             {
