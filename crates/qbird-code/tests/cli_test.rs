@@ -64,5 +64,5 @@ fn test_help_succeeds() {
 fn test_version_output() {
     let (stdout, _, code) = qingbird(&["--version"]);
     assert_eq!(code, Some(0));
-    assert!(stdout.contains("0.2.18"));
+    assert!(stdout.contains("0.2.19"));
 }
