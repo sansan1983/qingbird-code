@@ -1,5 +1,16 @@
 # CLAUDE.md — qingbird
 
+## 当前状态（会话交接）
+
+| 项 | 值 |
+|--- |--- |
+| **上次会话** | 2026-06-28 |
+| **已完成** | Phase 1 (v0.2.18) 全部 12 task 已合并 main；DeepSeek API 接通修复已推送 |
+| **下一步** | Phase 2 (v0.2.19) — 从 19-04（保留类型实现）或 19-03（Streaming）开始 |
+| **当前版本** | 0.2.18 |
+| **已修复** | api_key 空字符串回退、ToolCall.type 字段缺失、工具输出显示、yaml 模型名更新 |
+| **备注** | Phase 2 计划见 `docs/superpowers/plans/2026-06-27-qingbird-v0.3-implementation-plan.md` |
+
 ## △ V0.3.0 — 日常编码助手可用态
 
 ### 关键路径
