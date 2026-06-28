@@ -34,6 +34,7 @@ fn test_message_assistant() {
 fn test_message_assistant_with_tools() {
     let tc = ToolCall {
         id: "call_1".into(),
+        r#type: "function".into(),
         function: ToolCallFunction {
             name: "read_file".into(),
             arguments: r#"{"path": "foo.txt"}"#.into(),

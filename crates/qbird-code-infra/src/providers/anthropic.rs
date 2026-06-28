@@ -180,7 +180,9 @@ impl Provider for AnthropicProvider {
         let key = self
             .config
             .api_key
-            .clone()
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(String::from)
             .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
             .unwrap_or_default();
         let mut headers = HashMap::new();
@@ -360,6 +362,7 @@ mod tests {
             reasoning_content: Some("Step-by-step reasoning...".into()),
             tool_calls: Some(vec![ToolCall {
                 id: "call_123".into(),
+                r#type: "function".into(),
                 function: qbird_code_models::ToolCallFunction {
                     name: "get_weather".into(),
                     arguments: r#"{"location": "Beijing"}"#.into(),

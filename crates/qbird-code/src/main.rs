@@ -196,21 +196,39 @@ async fn main() {
     // 检查 API Key 是否已配置（仅远程 Provider）
     let env_var = match cfg.llm.active.as_str() {
         "deepseek" | "deepseek-anthropic" => {
-            if cfg.llm.deepseek.api_key.is_none() && std::env::var("DEEPSEEK_API_KEY").is_err() {
+            let key_empty = cfg
+                .llm
+                .deepseek
+                .api_key
+                .as_deref()
+                .is_none_or(|s| s.is_empty());
+            if key_empty && std::env::var("DEEPSEEK_API_KEY").is_err() {
                 Some("DEEPSEEK_API_KEY")
             } else {
                 None
             }
         }
         "openai" => {
-            if cfg.llm.openai.api_key.is_none() && std::env::var("OPENAI_API_KEY").is_err() {
+            let key_empty = cfg
+                .llm
+                .openai
+                .api_key
+                .as_deref()
+                .is_none_or(|s| s.is_empty());
+            if key_empty && std::env::var("OPENAI_API_KEY").is_err() {
                 Some("OPENAI_API_KEY")
             } else {
                 None
             }
         }
         "anthropic" => {
-            if cfg.llm.anthropic.api_key.is_none() && std::env::var("ANTHROPIC_API_KEY").is_err() {
+            let key_empty = cfg
+                .llm
+                .anthropic
+                .api_key
+                .as_deref()
+                .is_none_or(|s| s.is_empty());
+            if key_empty && std::env::var("ANTHROPIC_API_KEY").is_err() {
                 Some("ANTHROPIC_API_KEY")
             } else {
                 None

@@ -172,6 +172,11 @@ impl ReactLoop {
             let call_id = tc.id.clone();
             let call_name = tc.function.name.clone();
 
+            println!(
+                "⚙ {}({})",
+                call_name,
+                truncate_str(&tc.function.arguments, 120)
+            );
             futures.push(async move {
                 let result = registry.execute(&name, args, task_id).await;
                 (call_id, call_name, result)
@@ -183,6 +188,7 @@ impl ReactLoop {
                 Ok(output) => output.content,
                 Err(e) => format!("错误: {}", e),
             };
+            print_tool_output(&call_name, &content);
             messages.push(Message::tool_result(call_id, call_name, content));
         }
 
@@ -201,6 +207,11 @@ impl ReactLoop {
             let args: serde_json::Value =
                 serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::json!({}));
 
+            println!(
+                "⚙ {}({})",
+                tc.function.name,
+                truncate_str(&tc.function.arguments, 120)
+            );
             let result = tool_registry
                 .execute(&tc.function.name, args, task_id)
                 .await;
@@ -208,6 +219,7 @@ impl ReactLoop {
                 Ok(output) => output.content,
                 Err(e) => format!("错误: {}", e),
             };
+            print_tool_output(&tc.function.name, &content);
             messages.push(Message::tool_result(
                 tc.id.clone(),
                 tc.function.name.clone(),
@@ -217,4 +229,26 @@ impl ReactLoop {
 
         Ok(())
     }
+}
+
+fn truncate_str(s: &str, max: usize) -> String {
+    let s = s.trim();
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}…", &s[..max])
+    }
+}
+
+fn print_tool_output(tool_name: &str, content: &str) {
+    let preview = if content.len() > 800 {
+        format!(
+            "{}…\n(truncated, {} bytes total)",
+            &content[..800],
+            content.len()
+        )
+    } else {
+        content.to_string()
+    };
+    println!("[{}]\n{}\n", tool_name, preview);
 }

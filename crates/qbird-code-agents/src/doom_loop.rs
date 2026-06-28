@@ -156,6 +156,7 @@ mod tests {
     fn make_tool_call(name: &str, args: &str) -> ToolCall {
         ToolCall {
             id: "call_1".into(),
+            r#type: "function".into(),
             function: qbird_code_models::ToolCallFunction {
                 name: name.into(),
                 arguments: args.into(),

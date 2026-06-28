@@ -35,6 +35,7 @@ pub(super) fn process_llm_response(
                 let fc = &tc["function"];
                 ToolCall {
                     id: tc["id"].as_str().unwrap_or("").to_string(),
+                    r#type: tc["type"].as_str().unwrap_or("function").to_string(),
                     function: ToolCallFunction {
                         name: fc["name"].as_str().unwrap_or("").to_string(),
                         arguments: fc["arguments"].as_str().unwrap_or("{}").to_string(),

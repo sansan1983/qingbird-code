@@ -77,7 +77,9 @@ impl Provider for OpenAIProvider {
         let key = self
             .config
             .api_key
-            .clone()
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(String::from)
             .or_else(|| std::env::var("OPENAI_API_KEY").ok())
             .unwrap_or_default();
         let mut headers = HashMap::new();

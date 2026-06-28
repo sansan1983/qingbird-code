@@ -87,7 +87,10 @@ impl Provider for DeepseekProvider {
             body["tools"] = json!(config.tools);
         }
 
-        if let Some(t) = config.temperature {
+        // DeepSeek 思考模式下 temperature 无效（官方文档明确说明）
+        if !self.config.thinking_enabled
+            && let Some(t) = config.temperature
+        {
             body["temperature"] = json!(t);
         }
         if let Some(mt) = config.max_tokens {
@@ -131,7 +134,9 @@ impl Provider for DeepseekProvider {
         let api_key = self
             .config
             .api_key
-            .clone()
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(String::from)
             .or_else(|| std::env::var("DEEPSEEK_API_KEY").ok())
             .unwrap_or_default();
         let mut headers = HashMap::new();

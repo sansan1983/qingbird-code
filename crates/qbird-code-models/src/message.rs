@@ -15,9 +15,16 @@ pub enum MessageRole {
 pub struct ToolCall {
     /// 工具调用 ID（provider 返回）
     pub id: String,
+    /// 工具调用类型（OpenAI 格式必须为 "function"）
+    #[serde(default = "default_tool_call_type")]
+    pub r#type: String,
     /// 工具名称
     #[serde(rename = "function")]
     pub function: ToolCallFunction,
+}
+
+fn default_tool_call_type() -> String {
+    "function".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
