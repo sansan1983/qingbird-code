@@ -1,6 +1,8 @@
 use super::overflow::overflow_level;
 use super::tokenizer::estimate_tokens_simple;
 use super::types::{CheckpointEvent, ContextMessage, TokenInfo};
+use qbird_code_models::Message;
+use std::time::UNIX_EPOCH;
 
 pub struct ContextManager {
     messages: Vec<ContextMessage>,
@@ -28,10 +30,26 @@ impl ContextManager {
             role: role.to_string(),
             content: content.to_string(),
             timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
+                .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis() as i64,
         });
+    }
+
+    /// 19-01: record a `qbird_code_models::Message` into the context
+    /// (used by `ReactLoop` per-iteration to keep CM in sync with the
+    /// full conversation history). Maps `Message` → `(role, content)`
+    /// using `role_str()`.
+    pub fn add_chat_message(&mut self, msg: &Message) {
+        self.add_message(msg.role_str(), &msg.content);
+    }
+
+    /// 19-01: snapshot accessor for testing/inspection. For the active
+    /// "live" messages that ReactLoop should send to the LLM, prefer
+    /// `get_messages_within_budget`.
+    #[must_use]
+    pub fn get_messages(&self) -> Vec<ContextMessage> {
+        self.messages.clone()
     }
 
     pub fn get_message_count(&self) -> usize {

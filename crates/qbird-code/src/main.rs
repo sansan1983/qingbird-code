@@ -739,14 +739,47 @@ async fn main() {
                 let _ = store.save_messages(&current_session_id, &messages);
             }
 
-            // 上下文窗口管理：超出上限时截断旧消息（保留 system 消息）
+            // 19-01: 上下文窗口管理走 ContextManager 的 token budget（替代
+            // 历史的 50 条硬截断）。cm 跟踪每轮 add_chat_message，budget
+            // 触发时按 token 截断（保留 system + 最近 N 条）。
             if messages.len() > MAX_HISTORY_MSGS {
-                let keep = MAX_HISTORY_MSGS / 2;
-                let truncate_start = messages.len() - keep;
-                let system = messages[0].clone();
-                let remaining = messages[truncate_start..].to_vec();
-                messages = std::iter::once(system).chain(remaining).collect();
-                eprintln!("{}", t!("interactive_ctx_truncated", count = keep));
+                let budget = react_loop.config.context_token_limit;
+                let within = context_manager.get_messages_within_budget(budget);
+                if within.len() < context_manager.get_message_count() {
+                    // 重组 messages：保留 system + within 涵盖的最近条目
+                    let system = messages.first().cloned();
+                    let kept_indices: std::collections::HashSet<String> = within
+                        .iter()
+                        .map(|c| format!("{}|{}", c.role, c.content))
+                        .collect();
+                    let recent: Vec<Message> = messages
+                        .iter()
+                        .rev()
+                        .filter(|m| {
+                            let key = format!("{}|{}", m.role_str(), m.content);
+                            kept_indices.contains(&key)
+                        })
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .rev()
+                        .collect();
+                    let recent_len = recent.len();
+                    messages = if let Some(sys) = system {
+                        std::iter::once(sys).chain(recent).collect()
+                    } else {
+                        recent
+                    };
+                    eprintln!("{}", t!("interactive_ctx_truncated", count = recent_len));
+                } else {
+                    // 19-01: cm 没建议截断，保留历史 50 条硬截断兜底
+                    let keep = MAX_HISTORY_MSGS / 2;
+                    let truncate_start = messages.len() - keep;
+                    let system = messages[0].clone();
+                    let remaining = messages[truncate_start..].to_vec();
+                    messages = std::iter::once(system).chain(remaining).collect();
+                    eprintln!("{}", t!("interactive_ctx_truncated", count = keep));
+                }
             }
         }
 

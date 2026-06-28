@@ -96,11 +96,16 @@ impl ReactLoop {
             let step =
                 r#loop::process_llm_response(&mut state, &mut hooks, &chat_response, messages)?;
 
-            // 更新 ContextManager 检查点
-            if let Some(ref mut cm) = context_manager
-                && let Some(event) = cm.checkpoint_if_needed()
-            {
-                tracing::info!("Context checkpoint: {:?}", event);
+            // 19-01: keep ContextManager in sync with the live message log,
+            // and check for a checkpoint.  The assistant message pushed by
+            // `process_llm_response` is always the most recent entry.
+            if let Some(ref mut cm) = context_manager {
+                if let Some(last) = messages.last() {
+                    cm.add_chat_message(last);
+                }
+                if let Some(event) = cm.checkpoint_if_needed() {
+                    tracing::info!("Context checkpoint: {:?}", event);
+                }
             }
 
             match step {
