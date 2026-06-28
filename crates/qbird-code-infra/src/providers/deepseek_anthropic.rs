@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use qbird_code_models::{Message, MessageRole, UsageStats};
 
-use super::{ChatResponse, ProtocolKind, Provider, ProviderKind, RequestConfig};
+use super::{ChatResponse, ProtocolKind, Provider, ProviderKind, RequestConfig, StreamEvent};
 use crate::config::DeepseekConfig;
 
 pub struct DeepseekAnthropicProvider {
@@ -126,8 +126,13 @@ impl Provider for DeepseekAnthropicProvider {
             })
             .collect();
 
+        let model = if config.model.is_empty() {
+            self.config.default_model.clone()
+        } else {
+            config.model.clone()
+        };
         let mut body = json!({
-            "model": self.config.default_model,
+            "model": model,
             "max_tokens": config.max_tokens.unwrap_or(4096),
             "messages": anthropic_msgs,
         });
@@ -222,6 +227,23 @@ impl Provider for DeepseekAnthropicProvider {
         headers.insert("anthropic-version".into(), "2023-06-01".into());
         headers
     }
+
+    async fn stream(
+        &self,
+        http_client: &crate::http_client::HttpLlmClient,
+        messages: &[Message],
+        config: &RequestConfig,
+    ) -> qbird_code_models::Result<tokio::sync::mpsc::Receiver<StreamEvent>> {
+        let mut req_config = config.clone();
+        req_config.stream = true;
+        let body = self.build_request_body(messages, &req_config);
+        let resp = http_client.send_streaming(self, &body).await?;
+        let (tx, rx) = tokio::sync::mpsc::channel(256);
+        tokio::spawn(async move {
+            super::stream_parser::run_anthropic_stream(resp, tx).await;
+        });
+        Ok(rx)
+    }
 }
 
 #[cfg(test)]
@@ -305,6 +327,7 @@ mod tests {
             name: None,
         }];
         let req_cfg = RequestConfig {
+            model: String::new(),
             temperature: None,
             max_tokens: Some(8192),
             stream: false,

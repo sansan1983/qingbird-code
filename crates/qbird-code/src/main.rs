@@ -10,11 +10,12 @@ use qbird_code_agents::skill::{SddProposal, SkillContext, SkillRegistry};
 use qbird_code_agents::{ReactLoop, ReactLoopConfig};
 use qbird_code_infra::config::{find_config, load_config};
 use qbird_code_infra::http_client::HttpLlmClient;
-use qbird_code_infra::memory::SessionStore;
+use qbird_code_infra::memory::{MemoryManager, SessionStore};
 use qbird_code_infra::providers::{
     AnthropicProvider, DeepseekAnthropicProvider, DeepseekProvider, OllamaProvider, OpenAIProvider,
 };
-use qbird_code_models::Message;
+use qbird_code_infra::runtime_overrides::{CliOverrides, RuntimeOverrides};
+use qbird_code_models::{Message, RetryPolicy};
 use qbird_code_tools::{
     ExecuteCommandTool, GlobTool, ListDirTool, ReadFileTool, SearchCodeTool, ToolRegistry,
     WebFetchTool, WriteFileTool,
@@ -22,7 +23,7 @@ use qbird_code_tools::{
 /// qingbird — Efficient Flow Agent Collaboration Framework
 #[derive(Parser)]
 #[command(name = "qingbird")]
-#[command(version = "0.2.18")]
+#[command(version = "0.2.19")]
 #[command(about = "Efficient Flow Agent Collaboration Framework")]
 struct Cli {
     /// 执行单次任务
@@ -56,6 +57,14 @@ struct Cli {
         value_parser = clap::builder::PossibleValuesParser::new(["zh-CN", "en-US"])
     )]
     lang: Option<String>,
+
+    /// Enable streaming mode (typewriter output)
+    #[arg(long, default_value = "false")]
+    stream: bool,
+
+    /// Disable streaming mode (overrides --stream)
+    #[arg(long, default_value = "false")]
+    no_stream: bool,
 }
 
 fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message {
@@ -73,8 +82,7 @@ fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message
 
 fn init_llm(
     timeout_secs: u64,
-    max_retries: u8,
-    retry_backoff_ms: u64,
+    retry_policy: RetryPolicy,
     provider_result: qbird_code_models::Result<
         impl qbird_code_infra::providers::Provider + 'static,
     >,
@@ -82,7 +90,7 @@ fn init_llm(
     HttpLlmClient,
     Box<dyn qbird_code_infra::providers::Provider>,
 ) {
-    let http = match HttpLlmClient::new(timeout_secs, max_retries, retry_backoff_ms) {
+    let http = match HttpLlmClient::new(timeout_secs, retry_policy) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("{}", t!("err_http_client_init", msg = e));
@@ -97,6 +105,19 @@ fn init_llm(
         }
     };
     (http, Box::new(provider))
+}
+
+/// Map a provider's legacy (max_retries, retry_backoff_ms) pair onto the
+/// plan-shape `RetryPolicy`. Used during 19-09 transition; later (when
+/// cfg adds a top-level `retry_policy` block) this helper will read that
+/// block directly.
+fn legacy_retry_policy(max_retries: u8, retry_backoff_ms: u64) -> RetryPolicy {
+    RetryPolicy {
+        max_retries: u32::from(max_retries),
+        initial_backoff_ms: retry_backoff_ms,
+        backoff_multiplier: 2.0,
+        max_backoff_ms: 30_000,
+    }
 }
 
 #[tokio::main]
@@ -118,7 +139,7 @@ async fn main() {
         std::process::exit(1);
     });
 
-    let mut cfg = match load_config(&config_path) {
+    let cfg = match load_config(&config_path) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("{}", e.user_message());
@@ -131,54 +152,51 @@ async fn main() {
     let active_locale = qbird_code_infra::locale::init(resolved_locale_input);
     tracing::info!(locale = active_locale, "locale activated");
 
-    // --provider 命令行参数覆盖 config 中的 llm.active
-    if let Some(ref provider) = cli.provider {
-        cfg.llm.active = provider.clone();
-    }
-
-    // 解析当前 provider 的默认模型，--model 可覆盖
-    let default_model = match cfg.llm.active.as_str() {
-        "deepseek" | "deepseek-anthropic" => &cfg.llm.deepseek.default_model,
-        "ollama" => &cfg.llm.ollama.default_model,
-        "openai" => &cfg.llm.openai.default_model,
-        "anthropic" => &cfg.llm.anthropic.default_model,
-        _ => "",
-    };
-    let model = cli
-        .model
-        .clone()
-        .unwrap_or_else(|| default_model.to_string());
-    // === 3. 初始化基础设施（根据 cfg.llm.active 路由） ===
-    let active = cfg.llm.active.clone();
+    // --provider/--model/--temperature 命令行参数 → RuntimeOverrides（不 mutate cfg）
+    let mut overrides = RuntimeOverrides::from_cli(
+        &CliOverrides {
+            provider: cli.provider.clone(),
+            model: cli.model.clone(),
+            temperature: cli.temperature,
+        },
+        &cfg,
+    );
+    let model = overrides.resolved_model(&cfg);
+    // === 3. 初始化基础设施（根据 overrides.provider 路由） ===
+    let active = overrides.current_provider().to_string();
     let (http_client, provider) = match active.as_str() {
         "deepseek" => init_llm(
             cfg.llm.deepseek.timeout_secs,
-            cfg.llm.deepseek.max_retries,
-            cfg.llm.deepseek.retry_backoff_ms,
+            legacy_retry_policy(
+                cfg.llm.deepseek.max_retries,
+                cfg.llm.deepseek.retry_backoff_ms,
+            ),
             DeepseekProvider::new(cfg.llm.deepseek.clone()),
         ),
         "deepseek-anthropic" => init_llm(
             cfg.llm.deepseek.timeout_secs,
-            cfg.llm.deepseek.max_retries,
-            cfg.llm.deepseek.retry_backoff_ms,
+            legacy_retry_policy(
+                cfg.llm.deepseek.max_retries,
+                cfg.llm.deepseek.retry_backoff_ms,
+            ),
             DeepseekAnthropicProvider::new(cfg.llm.deepseek.clone()),
         ),
         "ollama" => init_llm(
             cfg.llm.ollama.timeout_secs,
-            cfg.llm.ollama.max_retries,
-            cfg.llm.ollama.retry_backoff_ms,
+            legacy_retry_policy(cfg.llm.ollama.max_retries, cfg.llm.ollama.retry_backoff_ms),
             OllamaProvider::new(cfg.llm.ollama.clone()),
         ),
         "openai" => init_llm(
             cfg.llm.openai.timeout_secs,
-            cfg.llm.openai.max_retries,
-            cfg.llm.openai.retry_backoff_ms,
+            legacy_retry_policy(cfg.llm.openai.max_retries, cfg.llm.openai.retry_backoff_ms),
             OpenAIProvider::new(cfg.llm.openai.clone()),
         ),
         "anthropic" => init_llm(
             cfg.llm.anthropic.timeout_secs,
-            cfg.llm.anthropic.max_retries,
-            cfg.llm.anthropic.retry_backoff_ms,
+            legacy_retry_policy(
+                cfg.llm.anthropic.max_retries,
+                cfg.llm.anthropic.retry_backoff_ms,
+            ),
             AnthropicProvider::new(cfg.llm.anthropic.clone()),
         ),
         other => {
@@ -194,7 +212,7 @@ async fn main() {
         }
     };
     // 检查 API Key 是否已配置（仅远程 Provider）
-    let env_var = match cfg.llm.active.as_str() {
+    let env_var = match active.as_str() {
         "deepseek" | "deepseek-anthropic" => {
             let key_empty = cfg
                 .llm
@@ -241,7 +259,10 @@ async fn main() {
         std::process::exit(1);
     }
 
-    tracing::info!("Startup: provider={}, model={}", cfg.llm.active, model);
+    tracing::info!("Startup: provider={}, model={}", active, model);
+
+    // Streaming mode: --stream enables, --no-stream disables (default: off)
+    let stream_enabled = cli.stream && !cli.no_stream;
 
     // === 4. 初始化工具注册表 ===
     let mut registry = ToolRegistry::new();
@@ -253,8 +274,10 @@ async fn main() {
     registry.register(Arc::new(ListDirTool));
     registry.register(Arc::new(WebFetchTool));
     registry.set_allowed_paths(cfg.security.allowed_paths.clone());
+    // 19-07: 风险阈值从 yaml 读，替代历史硬编码 L3
+    registry.set_risk_threshold(cfg.security.risk_threshold);
     // 提取 thinking 配置（仅 DeepSeek 支持）
-    let (thinking_enabled, thinking_effort) = match cfg.llm.active.as_str() {
+    let (thinking_enabled, thinking_effort) = match active.as_str() {
         "deepseek" | "deepseek-anthropic" => (
             cfg.llm.deepseek.thinking_enabled,
             cfg.llm.deepseek.thinking_effort.clone(),
@@ -291,10 +314,11 @@ async fn main() {
             temperature: cli.temperature,
             thinking_enabled,
             thinking_effort: thinking_effort.clone(),
+            stream_enabled,
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![
-            build_system_message(&tool_registry, &cfg.llm.active),
+            build_system_message(&tool_registry, &active),
             Message::user(&prompt),
         ];
 
@@ -307,6 +331,7 @@ async fn main() {
                 &tool_registry,
                 None,
                 None,
+                None, // no memory manager in --execute mode
             )
             .await
         {
@@ -329,11 +354,13 @@ async fn main() {
             temperature: cli.temperature,
             thinking_enabled,
             thinking_effort: thinking_effort.clone(),
+            stream_enabled,
             ..ReactLoopConfig::default()
         });
-        let mut messages = vec![build_system_message(&tool_registry, &cfg.llm.active)];
+        let mut messages = vec![build_system_message(&tool_registry, &active)];
         let mut cumulative_prompt: u64 = 0;
         let mut cumulative_completion: u64 = 0;
+        let mut cumulative_cache_hit: u64 = 0;
 
         // 初始化 SessionStore
         let session_dirs = dirs::data_dir()
@@ -348,6 +375,24 @@ async fn main() {
             "interactive".into(),
             react_loop.config.context_token_limit,
         );
+
+        // 19-02: init MemoryManager (XDG default path, auto-create parent)
+        let memory_manager = match MemoryManager::default_db_path() {
+            Ok(db_path) => match MemoryManager::open(&db_path) {
+                Ok(mm) => {
+                    tracing::info!("MemoryManager opened: {}", db_path.display());
+                    Some(Arc::new(mm))
+                }
+                Err(e) => {
+                    tracing::warn!("MemoryManager open failed (disabled): {}", e);
+                    None
+                }
+            },
+            Err(e) => {
+                tracing::warn!("MemoryManager path unavailable (disabled): {}", e);
+                None
+            }
+        };
 
         println!("{}", t!("interactive_banner"));
         println!();
@@ -400,6 +445,13 @@ async fn main() {
                                 value = format!("{:?}", react_loop.config.temperature)
                             )
                         );
+                        println!(
+                            "{}",
+                            t!(
+                                "interactive_help_provider",
+                                name = overrides.current_provider()
+                            )
+                        );
                         println!("{}", t!("interactive_help_usage"));
                         println!("{}", t!("interactive_help_sessions"));
                         println!("{}", t!("interactive_help_session_load"));
@@ -411,7 +463,6 @@ async fn main() {
                         println!();
                         println!("{}", t!("interactive_help_undo_planned"));
                         println!("{}", t!("interactive_help_profile_planned"));
-                        println!("{}", t!("interactive_help_provider_planned"));
                         println!("{}", t!("interactive_help_session_delete_planned"));
                         println!();
                     }
@@ -435,6 +486,13 @@ async fn main() {
                                 count = cumulative_prompt + cumulative_completion
                             )
                         );
+                        // 19-07: L1 cache hit 显示（仅当 yaml cache.l1_enabled = true）
+                        if cfg.llm.cache.l1_enabled {
+                            println!(
+                                "{}",
+                                t!("interactive_usage_cache_hit", count = cumulative_cache_hit)
+                            );
+                        }
                     }
                     "/sessions" => {
                         if let Some(ref store) = session_store {
@@ -514,8 +572,10 @@ async fn main() {
                                 t!("interactive_model_current", name = react_loop.config.model)
                             );
                         } else {
-                            react_loop.config.model = arg.to_string();
-                            println!("{}", t!("interactive_model_switched", name = arg));
+                            overrides.set_model(arg.to_string());
+                            let resolved = overrides.resolved_model(&cfg);
+                            react_loop.config.model = resolved.clone();
+                            println!("{}", t!("interactive_model_switched", name = resolved));
                         }
                     }
                     "/sdd" => {
@@ -628,10 +688,42 @@ async fn main() {
                         } else {
                             match arg.parse::<f64>() {
                                 Ok(t) if (0.0..=2.0).contains(&t) => {
+                                    overrides.set_temperature(t);
                                     react_loop.config.temperature = Some(t);
                                     println!("{}", t!("interactive_temp_set", value = t));
                                 }
                                 _ => println!("{}", t!("interactive_temp_invalid")),
+                            }
+                        }
+                    }
+                    "/provider" => {
+                        const SUPPORTED: &[&str] = &[
+                            "deepseek",
+                            "deepseek-anthropic",
+                            "ollama",
+                            "openai",
+                            "anthropic",
+                        ];
+                        if arg.is_empty() {
+                            println!(
+                                "{}",
+                                t!(
+                                    "interactive_provider_current",
+                                    name = overrides.current_provider()
+                                )
+                            );
+                        } else if !SUPPORTED.contains(&arg) {
+                            println!("{}", t!("interactive_provider_invalid", name = arg));
+                        } else {
+                            let new = arg.to_string();
+                            let needs_model_reset =
+                                overrides.model.is_some() && overrides.current_provider() != new;
+                            overrides.set_provider(new.clone());
+                            let resolved = overrides.resolved_model(&cfg);
+                            react_loop.config.model = resolved;
+                            println!("{}", t!("interactive_provider_switched", name = new));
+                            if needs_model_reset {
+                                println!("{}", t!("interactive_provider_reset_model"));
                             }
                         }
                     }
@@ -658,12 +750,14 @@ async fn main() {
                     &tool_registry,
                     None,
                     Some(&mut context_manager),
+                    memory_manager.clone(),
                 )
                 .await
             {
                 Ok(result) => {
                     cumulative_prompt += result.usage.prompt_tokens;
                     cumulative_completion += result.usage.completion_tokens;
+                    cumulative_cache_hit += result.usage.cache_hit_tokens;
                     println!();
                     println!("{}", result.content);
                     println!();
@@ -678,14 +772,47 @@ async fn main() {
                 let _ = store.save_messages(&current_session_id, &messages);
             }
 
-            // 上下文窗口管理：超出上限时截断旧消息（保留 system 消息）
+            // 19-01: 上下文窗口管理走 ContextManager 的 token budget（替代
+            // 历史的 50 条硬截断）。cm 跟踪每轮 add_chat_message，budget
+            // 触发时按 token 截断（保留 system + 最近 N 条）。
             if messages.len() > MAX_HISTORY_MSGS {
-                let keep = MAX_HISTORY_MSGS / 2;
-                let truncate_start = messages.len() - keep;
-                let system = messages[0].clone();
-                let remaining = messages[truncate_start..].to_vec();
-                messages = std::iter::once(system).chain(remaining).collect();
-                eprintln!("{}", t!("interactive_ctx_truncated", count = keep));
+                let budget = react_loop.config.context_token_limit;
+                let within = context_manager.get_messages_within_budget(budget);
+                if within.len() < context_manager.get_message_count() {
+                    // 重组 messages：保留 system + within 涵盖的最近条目
+                    let system = messages.first().cloned();
+                    let kept_indices: std::collections::HashSet<String> = within
+                        .iter()
+                        .map(|c| format!("{}|{}", c.role, c.content))
+                        .collect();
+                    let recent: Vec<Message> = messages
+                        .iter()
+                        .rev()
+                        .filter(|m| {
+                            let key = format!("{}|{}", m.role_str(), m.content);
+                            kept_indices.contains(&key)
+                        })
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .rev()
+                        .collect();
+                    let recent_len = recent.len();
+                    messages = if let Some(sys) = system {
+                        std::iter::once(sys).chain(recent).collect()
+                    } else {
+                        recent
+                    };
+                    eprintln!("{}", t!("interactive_ctx_truncated", count = recent_len));
+                } else {
+                    // 19-01: cm 没建议截断，保留历史 50 条硬截断兜底
+                    let keep = MAX_HISTORY_MSGS / 2;
+                    let truncate_start = messages.len() - keep;
+                    let system = messages[0].clone();
+                    let remaining = messages[truncate_start..].to_vec();
+                    messages = std::iter::once(system).chain(remaining).collect();
+                    eprintln!("{}", t!("interactive_ctx_truncated", count = keep));
+                }
             }
         }
 

@@ -181,6 +181,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.19] - 2026-06-28
+
+### Added
+
+- **6 plan-shape model types**: `PermissionSet` (with `allows_tool/allows_path/allows_risk`), `Role`, `Capability`, `MemoryCategory`, `Importance` (with `Ord`), `RetryPolicy` (with `backoff_for_attempt`) — replaces 18 write-only stubs from Phase 1
+- **RuntimeOverrides**: `--provider/--model/--temperature` CLI overrides immutable config; `fast` alias resolves to `cfg.llm.deepseek.fast_model`; `/provider <name>` slash command
+- **Config validation** (`config_validate::validate_config`): 4 rules — `llm.active` valid, active provider `api_key` non-empty, `profiles.default` exists, `memory.working_memory_limit > 0`
+- **Risk threshold**: `ToolRegistry.set_risk_threshold(RiskLevel)` replaces hardcoded L3; `/usage` shows L1 cache hit tokens when `cache.l1_enabled`
+- **MemoryManager XDG default path**: `$XDG_DATA_HOME/qingbird/memory.db`, auto-create parent; removed unused `project_db_path`/`user_db_path` fields
+- **RetryPolicy in HttpLlmClient**: `max_backoff_ms` cap, provider legacy `(max_retries, retry_backoff_ms)` mapped via `legacy_retry_policy()` helper
+- **ContextManager wired into ReactLoop**: per-iteration `add_chat_message` + `checkpoint_if_needed`; budget-aware truncation in interactive mode (replaces 50-message hard truncate)
+- **MemoryManager production integration**: per-turn `recall(query, 500)` injects `[memory]` prefix; async `save_with_summarization` (200-char clamp) on each iteration; `evict_by_importance(keep)` available
+- **13 new config validation tests**, **11 RuntimeOverrides tests**, **22 models tests**, **5 risk threshold tests**, **7 memory path tests**, **6 HTTP retry tests**, **10 context manager integration tests**, **8 memory recall tests**
+
+### Changed
+
+- **`RequestConfig` now carries `model` field**: all 5 providers check `config.model` before `default_model` — fixes hidden bug where `--model` only updated UI display
+- **`EflowConfig` explicit `Default` impls**: `LlmConfig` (active="deepseek") and `MemoryConfig` (working_memory_limit=1000) — `#[derive(Default)]` was ignoring serde defaults
+
+---
+
 ## [Unreleased]
 
 ---

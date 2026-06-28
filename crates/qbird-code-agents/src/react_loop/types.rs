@@ -85,6 +85,8 @@ pub struct ReactLoopConfig {
     pub thinking_effort: String,
     pub context_token_limit: usize,
     pub context_checkpoint_threshold: f64,
+    /// Streaming mode toggle (--stream / --no-stream)
+    pub stream_enabled: bool,
 }
 
 impl Default for ReactLoopConfig {
@@ -99,6 +101,7 @@ impl Default for ReactLoopConfig {
             thinking_effort: "high".into(),
             context_token_limit: 32000,
             context_checkpoint_threshold: 0.8,
+            stream_enabled: false,
         }
     }
 }

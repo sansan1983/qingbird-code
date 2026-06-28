@@ -14,7 +14,16 @@ async fn ollama_simple_reply_smoke_test() {
         ..Default::default()
     };
     let provider = OllamaProvider::new(config).expect("init ollama provider");
-    let http = HttpLlmClient::new(30, 1, 1000).expect("init http");
+    let http = HttpLlmClient::new(
+        30,
+        qbird_code_models::RetryPolicy {
+            max_retries: 1,
+            initial_backoff_ms: 1000,
+            backoff_multiplier: 2.0,
+            max_backoff_ms: 30_000,
+        },
+    )
+    .expect("init http");
 
     let tool_registry = Arc::new(ToolRegistry::new());
     let tool_schemas = vec![];
@@ -33,6 +42,7 @@ async fn ollama_simple_reply_smoke_test() {
             &tool_schemas,
             &tool_registry,
             Some(10),
+            None,
             None,
         )
         .await;

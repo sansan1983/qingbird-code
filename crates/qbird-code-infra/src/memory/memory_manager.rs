@@ -1,7 +1,8 @@
 use rusqlite::{Connection, params};
-use std::path::Path;
-use std::sync::Mutex;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
+use super::tokenizer::estimate_tokens_simple;
 use super::types::{MemoryEntry, MemoryResult};
 use qbird_code_models::{EflowError, Result};
 
@@ -10,6 +11,25 @@ pub struct MemoryManager {
 }
 
 impl MemoryManager {
+    /// Default DB location: `$XDG_DATA_HOME/qingbird/memory.db`
+    /// (Windows: `%APPDATA%/qingbird/memory.db`).
+    /// Creates the parent directory if it does not exist.
+    pub fn default_db_path() -> Result<PathBuf> {
+        let dir = dirs::data_dir()
+            .ok_or_else(|| {
+                EflowError::Internal("could not resolve $XDG_DATA_HOME (or %APPDATA%)".into())
+            })?
+            .join("qingbird");
+        std::fs::create_dir_all(&dir).map_err(|e| {
+            EflowError::Internal(format!(
+                "failed to create data dir {}: {}",
+                dir.display(),
+                e
+            ))
+        })?;
+        Ok(dir.join("memory.db"))
+    }
+
     pub fn open(db_path: &Path) -> Result<Self> {
         let conn = Connection::open(db_path)
             .map_err(|e| EflowError::Memory(format!("Failed to open DB: {}", e)))?;
@@ -36,7 +56,7 @@ impl MemoryManager {
         })
     }
 
-    pub fn save(&self, entry: &MemoryEntry) -> Result<&str> {
+    pub fn save(&self, entry: &MemoryEntry) -> Result<&'static str> {
         let db = self
             .db
             .lock()
@@ -76,6 +96,92 @@ impl MemoryManager {
         .map_err(|e| EflowError::Memory(format!("Insert failed: {}", e)))?;
 
         Ok("created")
+    }
+
+    /// 19-02: async recall with token-budget enforcement.
+    /// Searches FTS5 by query, returns up to top-5 hits whose combined
+    /// `estimate_tokens_simple` body fits within `budget_tokens`. Returns
+    /// an empty Vec if nothing matches (never an error for "no match").
+    /// Strictly enforces budget: skips any hit that would exceed it.
+    pub async fn recall(&self, query: &str, budget_tokens: usize) -> Vec<MemoryResult> {
+        let hits = match self.search(query, None) {
+            Ok(h) => h,
+            Err(_) => return Vec::new(), // degrade gracefully
+        };
+        // FTS5 already rank-sorts; take top 5 first, then budget-trim.
+        let top5: Vec<MemoryResult> = hits.into_iter().take(5).collect();
+        let mut result = Vec::new();
+        let mut used = 0usize;
+        for hit in top5 {
+            let tokens = estimate_tokens_simple(&hit.entry.body);
+            if used + tokens > budget_tokens {
+                continue; // strict: never overflow budget
+            }
+            used += tokens;
+            result.push(hit);
+        }
+        result
+    }
+
+    /// 19-02: spawn a background `save` task; returns the `JoinHandle`
+    /// so the caller can `.await` for the result when desired.
+    /// Failures are propagated via the JoinHandle, not panicked.
+    pub fn save_async(
+        self: Arc<Self>,
+        entry: MemoryEntry,
+    ) -> Result<tokio::task::JoinHandle<Result<&'static str>>> {
+        Ok(tokio::task::spawn_blocking(move || self.save(&entry)))
+    }
+
+    /// 19-02: save a body, deterministically clamped to 200 chars
+    /// (mimics an "≤ 200 char summary" without invoking an LLM). The
+    /// 200-char cap is the documented plan-shape for assistant summaries.
+    pub fn save_with_summarization(
+        self: Arc<Self>,
+        content: String,
+        scope: String,
+        path: Option<&str>,
+    ) -> Result<tokio::task::JoinHandle<Result<&'static str>>> {
+        let body: String = content.chars().take(200).collect();
+        let entry = MemoryEntry {
+            path: path.unwrap_or("(interactive)").to_string(),
+            scope,
+            scope_id: Some("interactive".into()),
+            r#type: "summary".into(),
+            body,
+            fingerprint: format!("sum-{}", chrono::Utc::now().timestamp_millis()),
+            last_indexed_at: chrono::Utc::now().timestamp_millis(),
+        };
+        self.save_async(entry)
+    }
+
+    /// 19-02: simple eviction by importance / recency. Keeps the
+    /// `keep` most-recently-updated entries; deletes the rest.
+    /// Returns the number of entries evicted.
+    pub fn evict_by_importance(&self, keep: usize) -> Result<usize> {
+        let db = self
+            .db
+            .lock()
+            .map_err(|e| EflowError::Internal(e.to_string()))?;
+        // Count current rows
+        let total: usize = db
+            .query_row("SELECT COUNT(*) FROM memory_fts", [], |r| r.get(0))
+            .map_err(|e| EflowError::Memory(format!("Count failed: {e}")))?;
+        if total <= keep {
+            return Ok(0);
+        }
+        // Delete the (total - keep) oldest by last_indexed_at.
+        // FTS5 + rowid: rowid is implicit but we can use it.
+        let to_delete = total - keep;
+        let deleted = db
+            .execute(
+                "DELETE FROM memory_fts WHERE rowid IN (
+                    SELECT rowid FROM memory_fts ORDER BY last_indexed_at ASC LIMIT ?1
+                )",
+                params![to_delete],
+            )
+            .map_err(|e| EflowError::Memory(format!("Evict delete failed: {e}")))?;
+        Ok(deleted)
     }
 
     pub fn search(&self, query: &str, scope: Option<&[String]>) -> Result<Vec<MemoryResult>> {

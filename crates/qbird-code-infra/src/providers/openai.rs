@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use qbird_code_models::{Message, UsageStats};
 
-use super::{ChatResponse, ProtocolKind, Provider, ProviderKind, RequestConfig};
+use super::{ChatResponse, ProtocolKind, Provider, ProviderKind, RequestConfig, StreamEvent};
 use crate::config::OpenaiConfig;
 
 pub struct OpenAIProvider {
@@ -34,8 +34,13 @@ impl Provider for OpenAIProvider {
     }
 
     fn build_request_body(&self, messages: &[Message], config: &RequestConfig) -> Value {
+        let model = if config.model.is_empty() {
+            self.config.default_model.clone()
+        } else {
+            config.model.clone()
+        };
         let mut body = serde_json::json!({
-            "model": self.config.default_model,
+            "model": model,
             "messages": messages.iter().map(|m| serde_json::json!({
                 "role": m.role_str(),
                 "content": m.content,
@@ -86,6 +91,23 @@ impl Provider for OpenAIProvider {
         headers.insert("Authorization".into(), format!("Bearer {}", key));
         headers.insert("Content-Type".into(), "application/json".into());
         headers
+    }
+
+    async fn stream(
+        &self,
+        http_client: &crate::http_client::HttpLlmClient,
+        messages: &[Message],
+        config: &RequestConfig,
+    ) -> qbird_code_models::Result<tokio::sync::mpsc::Receiver<StreamEvent>> {
+        let mut req_config = config.clone();
+        req_config.stream = true;
+        let body = self.build_request_body(messages, &req_config);
+        let resp = http_client.send_streaming(self, &body).await?;
+        let (tx, rx) = tokio::sync::mpsc::channel(256);
+        tokio::spawn(async move {
+            super::stream_parser::run_openai_stream(resp, tx).await;
+        });
+        Ok(rx)
     }
 }
 
@@ -155,6 +177,7 @@ mod tests {
             }
         });
         let req_cfg = RequestConfig {
+            model: String::new(),
             temperature: Some(0.5),
             max_tokens: Some(2048),
             stream: false,

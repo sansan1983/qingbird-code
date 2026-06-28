@@ -35,10 +35,10 @@ fn default_timezone() -> String {
 
 // ===== LLM 配置 =====
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     /// 当前激活的 provider
-    #[serde(default)]
+    #[serde(default = "default_active_provider")]
     pub active: String,
     #[serde(default)]
     pub deepseek: DeepseekConfig,
@@ -50,6 +50,23 @@ pub struct LlmConfig {
     pub anthropic: AnthropicConfig,
     #[serde(default)]
     pub cache: CacheConfig,
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            active: default_active_provider(),
+            deepseek: DeepseekConfig::default(),
+            ollama: OllamaConfig::default(),
+            openai: OpenaiConfig::default(),
+            anthropic: AnthropicConfig::default(),
+            cache: CacheConfig::default(),
+        }
+    }
+}
+
+fn default_active_provider() -> String {
+    "deepseek".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,16 +154,21 @@ pub struct CacheConfig {
 
 // ===== Memory/Security/Profiles =====
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryConfig {
     #[serde(default = "default_1000")]
     pub working_memory_limit: usize,
-    #[serde(default = "default_project_db")]
-    pub project_db_path: String,
-    #[serde(default = "default_user_db")]
-    pub user_db_path: String,
     #[serde(default = "default_24")]
     pub cleanup_interval_hours: u64,
+}
+
+impl Default for MemoryConfig {
+    fn default() -> Self {
+        Self {
+            working_memory_limit: default_1000(),
+            cleanup_interval_hours: default_24(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -281,12 +303,6 @@ fn default_1000() -> usize {
 }
 fn default_24() -> u64 {
     24
-}
-fn default_project_db() -> String {
-    "./data/project.db".into()
-}
-fn default_user_db() -> String {
-    "./data/user.db".into()
 }
 
 // ===== 配置加载 =====

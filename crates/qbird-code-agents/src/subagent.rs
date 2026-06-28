@@ -82,6 +82,7 @@ impl Subagent {
                 tool_registry,
                 Some(self.config.max_iterations),
                 None,
+                None,
             )
             .await?;
 
