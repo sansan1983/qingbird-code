@@ -185,6 +185,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cost tracking** (Task 30-04): per-provider `cost_per_million_input_tokens` / `cost_per_million_output_tokens` config fields (default 0.0 = unknown), `estimate_cost` function (cache hit tokens are free), `/usage` shows estimated cost in USD or RMB (zh-CN locale, hardcoded rate 7.2), `--execute` prints `[cost] $X.XXXX USD` when cost is known, 3 new i18n keys (`interactive_usage_cost_usd` / `interactive_usage_cost_rmb` / `interactive_usage_cost_unknown`)
 - **Edit tool** (`edit` — 8th built-in tool): precise substring replacement in files with single-match enforcement, line-level diff summary via `similar` crate, `allowed_paths` and risk-level checks. `EditTool` struct with `Tool` trait implementation
 - **UndoStack** (20-deep LIFO ring buffer): `UndoStack` + `UndoEntry` in `qbird-code-tools`, `Arc<Mutex<UndoStack>>` wired into `EditTool` so every successful edit auto-pushes the pre-edit file snapshot
 - **`/undo` slash command** in interactive mode: pops the undo stack and writes the file back to its previous content; rejected in `--execute` mode

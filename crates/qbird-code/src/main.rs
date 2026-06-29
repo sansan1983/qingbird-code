@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use clap::Parser;
 use qbird_code_agents::skill::{SddProposal, SkillContext, SkillRegistry};
 use qbird_code_agents::{ReactLoop, ReactLoopConfig};
-use qbird_code_infra::config::{find_config, load_config};
+use qbird_code_infra::config::{estimate_cost, find_config, format_cost, load_config};
 use qbird_code_infra::http_client::HttpLlmClient;
 use qbird_code_infra::memory::{MemoryManager, SessionStore};
 use qbird_code_infra::profile::Profile;
@@ -475,6 +475,35 @@ async fn main() {
         {
             Ok(result) => {
                 println!("{}", result.content);
+                // 30-04: cost line
+                let (cost_input, cost_output) = match active.as_str() {
+                    "deepseek" | "deepseek-anthropic" => (
+                        cfg.llm.deepseek.cost_per_million_input_tokens,
+                        cfg.llm.deepseek.cost_per_million_output_tokens,
+                    ),
+                    "ollama" => (
+                        cfg.llm.ollama.cost_per_million_input_tokens,
+                        cfg.llm.ollama.cost_per_million_output_tokens,
+                    ),
+                    "openai" => (
+                        cfg.llm.openai.cost_per_million_input_tokens,
+                        cfg.llm.openai.cost_per_million_output_tokens,
+                    ),
+                    "anthropic" => (
+                        cfg.llm.anthropic.cost_per_million_input_tokens,
+                        cfg.llm.anthropic.cost_per_million_output_tokens,
+                    ),
+                    _ => (0.0, 0.0),
+                };
+                if let Some(usd) = estimate_cost(
+                    result.usage.prompt_tokens,
+                    result.usage.completion_tokens,
+                    result.usage.cache_hit_tokens,
+                    cost_input,
+                    cost_output,
+                ) {
+                    println!("[cost] ${:.4} USD", usd);
+                }
             }
             Err(e) => {
                 eprintln!("{}", e.user_message());
@@ -643,6 +672,41 @@ async fn main() {
                                 "{}",
                                 t!("interactive_usage_cache_hit", count = cumulative_cache_hit)
                             );
+                        }
+                        // 30-04: cost display
+                        let (cost_input, cost_output) = match active.as_str() {
+                            "deepseek" | "deepseek-anthropic" => (
+                                cfg.llm.deepseek.cost_per_million_input_tokens,
+                                cfg.llm.deepseek.cost_per_million_output_tokens,
+                            ),
+                            "ollama" => (
+                                cfg.llm.ollama.cost_per_million_input_tokens,
+                                cfg.llm.ollama.cost_per_million_output_tokens,
+                            ),
+                            "openai" => (
+                                cfg.llm.openai.cost_per_million_input_tokens,
+                                cfg.llm.openai.cost_per_million_output_tokens,
+                            ),
+                            "anthropic" => (
+                                cfg.llm.anthropic.cost_per_million_input_tokens,
+                                cfg.llm.anthropic.cost_per_million_output_tokens,
+                            ),
+                            _ => (0.0, 0.0),
+                        };
+                        let is_zh = active_locale.starts_with("zh");
+                        match estimate_cost(
+                            cumulative_prompt,
+                            cumulative_completion,
+                            cumulative_cache_hit,
+                            cost_input,
+                            cost_output,
+                        ) {
+                            Some(usd) => {
+                                println!("{}", format_cost(usd, is_zh));
+                            }
+                            None => {
+                                println!("{}", t!("interactive_usage_cost_unknown"));
+                            }
                         }
                     }
                     "/sessions" => {

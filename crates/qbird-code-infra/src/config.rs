@@ -91,6 +91,10 @@ pub struct DeepseekConfig {
     pub max_retries: u8,
     #[serde(default = "default_retry_backoff_ms")]
     pub retry_backoff_ms: u64,
+    #[serde(default)]
+    pub cost_per_million_input_tokens: f64,
+    #[serde(default)]
+    pub cost_per_million_output_tokens: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,6 +111,10 @@ pub struct OllamaConfig {
     pub max_retries: u8,
     #[serde(default = "default_retry_backoff_ms")]
     pub retry_backoff_ms: u64,
+    #[serde(default)]
+    pub cost_per_million_input_tokens: f64,
+    #[serde(default)]
+    pub cost_per_million_output_tokens: f64,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenaiConfig {
@@ -122,6 +130,10 @@ pub struct OpenaiConfig {
     pub max_retries: u8,
     #[serde(default = "default_retry_backoff_ms")]
     pub retry_backoff_ms: u64,
+    #[serde(default)]
+    pub cost_per_million_input_tokens: f64,
+    #[serde(default)]
+    pub cost_per_million_output_tokens: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,6 +150,10 @@ pub struct AnthropicConfig {
     pub max_retries: u8,
     #[serde(default = "default_retry_backoff_ms")]
     pub retry_backoff_ms: u64,
+    #[serde(default)]
+    pub cost_per_million_input_tokens: f64,
+    #[serde(default)]
+    pub cost_per_million_output_tokens: f64,
 }
 
 // ===== 缓存配置 =====
@@ -202,6 +218,8 @@ impl Default for DeepseekConfig {
             timeout_secs: default_timeout_secs(),
             max_retries: default_max_retries(),
             retry_backoff_ms: default_retry_backoff_ms(),
+            cost_per_million_input_tokens: 0.0,
+            cost_per_million_output_tokens: 0.0,
         }
     }
 }
@@ -215,6 +233,8 @@ impl Default for OllamaConfig {
             timeout_secs: default_timeout_secs(),
             max_retries: default_max_retries(),
             retry_backoff_ms: default_retry_backoff_ms(),
+            cost_per_million_input_tokens: 0.0,
+            cost_per_million_output_tokens: 0.0,
         }
     }
 }
@@ -228,6 +248,8 @@ impl Default for OpenaiConfig {
             timeout_secs: default_timeout_secs(),
             max_retries: default_max_retries(),
             retry_backoff_ms: default_retry_backoff_ms(),
+            cost_per_million_input_tokens: 0.0,
+            cost_per_million_output_tokens: 0.0,
         }
     }
 }
@@ -241,6 +263,8 @@ impl Default for AnthropicConfig {
             timeout_secs: default_timeout_secs(),
             max_retries: default_max_retries(),
             retry_backoff_ms: default_retry_backoff_ms(),
+            cost_per_million_input_tokens: 0.0,
+            cost_per_million_output_tokens: 0.0,
         }
     }
 }
@@ -303,6 +327,39 @@ fn default_1000() -> usize {
 }
 fn default_24() -> u64 {
     24
+}
+
+// ===== Cost estimation =====
+
+const RMB_RATE: f64 = 7.2;
+
+/// Estimate cost in USD based on token usage and per-million-token pricing.
+/// Returns `None` when both cost rates are 0.0 (meaning "unknown").
+/// Cache hit tokens are free (already paid for) and excluded from cost.
+pub fn estimate_cost(
+    input_tokens: u64,
+    output_tokens: u64,
+    cache_hit_tokens: u64,
+    cost_per_million_input: f64,
+    cost_per_million_output: f64,
+) -> Option<f64> {
+    if cost_per_million_input == 0.0 && cost_per_million_output == 0.0 {
+        return None;
+    }
+    let effective_input = input_tokens.saturating_sub(cache_hit_tokens);
+    let input_cost = (effective_input as f64 / 1_000_000.0) * cost_per_million_input;
+    let output_cost = (output_tokens as f64 / 1_000_000.0) * cost_per_million_output;
+    Some(input_cost + output_cost)
+}
+
+/// Format estimated cost for display. Returns the i18n key and cost value.
+/// For zh-CN locale, converts USD to RMB (hardcoded rate 7.2).
+pub fn format_cost(usd_cost: f64, is_zh_locale: bool) -> String {
+    if is_zh_locale {
+        format!("≈ ¥{:.4}", usd_cost * RMB_RATE)
+    } else {
+        format!("≈ ${:.4} USD", usd_cost)
+    }
 }
 
 // ===== 配置加载 =====
