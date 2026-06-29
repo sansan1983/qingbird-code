@@ -181,6 +181,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.1] - 2026-06-29
+
+### Changed
+
+- **agent 身份定位**：重写 `system_prompt`（zh-CN + en-US），去掉"编码助手"身份，改为中性多面手助手，明确"先理解意图、清晰就行动、不清就询问"的核心行为原则
+- **nudge 文案**：重写 4 个 nudge 提示（zh-CN + en-US），去掉"是否要写代码"假设，给纯研究/纯对话场景提供出口
+- **sample profile 提示词**：同步更新 `developer` 和 `researcher` 的 `system_prompt`，与主提示词改写对齐
+
+---
+
 ## [0.3.0] - 2026-06-29
 
 ### Added
