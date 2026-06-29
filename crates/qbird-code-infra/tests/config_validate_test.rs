@@ -117,18 +117,20 @@ fn test_rule3_profiles_default_missing_file_errors() {
 
 #[test]
 fn test_rule3_profiles_default_existing_file_passes() {
-    let tmp = std::env::temp_dir().join("qingbird_test_profile.yaml");
-    std::fs::write(&tmp, "name: test\n").unwrap();
+    let profile_dir = qbird_code_infra::profile::Profile::default_dir();
+    std::fs::create_dir_all(&profile_dir).unwrap();
+    let profile_path = profile_dir.join("test_rule3.yaml");
+    std::fs::write(&profile_path, "name: test\n").unwrap();
     let cfg = EflowConfig {
         profiles: qbird_code_infra::config::ProfileListConfig {
-            default: tmp.to_string_lossy().to_string(),
+            default: "test_rule3".to_string(),
             available: vec![],
         },
         ..Default::default()
     };
     let errors = validate_config(&cfg);
     assert!(errors.iter().all(|e| !e.field.contains("profiles.default")));
-    let _ = std::fs::remove_file(tmp);
+    let _ = std::fs::remove_file(profile_path);
 }
 
 // ===== Rule 4: memory.working_memory_limit > 0 =====

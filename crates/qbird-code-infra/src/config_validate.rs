@@ -7,6 +7,7 @@
 use std::fmt;
 
 use crate::config::EflowConfig;
+use crate::profile::Profile;
 
 const VALID_PROVIDERS: &[&str] = &[
     "deepseek",
@@ -122,7 +123,8 @@ fn check_profiles_default(cfg: &EflowConfig, errors: &mut Vec<ConfigError>) {
     if cfg.profiles.default.is_empty() {
         return;
     }
-    if std::path::Path::new(&cfg.profiles.default).exists() {
+    let profile_path = Profile::default_dir().join(format!("{}.yaml", cfg.profiles.default));
+    if profile_path.exists() {
         return;
     }
     let msg = rust_i18n::t!(
