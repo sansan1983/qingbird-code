@@ -183,11 +183,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.1] - 2026-06-29
 
+### Added
+
+- **Subagent profile 系统**：`SubagentProfile` 数据模型 + 5 个内置 profile（general / explore / code-writer / planner / reviewer）+ 用户 yaml 扩展逻辑（`load_profiles_from_yaml` + `merge_into_builtins` 字段级覆盖）。
+- **预留 forward-compat 钩子**：`SubagentSpawnHints`（含 `detached` / `priority` / `on_event`）供 v0.4 进化系统（CompactionManager / Reflection Engine / Profile Compilation）接入。
+- **新 i18n key**：`err_subagent_profile_not_found` / `err_subagent_policy_denied` / `err_subagent_execution_failed`（zh-CN + en-US）。
+
 ### Changed
 
 - **agent 身份定位**：重写 `system_prompt`（zh-CN + en-US），去掉"编码助手"身份，改为中性多面手助手，明确"先理解意图、清晰就行动、不清就询问"的核心行为原则
 - **nudge 文案**：重写 4 个 nudge 提示（zh-CN + en-US），去掉"是否要写代码"假设，给纯研究/纯对话场景提供出口
 - **sample profile 提示词**：同步更新 `developer` 和 `researcher` 的 `system_prompt`，与主提示词改写对齐
+- **EflowError 加 `SubagentProfileNotFound { name }`** variant + `user_message()` i18n 分支
+- v0.3.0 中已废置的 `Subagent` / `SubagentConfig` / `SubagentRole` / `SubagentPool::execute_parallel` 孤儿代码整体删除（PR-B1 整体重做；PR-B2 接 `delegate_task` 工具）
 
 ---
 
