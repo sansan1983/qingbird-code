@@ -111,6 +111,61 @@ impl Profile {
         Ok(names)
     }
 
+    /// Create the two sample profiles (`developer` + `researcher`) in
+    /// `profile_dir` if it is empty (no `.yaml` files).
+    ///
+    /// Called on first startup when `Profile::list()` returns empty.
+    /// Does nothing if the directory already contains profiles.
+    pub fn create_sample_profiles(profile_dir: &Path) -> Result<()> {
+        if !profile_dir.exists() {
+            std::fs::create_dir_all(profile_dir).map_err(|e| EflowError::ProfileMalformed {
+                name: "<create_sample>".into(),
+                reason: e.to_string(),
+            })?;
+        }
+
+        let existing = Self::list(profile_dir)?;
+        if !existing.is_empty() {
+            return Ok(());
+        }
+
+        let developer_yaml = r#"name: developer
+description: "Rust development assistant"
+system_prompt: "你是一个专业的 Rust 开发助手。使用中文回复，代码注释保持英文。"
+tools_allow: []
+risk_threshold: L3
+thinking_enabled: true
+"#;
+
+        let researcher_yaml = r#"name: researcher
+description: "Research assistant (read-only)"
+system_prompt: "你是一个研究助手，专注于信息检索和分析。只使用只读工具。"
+tools_allow:
+  - read_file
+  - search_code
+  - glob
+  - list_dir
+  - web_fetch
+risk_threshold: L1
+"#;
+
+        std::fs::write(profile_dir.join("developer.yaml"), developer_yaml).map_err(|e| {
+            EflowError::ProfileMalformed {
+                name: "developer".into(),
+                reason: e.to_string(),
+            }
+        })?;
+        std::fs::write(profile_dir.join("researcher.yaml"), researcher_yaml).map_err(|e| {
+            EflowError::ProfileMalformed {
+                name: "researcher".into(),
+                reason: e.to_string(),
+            }
+        })?;
+
+        tracing::info!("Created sample profiles: developer, researcher");
+        Ok(())
+    }
+
     /// Return the default profile directory: `<data_dir>/qingbird/profiles/`.
     ///
     /// On Windows this is `%APPDATA%\qingbird\profiles\`. On Linux/macOS it

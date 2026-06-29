@@ -376,6 +376,10 @@ async fn main() {
     // 此时 LLM 已 init（确定性）、registry 刚组装好；profile 仍可在
     // model=... / provider=... 已被 reads 的状态下覆盖。
     let profile_dir = Profile::default_dir();
+    // First startup: create sample profiles if the directory is empty.
+    if let Err(e) = Profile::create_sample_profiles(&profile_dir) {
+        tracing::warn!("Failed to create sample profiles: {}", e);
+    }
     let resolved_profile_name: Option<String> =
         match (&cli.profile, cfg.profiles.default.is_empty()) {
             (Some(name), _) => Some(name.clone()),
@@ -560,10 +564,25 @@ async fn main() {
             .map(|p| p.join("qingbird").join("sessions.archive"))
             .unwrap_or_else(|| std::path::PathBuf::from(".qingbird/sessions.archive"));
         std::fs::create_dir_all(&archive_dir).ok();
-        if let Some(ref store) = session_store
-            && let Err(e) = store.cleanup_old_sessions(50)
-        {
-            tracing::warn!("Session LRU cleanup failed: {}", e);
+        if let Some(ref store) = session_store {
+            match store.should_cleanup(cfg.memory.cleanup_interval_hours) {
+                Ok(true) => {
+                    if let Err(e) = store.cleanup_old_sessions(50) {
+                        tracing::warn!("Session LRU cleanup failed: {}", e);
+                    } else {
+                        let _ = store.mark_cleanup();
+                    }
+                }
+                Ok(false) => {
+                    tracing::info!(
+                        "Session cleanup throttled (interval {}h)",
+                        cfg.memory.cleanup_interval_hours
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!("should_cleanup check failed: {}", e);
+                }
+            }
         }
         let mut current_session_id = uuid::Uuid::new_v4().to_string();
 

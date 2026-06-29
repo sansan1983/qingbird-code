@@ -38,6 +38,10 @@ impl SessionStore {
                 content TEXT NOT NULL,
                 timestamp INTEGER NOT NULL,
                 FOREIGN KEY (session_id) REFERENCES sessions(id)
+            );
+            CREATE TABLE IF NOT EXISTS meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
             );",
         )
         .map_err(|e| EflowError::Memory(format!("Failed to create session tables: {}", e)))?;
@@ -307,5 +311,49 @@ impl SessionStore {
                 .map_err(|e| EflowError::Memory(e.to_string()))?;
         }
         Ok(ids)
+    }
+
+    fn now_epoch_secs() -> i64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64
+    }
+
+    pub fn should_cleanup(&self, interval_hours: u64) -> Result<bool> {
+        let db = self
+            .db
+            .lock()
+            .map_err(|e| EflowError::Internal(e.to_string()))?;
+        let last: Option<String> = db
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'last_cleanup_at'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        match last {
+            None => Ok(true),
+            Some(ts_str) => {
+                let ts: i64 = ts_str.parse().unwrap_or(0);
+                let elapsed = Self::now_epoch_secs() - ts;
+                Ok(elapsed >= (interval_hours as i64) * 3600)
+            }
+        }
+    }
+
+    pub fn mark_cleanup(&self) -> Result<()> {
+        let db = self
+            .db
+            .lock()
+            .map_err(|e| EflowError::Internal(e.to_string()))?;
+        let now = Self::now_epoch_secs().to_string();
+        db.execute(
+            "INSERT INTO meta (key, value) VALUES ('last_cleanup_at', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = ?1",
+            params![now],
+        )
+        .map_err(|e| EflowError::Memory(e.to_string()))?;
+        Ok(())
     }
 }
