@@ -31,6 +31,9 @@ pub enum EflowError {
     #[error("Profile not found: {name}")]
     ProfileNotFound { name: String },
 
+    #[error("Subagent profile not found: {name}")]
+    SubagentProfileNotFound { name: String },
+
     #[error("Profile malformed ({name}): {reason}")]
     ProfileMalformed { name: String, reason: String },
 
@@ -104,6 +107,9 @@ impl EflowError {
             Self::TaskCancelled(id) => t!("err_task_cancelled", id = id.as_str()).into_owned(),
             Self::ProfileNotFound { name } => {
                 t!("err_profile_not_found", name = name.as_str()).into_owned()
+            }
+            Self::SubagentProfileNotFound { name } => {
+                t!("err_subagent_profile_not_found", name = name.as_str()).into_owned()
             }
             Self::ProfileMalformed { name, reason } => t!(
                 "err_profile_malformed",
