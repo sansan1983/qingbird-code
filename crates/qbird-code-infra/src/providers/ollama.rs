@@ -45,6 +45,10 @@ impl Provider for OllamaProvider {
         &self.config.base_url
     }
 
+    fn endpoint(&self) -> String {
+        format!("{}/v1/chat/completions", self.config.base_url)
+    }
+
     fn build_request_body(&self, messages: &[Message], config: &RequestConfig) -> Value {
         let model = if config.model.is_empty() {
             self.config.default_model.clone()
