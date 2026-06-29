@@ -2,14 +2,13 @@
 //!
 //! 用户 yaml 格式：
 //! ```yaml
-//! subagents:
-//!   profiles:
-//!     general:
-//!       prompt_preamble: "..."
-//!       max_iterations: 30
-//!     my-custom:
-//!       prompt_preamble: "..."
-//!       tool_policy: readonly
+//! profiles:
+//!   general:
+//!     prompt_preamble: "..."
+//!     max_iterations: 30
+//!   my-custom:
+//!     prompt_preamble: "..."
+//!     tool_policy: readonly
 //! ```
 
 use std::collections::HashMap;
@@ -19,21 +18,14 @@ use serde::Deserialize;
 
 use super::profile::{SubagentMode, SubagentProfile, ToolPolicy};
 
-#[derive(Debug, Deserialize)]
-struct SubagentsConfig {
+#[derive(Debug, Default, Deserialize)]
+struct ProfilesFile {
     #[serde(default)]
-    subagents: SubagentsSection,
+    profiles: HashMap<String, ProfileOverride>,
 }
 
 #[derive(Debug, Default, Deserialize)]
-struct SubagentsSection {
-    #[serde(default)]
-    profiles: Vec<SubagentProfileConfig>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct SubagentProfileConfig {
-    pub name: String,
+pub struct ProfileOverride {
     pub mode: Option<SubagentMode>,
     pub tool_policy: Option<ToolPolicy>,
     pub prompt_preamble: Option<String>,
@@ -42,6 +34,9 @@ pub struct SubagentProfileConfig {
     pub max_iterations: Option<usize>,
     pub model: Option<String>,
 }
+
+/// 用户配置（key = profile name）
+pub type SubagentProfileConfig = (String, ProfileOverride);
 
 /// 从 yaml 文本加载并与内置合并
 pub fn load_profiles_from_yaml(
@@ -53,9 +48,11 @@ pub fn load_profiles_from_yaml(
         .collect();
 
     if let Some(text) = yaml_text {
-        let config: SubagentsConfig = serde_yaml::from_str(text)
+        let parsed: ProfilesFile = serde_yaml::from_str(text)
             .map_err(|e| EflowError::Internal(format!("subagent yaml 解析失败: {}", e)))?;
-        merge_into_builtins(&mut map, &config.subagents.profiles);
+        let user_configs: Vec<SubagentProfileConfig> =
+            parsed.profiles.into_iter().collect();
+        merge_into_builtins(&mut map, &user_configs);
     }
 
     Ok(map)
@@ -69,10 +66,10 @@ pub fn load_profiles(yaml_text: Option<&str>) -> Result<HashMap<String, Subagent
 /// 用户配置逐字段覆盖 builtin（None 字段保留 builtin 值）
 pub fn merge_into_builtins(
     map: &mut HashMap<String, SubagentProfile>,
-    user_configs: &[SubagentProfileConfig],
+    user_configs: &[(String, ProfileOverride)],
 ) {
-    for cfg in user_configs {
-        if let Some(builtin) = map.get(&cfg.name).cloned() {
+    for (name, cfg) in user_configs {
+        if let Some(builtin) = map.get(name).cloned() {
             let merged = SubagentProfile {
                 name: builtin.name.clone(),
                 mode: cfg.mode.unwrap_or(builtin.mode),
@@ -86,10 +83,10 @@ pub fn merge_into_builtins(
                 max_iterations: cfg.max_iterations.or(builtin.max_iterations),
                 model: cfg.model.clone().or(builtin.model),
             };
-            map.insert(cfg.name.clone(), merged);
+            map.insert(name.clone(), merged);
         } else {
             let new_profile = SubagentProfile {
-                name: cfg.name.clone(),
+                name: name.clone(),
                 mode: cfg.mode.unwrap_or(SubagentMode::Subagent),
                 tool_policy: cfg.tool_policy.unwrap_or(ToolPolicy::Inherit),
                 prompt_preamble: cfg.prompt_preamble.clone().unwrap_or_default(),
@@ -98,7 +95,7 @@ pub fn merge_into_builtins(
                 max_iterations: cfg.max_iterations,
                 model: cfg.model.clone(),
             };
-            map.insert(cfg.name.clone(), new_profile);
+            map.insert(name.clone(), new_profile);
         }
     }
 }

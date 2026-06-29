@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 /// 工具策略：决定子 agent 可用工具集。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ToolPolicy {
     /// 只读工具集
     ReadOnly,
@@ -17,6 +18,7 @@ pub enum ToolPolicy {
 
 /// Subagent 模式（预留字段；v0.3.1 只用 Subagent）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SubagentMode {
     /// 子 agent：独立 ReAct 循环实例，独立 session
     Subagent,
