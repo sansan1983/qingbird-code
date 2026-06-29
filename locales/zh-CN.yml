@@ -101,10 +101,10 @@ interactive_help_session_load: "  /session load <id> 加载会话"
 interactive_help_usage: "  /usage             显示 Token 用量"
 
 # === Nudge 提醒 ===
-nudge_consecutive_reads: "你已经连续 %{count} 轮只进行读取操作。是否需要开始写代码或执行修改？"
-nudge_iteration_warning: "只剩 %{remaining} 轮迭代机会了。请尽快给出最终结论，不要再进行探索性操作。"
-nudge_completion_without_write: "你声明了任务完成，但尚未执行任何写入操作。如果有待办事项未完成，请先完成。"
-nudge_no_tool_calls: "你已连续多轮没有调用工具。请使用可用工具来完成操作。"
+nudge_consecutive_reads: "你已经连续 %{count} 轮只进行读取操作。是否需要调整当前策略？"
+nudge_iteration_warning: "只剩 %{remaining} 轮迭代机会了。请尽快收敛，给出最终结论。"
+nudge_completion_without_write: "你声明了任务完成，但尚未执行任何写入操作。如果有实际改动未完成，请先完成；如果是纯研究/咨询类任务，则无需写入。"
+nudge_no_tool_calls: "你已连续多轮没有调用工具。如果有可用的工具能推进任务，请使用；如果是纯对话则无需工具。"
 nudge_max_iterations: "达到最大迭代次数。请立即总结当前状态并给出最终回答。"
 
 # === 交互模式（v0.2.x） ===

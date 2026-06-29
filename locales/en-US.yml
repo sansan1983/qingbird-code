@@ -99,10 +99,10 @@ interactive_help_session_load: "  /session load <id> Load a session"
 interactive_help_usage: "  /usage             Show token usage"
 
 # === Nudge reminders ===
-nudge_consecutive_reads: "You have performed %{count} consecutive read-only operations. Do you want to start writing code or making changes?"
-nudge_iteration_warning: "Only %{remaining} iterations remaining. Please reach a conclusion without further exploration."
-nudge_completion_without_write: "You declared the task complete, but no write operations were performed. Please finish any pending items if applicable."
-nudge_no_tool_calls: "You have gone multiple rounds without calling any tool. Please use the available tools to complete the operation."
+nudge_consecutive_reads: "You have performed %{count} consecutive read-only operations. Do you need to adjust your current strategy?"
+nudge_iteration_warning: "Only %{remaining} iterations remaining. Please converge and give a final answer."
+nudge_completion_without_write: "You declared the task complete, but no write operations were performed. Finish any actual changes first; if this was a pure research or consultation task, no writes are needed."
+nudge_no_tool_calls: "You have gone multiple rounds without calling any tool. Use available tools to advance the task if applicable; for pure conversation, no tools are needed."
 nudge_max_iterations: "Maximum iterations reached. Please summarize the current state and give a final answer now."
 
 # === Interactive mode (v0.2.x) ===
