@@ -50,8 +50,7 @@ pub fn load_profiles_from_yaml(
     if let Some(text) = yaml_text {
         let parsed: ProfilesFile = serde_yaml::from_str(text)
             .map_err(|e| EflowError::Internal(format!("subagent yaml 解析失败: {}", e)))?;
-        let user_configs: Vec<SubagentProfileConfig> =
-            parsed.profiles.into_iter().collect();
+        let user_configs: Vec<SubagentProfileConfig> = parsed.profiles.into_iter().collect();
         merge_into_builtins(&mut map, &user_configs);
     }
 
