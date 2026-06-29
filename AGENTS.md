@@ -5,7 +5,7 @@
 
 ## 这是什么
 
-Rust 2024 5-crate workspace 二进制 Agent 框架（`qingbird` v0.2.17）。Crate 严格依赖：
+Rust 2024 5-crate workspace 二进制 Agent 框架（`qingbird` v0.2.19）。Crate 严格依赖：
 
 ```
 qbird-code (bin) → qbird-code-agents → qbird-code-tools
@@ -35,7 +35,7 @@ cargo build                                       # CI 加 --release --workspace
   前缀：`milestone/v<X>.<Y>`、`feature/*`、`fix/*`、`hotfix/*`。
 - Squash-merge 到 milestone 分支。milestone → main 由 maintainer 单 PR 收尾。
 - PR 模板 `.github/PULL_REQUEST_TEMPLATE.md` 是契约，checkbox 没勾齐不要 ship。尤其注意 CHANGELOG.md `[Unreleased]` 必须更新。
-- 所有 crate 共享 workspace 版本号 `0.2.17`，无特殊情况不要单独改。
+- 所有 crate 共享 workspace 版本号 `0.2.19`，无特殊情况不要单独改。
 
 ## 精准改动（Surgical Changes）
 

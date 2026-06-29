@@ -3,27 +3,29 @@ rust_i18n::i18n!("../../locales", fallback = "en-US");
 use rust_i18n::t;
 
 use std::io::{self, BufRead, Write};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use clap::Parser;
 use qbird_code_agents::skill::{SddProposal, SkillContext, SkillRegistry};
 use qbird_code_agents::{ReactLoop, ReactLoopConfig};
-use qbird_code_infra::config::{find_config, load_config};
+use qbird_code_infra::config::{estimate_cost, find_config, format_cost, load_config};
+use qbird_code_infra::config_validate::validate_config;
 use qbird_code_infra::http_client::HttpLlmClient;
 use qbird_code_infra::memory::{MemoryManager, SessionStore};
+use qbird_code_infra::profile::Profile;
 use qbird_code_infra::providers::{
     AnthropicProvider, DeepseekAnthropicProvider, DeepseekProvider, OllamaProvider, OpenAIProvider,
 };
 use qbird_code_infra::runtime_overrides::{CliOverrides, RuntimeOverrides};
-use qbird_code_models::{Message, RetryPolicy};
+use qbird_code_models::{Message, RetryPolicy, RiskLevel};
 use qbird_code_tools::{
-    ExecuteCommandTool, GlobTool, ListDirTool, ReadFileTool, SearchCodeTool, ToolRegistry,
-    WebFetchTool, WriteFileTool,
+    EditTool, ExecuteCommandTool, GlobTool, ListDirTool, ReadFileTool, SearchCodeTool,
+    ToolRegistry, UndoStack, WebFetchTool, WriteFileTool,
 };
 /// qingbird — Efficient Flow Agent Collaboration Framework
 #[derive(Parser)]
 #[command(name = "qingbird")]
-#[command(version = "0.2.19")]
+#[command(version = "0.3.0")]
 #[command(about = "Efficient Flow Agent Collaboration Framework")]
 struct Cli {
     /// 执行单次任务
@@ -65,19 +67,88 @@ struct Cli {
     /// Disable streaming mode (overrides --stream)
     #[arg(long, default_value = "false")]
     no_stream: bool,
+
+    /// 加载用户 profile 文件 (`<data_dir>/qingbird/profiles/<name>.yaml`)。
+    /// 优先级: `--profile` > yaml `profiles.default` > 无 profile。
+    #[arg(long)]
+    profile: Option<String>,
 }
 
 fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message {
+    Message::system(build_system_prompt_text(registry, provider_name))
+}
+
+fn build_system_prompt_text(registry: &ToolRegistry, provider_name: &str) -> String {
     let defs = registry.definitions();
     let tool_names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
-    Message::system(
-        t!(
-            "system_prompt",
-            provider = provider_name,
-            tools = tool_names.join(", ")
-        )
-        .to_string(),
+    t!(
+        "system_prompt",
+        provider = provider_name,
+        tools = tool_names.join(", ")
     )
+    .to_string()
+}
+
+/// Parse a risk-threshold string ("L0".. "L3") into the enum. None = unknown.
+fn parse_risk_threshold(s: &str) -> Option<RiskLevel> {
+    match s.to_ascii_uppercase().as_str() {
+        "L0" => Some(RiskLevel::L0),
+        "L1" => Some(RiskLevel::L1),
+        "L2" => Some(RiskLevel::L2),
+        "L3" => Some(RiskLevel::L3),
+        _ => None,
+    }
+}
+
+/// Apply a profile onto an existing `Arc<ToolRegistry>` mid-session.
+///
+/// Clones the inner `ToolRegistry` (cheap — all fields Clone, tools are
+/// `Arc<dyn Tool>`), mutates the clone, rewraps it. Replaces the caller's
+/// `tool_registry: &mut Arc<ToolRegistry>`. Caller is the sole owner, so
+/// `Arc::strong_count == 1` — clone + drop old + arc-new is fine.
+///
+/// Profile `provider` / `model` fields are merged but do NOT re-init the
+/// live `HttpLlmClient` / `Box<dyn Provider>` (out of scope for v0.3.0
+/// — see `merge_into` doc). Warnings about this limitation are pushed
+/// into `warnings` so the caller can surface them to the user.
+fn apply_profile_to_registry(
+    profile: &Profile,
+    tool_registry: &mut Arc<ToolRegistry>,
+    system_prompt: &mut String,
+    provider_active: &str,
+    model_active: &str,
+    warnings: &mut Vec<String>,
+) {
+    let mut allowed: Option<Vec<String>> = tool_registry.allowed_tools();
+    let current_risk = match tool_registry.risk_threshold() {
+        RiskLevel::L0 => "L0",
+        RiskLevel::L1 => "L1",
+        RiskLevel::L2 => "L2",
+        RiskLevel::L3 => "L3",
+    };
+    let mut risk: Option<String> = Some(current_risk.to_string());
+    let mut provider = provider_active.to_string();
+    let mut model = model_active.to_string();
+    profile.merge_into(
+        system_prompt,
+        &mut allowed,
+        &mut risk,
+        &mut provider,
+        &mut model,
+        warnings,
+    );
+
+    // Mutate the registry by clone + replace (sole-owner fast path).
+    let mut reg = (**tool_registry).clone();
+    if let Some(allow) = allowed {
+        reg.set_allowed_tools(Some(allow));
+    }
+    if let Some(r_str) = risk
+        && let Some(rl) = parse_risk_threshold(&r_str)
+    {
+        reg.set_risk_threshold(rl);
+    }
+    *tool_registry = Arc::new(reg);
 }
 
 fn init_llm(
@@ -151,6 +222,22 @@ async fn main() {
     let resolved_locale_input = cli.lang.as_deref().unwrap_or(cfg.core.language.as_str());
     let active_locale = qbird_code_infra::locale::init(resolved_locale_input);
     tracing::info!(locale = active_locale, "locale activated");
+
+    // === 2.6. 配置校验（聚合错误输出，exit code 2） ===
+    let validation_errors = validate_config(&cfg);
+    if !validation_errors.is_empty() {
+        for err in &validation_errors {
+            eprintln!("[error] {}", err.message);
+        }
+        eprintln!(
+            "{}",
+            t!(
+                "err_config_validation_failed",
+                count = validation_errors.len()
+            )
+        );
+        std::process::exit(2);
+    }
 
     // --provider/--model/--temperature 命令行参数 → RuntimeOverrides（不 mutate cfg）
     let mut overrides = RuntimeOverrides::from_cli(
@@ -273,9 +360,78 @@ async fn main() {
     registry.register(Arc::new(GlobTool));
     registry.register(Arc::new(ListDirTool));
     registry.register(Arc::new(WebFetchTool));
+
+    // Undo stack lives outside ToolRegistry so profile switches cannot clear it.
+    let undo_stack: Arc<Mutex<UndoStack>> = Arc::new(Mutex::new(UndoStack::new()));
+    registry.register(Arc::new(
+        EditTool::new().with_undo_stack(undo_stack.clone()),
+    ));
+
     registry.set_allowed_paths(cfg.security.allowed_paths.clone());
     // 19-07: 风险阈值从 yaml 读，替代历史硬编码 L3
     registry.set_risk_threshold(cfg.security.risk_threshold);
+
+    // === 4a. 解析 + 应用 profile（Task 30-02）===
+    // 优先级: --profile CLI flag > yaml profiles.default > 无
+    // 此时 LLM 已 init（确定性）、registry 刚组装好；profile 仍可在
+    // model=... / provider=... 已被 reads 的状态下覆盖。
+    let profile_dir = Profile::default_dir();
+    // First startup: create sample profiles if the directory is empty.
+    if let Err(e) = Profile::create_sample_profiles(&profile_dir) {
+        tracing::warn!("Failed to create sample profiles: {}", e);
+    }
+    let resolved_profile_name: Option<String> =
+        match (&cli.profile, cfg.profiles.default.is_empty()) {
+            (Some(name), _) => Some(name.clone()),
+            (None, false) => Some(cfg.profiles.default.clone()),
+            (None, true) => None,
+        };
+    let mut active_profile: Option<String> = None;
+    let mut active_allowed_tools: Option<Vec<String>> = None;
+    let mut active_risk_override: Option<String> = None;
+    let mut profile_overridden_system_prompt: Option<String> = None;
+
+    if let Some(ref pname) = resolved_profile_name {
+        match Profile::load(&profile_dir, pname) {
+            Ok(p) => {
+                tracing::info!(profile = %p.name, "profile loaded");
+                let mut sp = build_system_prompt_text(&registry, &active);
+                let mut provider_active = active.clone();
+                let mut model_active = model.clone();
+                let mut profile_warnings: Vec<String> = Vec::new();
+                p.merge_into(
+                    &mut sp,
+                    &mut active_allowed_tools,
+                    &mut active_risk_override,
+                    &mut provider_active,
+                    &mut model_active,
+                    &mut profile_warnings,
+                );
+                if let Some(ref allow) = active_allowed_tools {
+                    registry.set_allowed_tools(Some(allow.clone()));
+                }
+                if let Some(ref r) = active_risk_override
+                    && let Some(rl) = parse_risk_threshold(r)
+                {
+                    registry.set_risk_threshold(rl);
+                }
+                profile_overridden_system_prompt = Some(sp);
+                active_profile = Some(p.name.clone());
+                // Surface provider/model-restart-required warnings to the user.
+                // Without this, a user with `provider: ollama` in their profile
+                // silently gets `deepseek` (LLM was already constructed above).
+                for w in &profile_warnings {
+                    eprintln!("{w}");
+                    tracing::warn!("{w}");
+                }
+            }
+            Err(e) => {
+                eprintln!("{}", e.user_message());
+                std::process::exit(1);
+            }
+        }
+    }
+
     // 提取 thinking 配置（仅 DeepSeek 支持）
     let (thinking_enabled, thinking_effort) = match active.as_str() {
         "deepseek" | "deepseek-anthropic" => (
@@ -284,7 +440,7 @@ async fn main() {
         ),
         _ => (false, "high".into()),
     };
-    let tool_registry = Arc::new(registry);
+    let mut tool_registry = Arc::new(registry);
 
     // === 4b. 初始化技能注册表 ===
     let mut skill_registry = SkillRegistry::new();
@@ -318,7 +474,10 @@ async fn main() {
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![
-            build_system_message(&tool_registry, &active),
+            match &profile_overridden_system_prompt {
+                Some(sp) => Message::system(sp.clone()),
+                None => build_system_message(&tool_registry, &active),
+            },
             Message::user(&prompt),
         ];
 
@@ -337,6 +496,35 @@ async fn main() {
         {
             Ok(result) => {
                 println!("{}", result.content);
+                // 30-04: cost line
+                let (cost_input, cost_output) = match active.as_str() {
+                    "deepseek" | "deepseek-anthropic" => (
+                        cfg.llm.deepseek.cost_per_million_input_tokens,
+                        cfg.llm.deepseek.cost_per_million_output_tokens,
+                    ),
+                    "ollama" => (
+                        cfg.llm.ollama.cost_per_million_input_tokens,
+                        cfg.llm.ollama.cost_per_million_output_tokens,
+                    ),
+                    "openai" => (
+                        cfg.llm.openai.cost_per_million_input_tokens,
+                        cfg.llm.openai.cost_per_million_output_tokens,
+                    ),
+                    "anthropic" => (
+                        cfg.llm.anthropic.cost_per_million_input_tokens,
+                        cfg.llm.anthropic.cost_per_million_output_tokens,
+                    ),
+                    _ => (0.0, 0.0),
+                };
+                if let Some(usd) = estimate_cost(
+                    result.usage.prompt_tokens,
+                    result.usage.completion_tokens,
+                    result.usage.cache_hit_tokens,
+                    cost_input,
+                    cost_output,
+                ) {
+                    println!("[cost] ${:.4} USD", usd);
+                }
             }
             Err(e) => {
                 eprintln!("{}", e.user_message());
@@ -357,7 +545,10 @@ async fn main() {
             stream_enabled,
             ..ReactLoopConfig::default()
         });
-        let mut messages = vec![build_system_message(&tool_registry, &active)];
+        let mut messages = vec![match &profile_overridden_system_prompt {
+            Some(sp) => Message::system(sp.clone()),
+            None => build_system_message(&tool_registry, &active),
+        }];
         let mut cumulative_prompt: u64 = 0;
         let mut cumulative_completion: u64 = 0;
         let mut cumulative_cache_hit: u64 = 0;
@@ -369,6 +560,30 @@ async fn main() {
         std::fs::create_dir_all(&session_dirs).ok();
         let db_path = session_dirs.join("sessions.db");
         let session_store = SessionStore::open(&db_path).ok();
+        let archive_dir = dirs::data_dir()
+            .map(|p| p.join("qingbird").join("sessions.archive"))
+            .unwrap_or_else(|| std::path::PathBuf::from(".qingbird/sessions.archive"));
+        std::fs::create_dir_all(&archive_dir).ok();
+        if let Some(ref store) = session_store {
+            match store.should_cleanup(cfg.memory.cleanup_interval_hours) {
+                Ok(true) => {
+                    if let Err(e) = store.cleanup_old_sessions(50) {
+                        tracing::warn!("Session LRU cleanup failed: {}", e);
+                    } else {
+                        let _ = store.mark_cleanup();
+                    }
+                }
+                Ok(false) => {
+                    tracing::info!(
+                        "Session cleanup throttled (interval {}h)",
+                        cfg.memory.cleanup_interval_hours
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!("should_cleanup check failed: {}", e);
+                }
+            }
+        }
         let mut current_session_id = uuid::Uuid::new_v4().to_string();
 
         let mut context_manager = qbird_code_infra::memory::ContextManager::new(
@@ -455,15 +670,16 @@ async fn main() {
                         println!("{}", t!("interactive_help_usage"));
                         println!("{}", t!("interactive_help_sessions"));
                         println!("{}", t!("interactive_help_session_load"));
+                        println!("{}", t!("interactive_help_session_delete"));
+                        println!("{}", t!("interactive_help_session_rename"));
                         println!();
                         println!("{}", t!("interactive_help_sdd_title"));
                         println!("{}", t!("interactive_help_sdd_run"));
                         println!("{}", t!("interactive_help_sdd_confirm"));
                         println!("{}", t!("interactive_help_sdd_status"));
                         println!();
-                        println!("{}", t!("interactive_help_undo_planned"));
-                        println!("{}", t!("interactive_help_profile_planned"));
-                        println!("{}", t!("interactive_help_session_delete_planned"));
+                        println!("{}", t!("interactive_help_undo"));
+                        println!("{}", t!("interactive_help_profile"));
                         println!();
                     }
                     "/usage" => {
@@ -486,12 +702,46 @@ async fn main() {
                                 count = cumulative_prompt + cumulative_completion
                             )
                         );
-                        // 19-07: L1 cache hit 显示（仅当 yaml cache.l1_enabled = true）
-                        if cfg.llm.cache.l1_enabled {
+                        if cumulative_cache_hit > 0 {
                             println!(
                                 "{}",
                                 t!("interactive_usage_cache_hit", count = cumulative_cache_hit)
                             );
+                        }
+                        // 30-04: cost display
+                        let (cost_input, cost_output) = match active.as_str() {
+                            "deepseek" | "deepseek-anthropic" => (
+                                cfg.llm.deepseek.cost_per_million_input_tokens,
+                                cfg.llm.deepseek.cost_per_million_output_tokens,
+                            ),
+                            "ollama" => (
+                                cfg.llm.ollama.cost_per_million_input_tokens,
+                                cfg.llm.ollama.cost_per_million_output_tokens,
+                            ),
+                            "openai" => (
+                                cfg.llm.openai.cost_per_million_input_tokens,
+                                cfg.llm.openai.cost_per_million_output_tokens,
+                            ),
+                            "anthropic" => (
+                                cfg.llm.anthropic.cost_per_million_input_tokens,
+                                cfg.llm.anthropic.cost_per_million_output_tokens,
+                            ),
+                            _ => (0.0, 0.0),
+                        };
+                        let is_zh = active_locale.starts_with("zh");
+                        match estimate_cost(
+                            cumulative_prompt,
+                            cumulative_completion,
+                            cumulative_cache_hit,
+                            cost_input,
+                            cost_output,
+                        ) {
+                            Some(usd) => {
+                                println!("{}", format_cost(usd, is_zh));
+                            }
+                            None => {
+                                println!("{}", t!("interactive_usage_cost_unknown"));
+                            }
                         }
                     }
                     "/sessions" => {
@@ -557,6 +807,63 @@ async fn main() {
                                                 t!("interactive_session_not_found", id = sub_arg)
                                             );
                                         }
+                                    }
+                                }
+                            }
+                            "delete" => {
+                                if sub_arg.is_empty() {
+                                    println!("{}", t!("interactive_session_delete_usage"));
+                                } else if let Some(ref store) = session_store {
+                                    match store.delete(sub_arg, &archive_dir) {
+                                        Ok(()) => {
+                                            println!(
+                                                "{}",
+                                                t!("interactive_session_deleted", id = sub_arg)
+                                            );
+                                            if current_session_id == sub_arg {
+                                                current_session_id =
+                                                    uuid::Uuid::new_v4().to_string();
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!("{}", e.user_message());
+                                        }
+                                    }
+                                } else {
+                                    eprintln!("{}", t!("err_session_store_unavailable"));
+                                }
+                            }
+                            "rename" => {
+                                if sub_arg.is_empty() {
+                                    println!("{}", t!("interactive_session_rename_usage"));
+                                } else {
+                                    let rename_parts: Vec<&str> = sub_arg.splitn(2, ' ').collect();
+                                    let id = rename_parts.first().copied().unwrap_or("");
+                                    let new_name =
+                                        rename_parts.get(1).copied().unwrap_or("").trim();
+                                    if id.is_empty() || new_name.is_empty() {
+                                        println!(
+                                            "{}",
+                                            t!("interactive_session_rename_missing_name")
+                                        );
+                                    } else if let Some(ref store) = session_store {
+                                        match store.rename(id, new_name) {
+                                            Ok(()) => {
+                                                println!(
+                                                    "{}",
+                                                    t!(
+                                                        "interactive_session_renamed",
+                                                        id = id,
+                                                        name = new_name
+                                                    )
+                                                );
+                                            }
+                                            Err(e) => {
+                                                eprintln!("{}", e.user_message());
+                                            }
+                                        }
+                                    } else {
+                                        eprintln!("{}", t!("err_session_store_unavailable"));
                                     }
                                 }
                             }
@@ -727,6 +1034,105 @@ async fn main() {
                             }
                         }
                     }
+                    "/profile" => {
+                        if arg.is_empty() {
+                            match &active_profile {
+                                Some(name) => {
+                                    println!(
+                                        "{}",
+                                        t!("interactive_profile_current", name = name.as_str())
+                                    );
+                                }
+                                None => {
+                                    println!("{}", t!("interactive_profile_usage"));
+                                }
+                            }
+                        } else if arg == "list" {
+                            match Profile::list(&profile_dir) {
+                                Ok(list) => {
+                                    println!("{}", t!("interactive_profile_list_title"));
+                                    for n in &list {
+                                        println!("  {n}");
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("{}", e.user_message());
+                                }
+                            }
+                        } else {
+                            // Switch profile mid-session.
+                            match Profile::load(&profile_dir, arg) {
+                                Ok(p) => {
+                                    // Re-apply onto messages[0] (system prompt)
+                                    // and tool_registry.set_allowed_tools +
+                                    // set_risk_threshold (via clone+replace).
+                                    let mut sp = if let Some(m) = messages.first() {
+                                        m.content.clone()
+                                    } else {
+                                        build_system_prompt_text(&tool_registry, &active)
+                                    };
+                                    let mut switch_warnings: Vec<String> = Vec::new();
+                                    apply_profile_to_registry(
+                                        &p,
+                                        &mut tool_registry,
+                                        &mut sp,
+                                        &active,
+                                        &model,
+                                        &mut switch_warnings,
+                                    );
+                                    // Re-write messages[0] with the new prompt.
+                                    if let Some(m) = messages.first_mut() {
+                                        m.content = sp.clone();
+                                    }
+                                    active_profile = Some(p.name.clone());
+                                    println!(
+                                        "{}",
+                                        t!("interactive_profile_loaded", name = p.name.as_str())
+                                    );
+                                    // Mid-session provider/model overrides cannot
+                                    // re-init the live LLM client. Surface this
+                                    // explicitly so the user understands why
+                                    // their `provider:` change doesn't take effect.
+                                    for w in &switch_warnings {
+                                        eprintln!("{w}");
+                                        tracing::warn!("{w}");
+                                    }
+                                    if !switch_warnings.is_empty() {
+                                        eprintln!("{}", t!("interactive_profile_restart_note"));
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("{}", e.user_message());
+                                }
+                            }
+                        }
+                    }
+                    "/undo" => match undo_stack.lock() {
+                        Ok(mut stack) => match stack.pop() {
+                            Some(entry) => {
+                                let path = entry.path.clone();
+                                let content = entry.previous_content.clone();
+                                drop(stack);
+                                match std::fs::write(&path, &content) {
+                                    Ok(()) => {
+                                        println!(
+                                            "{}",
+                                            t!("interactive_undo_success", path = path.display())
+                                        );
+                                    }
+                                    Err(e) => {
+                                        eprintln!("{}", t!("err_io", msg = e.to_string()));
+                                    }
+                                }
+                            }
+                            None => {
+                                eprintln!("{}", t!("err_undo_stack_empty"));
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!("{}", t!("err_undo_lock_failed", msg = e.to_string()));
+                        }
+                    },
                     _ => {
                         println!("{}", t!("interactive_unknown_cmd", cmd = cmd));
                     }

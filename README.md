@@ -109,7 +109,11 @@ qingbird (binary CLI)
 
 ## 用户文档
 
-详细参考见 `docs/` 目录（v0.3.0 起提供 CLI / Configuration / Profiles 完整文档）。
+| 文档 | 说明 |
+|------|------|
+| [CLI 完整参考](docs/cli.md) | 全部启动参数 + 交互模式斜杠命令 |
+| [配置文件参考](docs/configuration.md) | `qingbird.yaml` 全部字段、默认值与校验规则 |
+| [Profile 系统指南](docs/profiles.md) | 用户 Profile 创建、使用与切换 |
 
 ## 许可证
 

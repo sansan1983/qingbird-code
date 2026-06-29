@@ -18,3 +18,7 @@ regex-lite.workspace = true
 reqwest.workspace = true
 tracing.workspace = true
 rust-i18n.workspace = true
+similar.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

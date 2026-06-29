@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use qbird_code_models::{EflowError, Result, RiskLevel};
@@ -30,12 +30,17 @@ pub trait Tool: Send + Sync {
 }
 
 /// 工具注册表
+#[derive(Clone)]
 pub struct ToolRegistry {
     tools: HashMap<String, Arc<dyn Tool>>,
     allowed_paths: Vec<String>,
     /// Maximum risk level allowed. Tools with `risk_level >= risk_threshold`
     /// are rejected. Default `L3` (allow everything), historically.
     risk_threshold: RiskLevel,
+    /// Optional tool whitelist (from profile `tools_allow`). `None` = all
+    /// tools allowed (the historical default); `Some(set)` = only listed
+    /// tool names may execute.
+    allowed_tools: Option<HashSet<String>>,
 }
 
 impl ToolRegistry {
@@ -45,6 +50,7 @@ impl ToolRegistry {
             tools: HashMap::new(),
             allowed_paths: Vec::new(),
             risk_threshold: RiskLevel::L3,
+            allowed_tools: None,
         }
     }
 
@@ -62,6 +68,20 @@ impl ToolRegistry {
     #[must_use]
     pub fn risk_threshold(&self) -> RiskLevel {
         self.risk_threshold
+    }
+
+    /// Apply a profile `tools_allow` whitelist. `None` clears the whitelist
+    /// (back to "allow everything"); `Some(list)` allows only those tool names.
+    pub fn set_allowed_tools(&mut self, allow: Option<Vec<String>>) {
+        self.allowed_tools = allow.map(|v| v.into_iter().collect());
+    }
+
+    /// Current tool whitelist (`None` = all allowed).
+    #[must_use]
+    pub fn allowed_tools(&self) -> Option<Vec<String>> {
+        self.allowed_tools
+            .as_ref()
+            .map(|s| s.iter().cloned().collect())
     }
 
     pub fn register(&mut self, tool: Arc<dyn Tool>) {
@@ -90,6 +110,17 @@ impl ToolRegistry {
         params: serde_json::Value,
         task_id: uuid::Uuid,
     ) -> Result<ToolOutput> {
+        // 白名单检查（profile `tools_allow`）。None = 全允许（向后兼容）。
+        if let Some(ref allow) = self.allowed_tools
+            && !allow.contains(name)
+        {
+            let allowed: Vec<String> = allow.iter().cloned().collect();
+            return Err(EflowError::ToolNotAllowed {
+                tool: name.to_string(),
+                allowed,
+            });
+        }
+
         let tool = self
             .tools
             .get(name)
