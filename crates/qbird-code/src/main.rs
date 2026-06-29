@@ -9,6 +9,7 @@ use clap::Parser;
 use qbird_code_agents::skill::{SddProposal, SkillContext, SkillRegistry};
 use qbird_code_agents::{ReactLoop, ReactLoopConfig};
 use qbird_code_infra::config::{estimate_cost, find_config, format_cost, load_config};
+use qbird_code_infra::config_validate::validate_config;
 use qbird_code_infra::http_client::HttpLlmClient;
 use qbird_code_infra::memory::{MemoryManager, SessionStore};
 use qbird_code_infra::profile::Profile;
@@ -221,6 +222,22 @@ async fn main() {
     let resolved_locale_input = cli.lang.as_deref().unwrap_or(cfg.core.language.as_str());
     let active_locale = qbird_code_infra::locale::init(resolved_locale_input);
     tracing::info!(locale = active_locale, "locale activated");
+
+    // === 2.6. 配置校验（聚合错误输出，exit code 2） ===
+    let validation_errors = validate_config(&cfg);
+    if !validation_errors.is_empty() {
+        for err in &validation_errors {
+            eprintln!("[error] {}", err.message);
+        }
+        eprintln!(
+            "{}",
+            t!(
+                "err_config_validation_failed",
+                count = validation_errors.len()
+            )
+        );
+        std::process::exit(2);
+    }
 
     // --provider/--model/--temperature 命令行参数 → RuntimeOverrides（不 mutate cfg）
     let mut overrides = RuntimeOverrides::from_cli(

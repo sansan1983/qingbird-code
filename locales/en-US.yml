@@ -1,5 +1,6 @@
 _system_prompt: |
   You are qingbird, the entry point of an efficient multi-layer Agent collaboration framework.
+err_config_validation_failed: "Config validation failed: %{count} error(s)"
 err_config_load: "Failed to load config: %{msg}"
 err_api_key_missing: "API Key not configured. Set api_key in qingbird.yaml, or set the %{env_var} environment variable"
 cfg_err_invalid_active: "Invalid llm.active: '%{value}'. Valid values: %{valid}"
