@@ -683,8 +683,7 @@ async fn main() {
                                 count = cumulative_prompt + cumulative_completion
                             )
                         );
-                        // 19-07: L1 cache hit 显示（仅当 yaml cache.l1_enabled = true）
-                        if cfg.llm.cache.l1_enabled {
+                        if cumulative_cache_hit > 0 {
                             println!(
                                 "{}",
                                 t!("interactive_usage_cache_hit", count = cumulative_cache_hit)
