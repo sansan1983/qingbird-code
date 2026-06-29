@@ -387,7 +387,14 @@ pub fn find_config() -> Option<PathBuf> {
             }
         })
         .map(|p| p.join("qingbird").join("config.yaml"));
-    user_dir.filter(|p| p.exists())
+    if let Some(ref p) = user_dir {
+        if p.exists() {
+            return Some(p.clone());
+        }
+    }
+    let home_qingbird = dirs::home_dir()
+        .map(|p| p.join(".qingbird").join("qingbird.yaml"));
+    home_qingbird.filter(|p| p.exists())
 }
 
 #[cfg(test)]
