@@ -181,6 +181,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+---
+
 ## [0.2.19] - 2026-06-28
 
 ### Added
@@ -199,10 +203,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`RequestConfig` now carries `model` field**: all 5 providers check `config.model` before `default_model` — fixes hidden bug where `--model` only updated UI display
 - **`EflowConfig` explicit `Default` impls**: `LlmConfig` (active="deepseek") and `MemoryConfig` (working_memory_limit=1000) — `#[derive(Default)]` was ignoring serde defaults
-
----
-
-## [Unreleased]
 
 ---
 
@@ -227,6 +227,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/sansan1983/qingbird/compare/v0.2.18...HEAD
+[Unreleased]: https://github.com/sansan1983/qingbird/compare/v0.2.19...HEAD
+[0.2.19]: https://github.com/sansan1983/qingbird/compare/v0.2.18...v0.2.19
 [0.2.18]: https://github.com/sansan1983/qingbird/compare/v0.2.17...v0.2.18
 [0.2.17]: https://github.com/sansan1983/qingbird/releases/tag/v0.2.17
