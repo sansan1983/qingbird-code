@@ -112,6 +112,14 @@ qingbird (binary CLI)
 
 **Strict dependency direction**: lower layers must not import upper layers.
 
+## Documentation
+
+| Doc | Description |
+|-----|-------------|
+| [CLI Reference](docs/cli.md) | All startup flags + interactive slash commands |
+| [Configuration Reference](docs/configuration.md) | All `qingbird.yaml` fields, defaults & validation |
+| [Profile Guide](docs/profiles.md) | Create, use, and switch user profiles |
+
 ## License
 
 MIT / Apache-2.0 dual-licensed.
