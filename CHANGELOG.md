@@ -188,6 +188,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Subagent profile 系统**：`SubagentProfile` 数据模型 + 5 个内置 profile（general / explore / code-writer / planner / reviewer）+ 用户 yaml 扩展逻辑（`load_profiles_from_yaml` + `merge_into_builtins` 字段级覆盖）。
 - **预留 forward-compat 钩子**：`SubagentSpawnHints`（含 `detached` / `priority` / `on_event`）供 v0.4 进化系统（CompactionManager / Reflection Engine / Profile Compilation）接入。
 - **新 i18n key**：`err_subagent_profile_not_found` / `err_subagent_policy_denied` / `err_subagent_execution_failed`（zh-CN + en-US）。
+- **SubagentExecutor 真实实现**（`crates/qbird-code-agents/src/subagent/executor.rs`）：builder 模式（profiles + base_config + tool_registry + spawn_hints + on_event）；`spawn_child_with_provider` 内部构造子 `ReactLoop` 用主 agent 的 provider/http_client 同步执行，`Box::pin` 打破类型级 async fn 递归；返回 `ChildRecord { child_id / status / summary / usage / profile / tool_policy / duration_ms }`。`ChildEvent` 三态回调（Started / Progress / Completed | Failed | Cancelled）按 SpawnPriority 决定 sync / queued / detached。
+- **`SubagentExecutorTrait` 抽象**：`qbird_code_agents::subagent::SubagentExecutorTrait`，让 `DelegateTaskTool` 在不依赖具体 executor 的前提下 mock 测试（集成测试用 `MockExecutor` 跑过）。
+- **`delegate_task` 工具**（`crates/qbird-code-agents/src/delegate_task.rs`）：`impl qbird_code_tools::Tool`，但默认 `execute()` 拒绝调用并要求走 `execute_with_provider(provider, http_client)` 路径。注册到主 `ToolRegistry` 后，LLM 可在主 ReAct 循环里调用它分发子任务；子 agent 共享主 registry 的 `allowed_tools` / `risk_threshold` / `allowed_paths`，不递归暴露 `delegate_task`（避免无限派发）。
+- **ReactLoop 集成**：`ReactLoopConfig` 新增 `subagent_executor: Option<Arc<SubagentExecutor>>`；`execute_tools_parallel` / `execute_tools_sequential` 签名加 `provider: &dyn Provider, http_client: &HttpLlmClient`，新增 `execute_delegate_task` 方法在 delegate_task 分支直接调 SubagentExecutor。
+- **main.rs 接线**：构造 `SubagentExecutor` + 注册 `DelegateTaskTool` 到主 registry（`temp_registry_arc` 用 registry.clone() 共享安全设置）；两处 `ReactLoop::new()` 都传 `subagent_executor: Some(subagent_executor.clone())`。
+- **SessionStore schema 迁移**：`sessions` 表加 `relation` / `parent_session_id` / `role` 3 字段，旧库自动 `ALTER TABLE` 迁移零用户修改；新 API `list_sessions_filtered(bool include_side)` 默认隐藏 subagent 派生会话（`/sessions` 默认不显示 subagent 上下文，未来加 `/sessions --include-side` 时复用）。
+- **i18n key**：`tool_delegate_task_description`（zh-CN + en-US），`delegate_task` 工具 description 含可用 profile 列表。
+
+### Migration Notes
+
+- v0.3.0 SessionStore 数据库自动迁移（ALTER TABLE），用户无修改。
+- v0.3.0 中已废置的孤儿代码（`Subagent` struct / `SubagentConfig` / `SubagentRole` / `SubagentPool::execute_parallel`）已在 PR-B1 删除。
 
 ### Changed
 

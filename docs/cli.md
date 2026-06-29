@@ -257,6 +257,56 @@ qingbird --version
 
 ---
 
+## Subagent 系统（v0.3.1+）
+
+qingbird 在 v0.3.1 引入 subagent 机制：主 agent 在 ReAct 循环里通过
+`delegate_task` 工具把子任务分发给一个独立 ReAct 循环实例，LLM 透明地
+并行/串行调用子 agent 来完成大任务。
+
+### 5 个内置 profile
+
+| Profile | 工具策略 | 适用场景 |
+|---|---|---|
+| `general` | 继承主 agent | 多步任务、读写文件、运行命令 |
+| `explore` | 只读 | 快速浏览文件、搜索、只读分析 |
+| `code-writer` | 继承 | 实现功能、修 bug |
+| `planner` | 只读 | 制定方案、出实施计划 |
+| `reviewer` | 只读 | 代码审查、找问题 |
+
+### LLM 自主调用
+
+`delegate_task` 是注册到主 `ToolRegistry` 的内置工具，LLM 在需要时
+自动决定何时调用（不需要用户显式命令）：
+
+```json
+{
+  "label": "审查登录模块",
+  "prompt": "阅读 src/auth/login.rs 找出 3 个最严重的错误",
+  "profile": "reviewer"
+}
+```
+
+一次调用 `delegate_task` 阻塞等子 agent 跑完，把 `ChildRecord`
+（`child_id` / `status` / `summary` / `usage` / `profile` /
+`tool_policy` / `duration_ms`）以 pretty JSON 返回给主 agent 上下文。
+
+### 安全边界
+
+- 子 agent **共享主 agent** 的 `allowed_tools` / `risk_threshold` /
+  `allowed_paths`（构造 `SubagentExecutor` 时 clone `ToolRegistry` 快照）。
+- 子 agent **不递归** 看到 `delegate_task` 工具（避免无限派发）。
+- 主 agent 的 profile / user config 中可以 yaml 覆盖 5 个内置 profile 的
+  任意字段（description / system_prompt / tools / temperature 等）。
+
+### Side Session 持久化（v0.3.1+）
+
+主 agent 会话存到 `SessionStore` 时，子 agent 历史以 `relation: 'side'` +
+`parent_session_id` 关联挂载。`/sessions` 默认不显示子会话，避免
+列表爆炸；未来 `/sessions --include-side` 复用同一个
+`list_sessions_filtered(bool)` API。
+
+---
+
 ## English Summary
 
 ### Startup Modes
@@ -290,3 +340,10 @@ qingbird --version
 | `/sdd run\|confirm\|status` | SDD workflow |
 | `/undo` | Undo last file write |
 | `/profile [name\|list]` | Show/switch/list profiles |
+
+### Subagent (v0.3.1+)
+`delegate_task` is a built-in tool the LLM autonomously invokes to dispatch
+a child ReAct loop with one of 5 built-in profiles: `general` (inherits),
+`explore` / `planner` / `reviewer` (read-only), `code-writer` (inherits).
+Children share the parent's tool registry safety settings but do **not**
+see `delegate_task` themselves (no recursion).
