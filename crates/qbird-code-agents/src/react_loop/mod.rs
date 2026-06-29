@@ -12,6 +12,7 @@ use qbird_code_infra::providers::{Provider, RequestConfig, StreamEvent};
 use qbird_code_models::{EflowError, Message, ToolCall, UsageStats};
 use qbird_code_tools::ToolRegistry;
 
+use crate::doom_loop::DoomLoopAction;
 use crate::nudge::NudgeSystem;
 use hooks::AgentHooks;
 
@@ -275,7 +276,7 @@ impl ReactLoop {
                         .iter()
                         .all(|tc| types::READ_ONLY_TOOLS.contains(&tc.function.name.as_str()));
 
-                    if is_all_readonly {
+                    let outcomes = if is_all_readonly {
                         self.execute_tools_parallel(
                             &tool_calls,
                             tool_registry,
@@ -283,7 +284,7 @@ impl ReactLoop {
                             provider,
                             http_client,
                         )
-                        .await?;
+                        .await?
                     } else {
                         self.execute_tools_sequential(
                             &tool_calls,
@@ -292,7 +293,13 @@ impl ReactLoop {
                             provider,
                             http_client,
                         )
-                        .await?;
+                        .await?
+                    };
+
+                    // === 决策: 连续失败工具风暴检测 ===
+                    let (storm_action, storm_warning) = hooks.record_tool_outcomes(&outcomes);
+                    if storm_action == DoomLoopAction::ForceStop {
+                        return Err(EflowError::Internal(storm_warning));
                     }
 
                     // === 决策: 工具执行后继续 ===
@@ -318,11 +325,12 @@ impl ReactLoop {
         messages: &mut Vec<Message>,
         provider: &dyn Provider,
         http_client: &HttpLlmClient,
-    ) -> Result<(), EflowError> {
+    ) -> Result<Vec<bool>, EflowError> {
         use futures_util::stream::{FuturesUnordered, StreamExt};
 
         let task_id = uuid::Uuid::new_v4();
         let mut futures = FuturesUnordered::new();
+        let mut call_order: Vec<String> = Vec::with_capacity(tool_calls.len());
 
         for tc in tool_calls {
             let registry = Arc::clone(tool_registry);
@@ -339,6 +347,7 @@ impl ReactLoop {
                 call_name,
                 truncate_str(&tc.function.arguments, 120)
             );
+            call_order.push(call_id.clone());
             futures.push(async move {
                 let result = if is_delegate {
                     self.execute_delegate_task(&tc_clone, provider, http_client)
@@ -353,16 +362,22 @@ impl ReactLoop {
             });
         }
 
+        let mut outcomes_by_id: std::collections::HashMap<String, bool> =
+            std::collections::HashMap::new();
         while let Some((call_id, call_name, result)) = futures.next().await {
-            let content = match result {
-                Ok(c) => c,
-                Err(e) => format!("错误: {}", e),
+            let (content, ok) = match result {
+                Ok(c) => (c, true),
+                Err(e) => (format!("错误: {}", e), false),
             };
+            outcomes_by_id.insert(call_id.clone(), ok);
             print_tool_output(&call_name, &content);
             messages.push(Message::tool_result(call_id, call_name, content));
         }
-
-        Ok(())
+        let outcomes: Vec<bool> = call_order
+            .iter()
+            .filter_map(|id| outcomes_by_id.get(id).copied())
+            .collect();
+        Ok(outcomes)
     }
 
     async fn execute_tools_sequential(
@@ -372,8 +387,9 @@ impl ReactLoop {
         messages: &mut Vec<Message>,
         provider: &dyn Provider,
         http_client: &HttpLlmClient,
-    ) -> Result<(), EflowError> {
+    ) -> Result<Vec<bool>, EflowError> {
         let task_id = uuid::Uuid::new_v4();
+        let mut outcomes: Vec<bool> = Vec::with_capacity(tool_calls.len());
 
         for tc in tool_calls {
             let args: serde_json::Value =
@@ -384,18 +400,21 @@ impl ReactLoop {
                 tc.function.name,
                 truncate_str(&tc.function.arguments, 120)
             );
-            let content = if tc.function.name == "delegate_task" {
-                self.execute_delegate_task(tc, provider, http_client)
-                    .await?
+            let (content, ok) = if tc.function.name == "delegate_task" {
+                match self.execute_delegate_task(tc, provider, http_client).await {
+                    Ok(c) => (c, true),
+                    Err(e) => (format!("错误: {}", e), false),
+                }
             } else {
-                let result = tool_registry
+                match tool_registry
                     .execute(&tc.function.name, args, task_id)
-                    .await;
-                match result {
-                    Ok(output) => output.content,
-                    Err(e) => format!("错误: {}", e),
+                    .await
+                {
+                    Ok(output) => (output.content, output.success),
+                    Err(e) => (format!("错误: {}", e), false),
                 }
             };
+            outcomes.push(ok);
             print_tool_output(&tc.function.name, &content);
             messages.push(Message::tool_result(
                 tc.id.clone(),
@@ -404,7 +423,7 @@ impl ReactLoop {
             ));
         }
 
-        Ok(())
+        Ok(outcomes)
     }
 
     /// 跑 `delegate_task` 工具调用：调 `SubagentExecutor::spawn_child_with_provider`
@@ -466,9 +485,16 @@ fn truncate_str(s: &str, max: usize) -> String {
 
 fn print_tool_output(tool_name: &str, content: &str) {
     let preview = if content.len() > 800 {
+        // UTF-8 safe truncation: find the byte index of the 800th char
+        // boundary (or end-of-string), then slice up to that point.
+        let cut_at = content
+            .char_indices()
+            .nth(800)
+            .map(|(i, _)| i)
+            .unwrap_or(content.len());
         format!(
             "{}…\n(truncated, {} bytes total)",
-            &content[..800],
+            &content[..cut_at],
             content.len()
         )
     } else {

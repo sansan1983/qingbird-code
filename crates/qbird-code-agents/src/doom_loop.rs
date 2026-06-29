@@ -7,6 +7,8 @@ use qbird_code_models::ToolCall;
 const MAX_CYCLE_LEN: usize = 3;
 const DOOM_LOOP_THRESHOLD: usize = 3;
 const MAX_RECENT: usize = 20;
+/// 连续失败上限：N 次 tool call 都失败（不同参数、不构成循环也认），强制停止
+const CONSECUTIVE_FAILURE_LIMIT: usize = 5;
 
 /// 死循环升级级别
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +32,7 @@ pub enum RecoveryAction {
 pub struct DoomLoopDetector {
     recent: VecDeque<String>,
     nudge_count: usize,
+    consecutive_failures: usize,
 }
 
 impl DoomLoopDetector {
@@ -37,6 +40,7 @@ impl DoomLoopDetector {
         Self {
             recent: VecDeque::with_capacity(MAX_RECENT),
             nudge_count: 0,
+            consecutive_failures: 0,
         }
     }
 
@@ -47,6 +51,34 @@ impl DoomLoopDetector {
     pub fn reset(&mut self) {
         self.recent.clear();
         self.nudge_count = 0;
+        self.consecutive_failures = 0;
+    }
+
+    /// 记录本轮所有 tool call 的执行结果。返回 (action, warning)：
+    /// - 若最近 CONSECUTIVE_FAILURE_LIMIT 次 tool call 全部失败 → ForceStop
+    /// - 否则返回 (None, "")
+    ///
+    /// 跟踪逻辑：只要本轮有任意一次成功，counter 清零。
+    /// 用途：catch "工具风暴"（LLM 编造错误路径 / 反复试错不同参数）。
+    pub fn record_outcomes(&mut self, outcomes: &[bool]) -> (DoomLoopAction, String) {
+        if outcomes.is_empty() {
+            return (DoomLoopAction::None, String::new());
+        }
+        if outcomes.iter().any(|ok| *ok) {
+            self.consecutive_failures = 0;
+            return (DoomLoopAction::None, String::new());
+        }
+        self.consecutive_failures += outcomes.len();
+        if self.consecutive_failures >= CONSECUTIVE_FAILURE_LIMIT {
+            return (
+                DoomLoopAction::ForceStop,
+                format!(
+                    "已连续 {} 次工具调用全部失败（不同路径 / 参数均报错），疑似工具风暴或环境错误。强制停止以避免资源浪费。",
+                    self.consecutive_failures
+                ),
+            );
+        }
+        (DoomLoopAction::None, String::new())
     }
 
     /// 计算工具调用指纹: "tool_name:args_hash"
@@ -152,6 +184,44 @@ impl Default for DoomLoopDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn consecutive_failures_force_stop() {
+        let mut detector = DoomLoopDetector::new();
+        // 5 次失败（不同 args），不是循环但全失败 → ForceStop
+        let tcs: Vec<ToolCall> = (0..5)
+            .map(|i| make_tool_call("read_file", &format!(r#"{{"path":"bad-{}.txt"}}"#, i)))
+            .collect();
+        for tc in &tcs {
+            let _ = detector.check(std::slice::from_ref(tc));
+            let (a, w) = detector.record_outcomes(&[false]);
+            if detector.consecutive_failures >= 5 {
+                assert_eq!(a, DoomLoopAction::ForceStop);
+                assert!(w.contains("工具风暴"));
+            }
+        }
+        assert_eq!(detector.consecutive_failures, 5);
+    }
+
+    #[test]
+    fn consecutive_failures_reset_on_success() {
+        let mut detector = DoomLoopDetector::new();
+        let _ = detector.record_outcomes(&[false]);
+        let _ = detector.record_outcomes(&[false]);
+        assert_eq!(detector.consecutive_failures, 2);
+        let _ = detector.record_outcomes(&[true]);
+        assert_eq!(detector.consecutive_failures, 0);
+    }
+
+    #[test]
+    fn mixed_round_resets_counter() {
+        let mut detector = DoomLoopDetector::new();
+        let _ = detector.record_outcomes(&[false, false]);
+        assert_eq!(detector.consecutive_failures, 2);
+        // 本轮有成功 → 清零
+        let _ = detector.record_outcomes(&[true, false]);
+        assert_eq!(detector.consecutive_failures, 0);
+    }
 
     fn make_tool_call(name: &str, args: &str) -> ToolCall {
         ToolCall {

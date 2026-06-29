@@ -124,31 +124,36 @@ impl Profile {
             })?;
         }
 
-        let existing = Self::list(profile_dir)?;
-        if !existing.is_empty() {
-            return Ok(());
-        }
+        const SAMPLE_VERSION: &str = "0.3.1";
 
-        let developer_yaml = r#"name: developer
-description: "Rust development assistant"
+        let developer_yaml = format!(
+            r#"name: developer
+description: "Generic development assistant (multi-task)"
 system_prompt: |
-  你是一个 Rust 开发助手，专注于帮助用户编写、审查和改进 Rust 代码。
+  你是 qingbird 的通用开发 profile。用于写代码、审查、重构等工程任务，
+  也支持文件操作、命令执行、调研等多种工作。
 
-  工作方式：
-  - 先理解用户的具体需求和约束，再给出方案
+  核心原则：
+  - 先理解用户意图和约束（任务范围、文件范围、风险偏好），再决定如何行动
+  - 用户没明确要求时，不假设工作上下文；闲聊时不要主动调工具
+  - 工具仅在相关且必要时调用
   - 尊重现有代码风格和约定，不做大范围重写
-  - 读当前状态再行动；不确定时询问或检查文件
-  - 使用中文回复，代码注释保持英文
+  - 直接、简洁；中文回复；代码注释保持英文
+sample_version: "{SAMPLE_VERSION}"
 tools_allow: []
 risk_threshold: L3
 thinking_enabled: true
-"#;
+"#
+        );
 
-        let researcher_yaml = r#"name: researcher
-description: "Research assistant (read-only)"
+        let researcher_yaml = format!(
+            r#"name: researcher
+description: "Read-only research assistant"
 system_prompt: |
-  你是一个研究助手，专注于信息检索、整合与分析。
-  只使用只读工具收集信息，不修改任何文件；找到答案后清晰汇报发现。
+  你是 qingbird 的调研 profile。用于检索、整合、分析信息。
+  只使用只读工具收集信息，不修改任何文件、也不执行命令；
+  找到答案后清晰汇报发现；任务边界清晰前不假设上下文。
+sample_version: "{SAMPLE_VERSION}"
 tools_allow:
   - read_file
   - search_code
@@ -156,22 +161,52 @@ tools_allow:
   - list_dir
   - web_fetch
 risk_threshold: L1
-"#;
+"#
+        );
 
-        std::fs::write(profile_dir.join("developer.yaml"), developer_yaml).map_err(|e| {
-            EflowError::ProfileMalformed {
-                name: "developer".into(),
-                reason: e.to_string(),
+        // Refresh-on-version-mismatch: write only if existing yaml is older
+        // (missing or smaller sample_version). User-customized profiles
+        // (sample_version >= current, or unknown field) are left untouched.
+        let need_write = |name: &str| -> Result<bool> {
+            let path = profile_dir.join(format!("{}.yaml", name));
+            if !path.exists() {
+                return Ok(true);
             }
-        })?;
-        std::fs::write(profile_dir.join("researcher.yaml"), researcher_yaml).map_err(|e| {
-            EflowError::ProfileMalformed {
-                name: "researcher".into(),
+            let raw = std::fs::read_to_string(&path).map_err(|e| EflowError::ProfileMalformed {
+                name: name.into(),
                 reason: e.to_string(),
+            })?;
+            // naive parse: just look for `sample_version: "X"` line
+            let current = raw
+                .lines()
+                .find_map(|l| l.trim_start().strip_prefix("sample_version:"))
+                .map(|s| s.trim().trim_matches('"').to_string());
+            match current {
+                None => Ok(true), // older version without sample_version field
+                Some(v) if v.as_str() < SAMPLE_VERSION => Ok(true),
+                _ => Ok(false),
             }
-        })?;
+        };
 
-        tracing::info!("Created sample profiles: developer, researcher");
+        if need_write("developer")? {
+            std::fs::write(profile_dir.join("developer.yaml"), developer_yaml).map_err(|e| {
+                EflowError::ProfileMalformed {
+                    name: "developer".into(),
+                    reason: e.to_string(),
+                }
+            })?;
+            tracing::info!("Wrote/refreshed sample profile: developer");
+        }
+        if need_write("researcher")? {
+            std::fs::write(profile_dir.join("researcher.yaml"), researcher_yaml).map_err(|e| {
+                EflowError::ProfileMalformed {
+                    name: "researcher".into(),
+                    reason: e.to_string(),
+                }
+            })?;
+            tracing::info!("Wrote/refreshed sample profile: researcher");
+        }
+
         Ok(())
     }
 

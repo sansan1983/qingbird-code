@@ -27,6 +27,15 @@ impl AgentHooks {
         self.current_tool_calls = tool_calls;
     }
 
+    /// 把本轮 tool 执行结果喂给 doom_detector；如果连续失败到上限，
+    /// 返回 ForceStop + 警告，调用方应 halt loop。
+    pub(super) fn record_tool_outcomes(
+        &mut self,
+        outcomes: &[bool],
+    ) -> (crate::doom_loop::DoomLoopAction, String) {
+        self.doom_detector.record_outcomes(outcomes)
+    }
+
     /// 执行 completion nudge 检查（在 process_llm_response 中调用）
     pub(super) fn check_completion_nudge(
         &mut self,
