@@ -7,3 +7,7 @@ pub mod skill;
 pub mod subagent;
 
 pub use react_loop::{ReactLoop, ReactLoopConfig};
+pub use subagent::{
+    ChildEvent, ChildRecord, ChildStatus, SpawnPriority, SubagentExecutor, SubagentMode,
+    SubagentProfile, SubagentProfileConfig, SubagentSpawnHints, ToolPolicy, load_profiles,
+};
