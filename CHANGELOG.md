@@ -181,7 +181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.3.0] - 2026-06-29
 
 ### Added
 
@@ -189,25 +189,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Edit tool** (`edit` — 8th built-in tool): precise substring replacement in files with single-match enforcement, line-level diff summary via `similar` crate, `allowed_paths` and risk-level checks. `EditTool` struct with `Tool` trait implementation
 - **UndoStack** (20-deep LIFO ring buffer): `UndoStack` + `UndoEntry` in `qbird-code-tools`, `Arc<Mutex<UndoStack>>` wired into `EditTool` so every successful edit auto-pushes the pre-edit file snapshot
 - **`/undo` slash command** in interactive mode: pops the undo stack and writes the file back to its previous content; rejected in `--execute` mode
-- **i18n keys** for edit/undo: `interactive_edit_diff_summary`, `interactive_edit_success`, `interactive_undo_success`, `interactive_help_undo`, `err_tool_edit_not_found`, `err_tool_edit_ambiguous`, `err_undo_stack_empty`, `err_undo_unavailable_in_execute`, `err_undo_lock_failed` (zh-CN + en-US)
-- **12 unit tests** for EditTool (match/no-match/ambiguous/diff/allowed_paths/risk/no-file) and UndoStack (push/pop/limit/profile-preserved/execute-blocked)
-- **1 integration test** for edit → undo round trip
-
-### Changed
-
 - **Profile system** (`--profile <name>` flag + `/profile` slash command): user profile files at `<data_dir>/qingbird/profiles/<name>.yaml` override parts of `qingbird.yaml` — `system_prompt` (replace, not append), `tools_allow` (whitelist enforced in `ToolRegistry.execute`), `risk_threshold`, `provider`, `model`. Resolution order: `--profile` CLI flag > `qingbird.yaml` `profiles.default` > no profile. Mid-session `/profile <name>`, `/profile list`, `/profile` (current). `Profile::load`, `Profile::list`, `Profile::merge_into`, `Profile::default_dir`. `ToolRegistry.set_allowed_tools` + whitelist check in `execute`. New `EflowError` variants: `ProfileNotFound { name }`, `ProfileMalformed { name, reason }`, `ToolNotAllowed { tool, allowed }` — all with `user_message()` i18n keys
-- **10 unit tests** for `Profile` (load/list/merge/replace semantics/default dir), **3 tests** for `ToolRegistry` `allowed_tools` whitelist (block/admit/none-allows-all), **3 tests** for the CLI `--profile` flag path (load → merge → user_message on missing → list)
-
-### Known limitations
-
-- Profile `provider` and `model` fields require restart to take effect; mid-session `/profile <name>` applies other fields immediately but logs a warning (and prints to stderr) when these two fields would have changed something. The `HttpLlmClient` + `Box<dyn Provider>` are constructed at startup before the profile is merged, so a profile with `provider: ollama` would silently keep `deepseek` until a follow-up task reorders / re-inits the LLM at the profile-application point. Same caveat applies to `--profile` at startup. Tracked as a known limitation of v0.3.0; new i18n keys `interactive_profile_warn_provider` / `interactive_profile_warn_model` (both locales) provide the user-facing message.
 - **Session lifecycle** (`/session delete <id>` / `/session rename <id> <name>`): delete with auto-archive to `<data_dir>/qingbird/sessions.archive/<id>.jsonl` (one line per message, JSON `role/content/timestamp`); rename persists across reopens; prefix-match deletion (exact wins, then `LIKE prefix%`, ambiguous → `SessionAmbiguous` error)
 - **SessionStore new API**: `delete(id_or_prefix, archive_dir)`, `rename(id, new_name)`, `list_with_meta() -> Vec<SessionMeta>` (no LIMIT 20), `cleanup_old_sessions(keep) -> Vec<deleted_ids>`
 - **SessionMeta struct**: `id / name / created_at / updated_at / message_count`
 - **EflowError variants**: `SessionNotFound { id }`, `SessionAmbiguous { prefix, count }` (both with `user_message()` i18n keys)
 - **Startup LRU**: on every interactive-mode launch, `cleanup_old_sessions(50)` prunes oldest-by-updated_at; silent to user, logged at `warn` on failure
-- **`tempfile` dev-dep** in `qbird-code-infra` (8 new SessionStore unit tests)
-- **8 unit tests + 1 integration test** for the session lifecycle (total 9 new tests)
+- **`/provider` slash command**: interactive mode `/provider <name>` switches active provider, clears model override, preserves temperature
+- **`/usage` cache hit display**: `/usage` output includes `cache hit: N tokens` when `cache_hit_tokens > 0`
+- **Cleanup throttle**: `SessionStore.should_cleanup(interval_hours)` + `mark_cleanup()` throttles LRU cleanup to once per interval
+- **Sample profiles**: `Profile::create_sample_profiles()` seeds `developer` + `researcher` profiles on first run
+- **i18n keys** for edit/undo: `interactive_edit_diff_summary`, `interactive_edit_success`, `interactive_undo_success`, `interactive_help_undo`, `err_tool_edit_not_found`, `err_tool_edit_ambiguous`, `err_undo_stack_empty`, `err_undo_unavailable_in_execute`, `err_undo_lock_failed` (zh-CN + en-US)
+- **357 tests** across the workspace (46 new in Task 30-10), including 1 comprehensive E2E test covering profile → session → edit → undo → delete → usage full chain
+
+### Known limitations
+
+- Profile `provider` and `model` fields require restart to take effect; mid-session `/profile <name>` applies other fields immediately but logs a warning (and prints to stderr) when these two fields would have changed something. The `HttpLlmClient` + `Box<dyn Provider>` are constructed at startup before the profile is merged, so a profile with `provider: ollama` would silently keep `deepseek` until a follow-up task reorders / re-inits the LLM at the profile-application point. Same caveat applies to `--profile` at startup. Tracked as a known limitation of v0.3.0; new i18n keys `interactive_profile_warn_provider` / `interactive_profile_warn_model` (both locales) provide the user-facing message.
 
 ---
 
@@ -253,7 +250,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/sansan1983/qingbird/compare/v0.2.19...HEAD
+[Unreleased]: https://github.com/sansan1983/qingbird/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sansan1983/qingbird/compare/v0.2.19...v0.3.0
 [0.2.19]: https://github.com/sansan1983/qingbird/compare/v0.2.18...v0.2.19
 [0.2.18]: https://github.com/sansan1983/qingbird/compare/v0.2.17...v0.2.18
 [0.2.17]: https://github.com/sansan1983/qingbird/releases/tag/v0.2.17
