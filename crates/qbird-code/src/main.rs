@@ -224,6 +224,14 @@ async fn main() {
     let active_locale = qbird_code_infra::locale::init(resolved_locale_input);
     tracing::info!(locale = active_locale, "locale activated");
 
+    // === 2.5.5. 创建 sample profile（必须在 validate_config 之前）
+    // validate_config 检查 profiles.default 是否存在；fresh clone 时
+    // profile 目录是空的，需要先 seed developer/researcher 才能通过校验。
+    let profile_dir = Profile::default_dir();
+    if let Err(e) = Profile::create_sample_profiles(&profile_dir) {
+        tracing::warn!("Failed to create sample profiles: {}", e);
+    }
+
     // === 2.6. 配置校验（聚合错误输出，exit code 2） ===
     let validation_errors = validate_config(&cfg);
     if !validation_errors.is_empty() {
@@ -376,11 +384,7 @@ async fn main() {
     // 优先级: --profile CLI flag > yaml profiles.default > 无
     // 此时 LLM 已 init（确定性）、registry 刚组装好；profile 仍可在
     // model=... / provider=... 已被 reads 的状态下覆盖。
-    let profile_dir = Profile::default_dir();
-    // First startup: create sample profiles if the directory is empty.
-    if let Err(e) = Profile::create_sample_profiles(&profile_dir) {
-        tracing::warn!("Failed to create sample profiles: {}", e);
-    }
+    // 注：sample profiles 已在 2.5.5 阶段创建（必须在 validate_config 之前）
     let resolved_profile_name: Option<String> =
         match (&cli.profile, cfg.profiles.default.is_empty()) {
             (Some(name), _) => Some(name.clone()),
