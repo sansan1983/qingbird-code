@@ -183,6 +183,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Session lifecycle** (`/session delete <id>` / `/session rename <id> <name>`): delete with auto-archive to `<data_dir>/qingbird/sessions.archive/<id>.jsonl` (one line per message, JSON `role/content/timestamp`); rename persists across reopens; prefix-match deletion (exact wins, then `LIKE prefix%`, ambiguous → `SessionAmbiguous` error)
+- **SessionStore new API**: `delete(id_or_prefix, archive_dir)`, `rename(id, new_name)`, `list_with_meta() -> Vec<SessionMeta>` (no LIMIT 20), `cleanup_old_sessions(keep) -> Vec<deleted_ids>`
+- **SessionMeta struct**: `id / name / created_at / updated_at / message_count`
+- **EflowError variants**: `SessionNotFound { id }`, `SessionAmbiguous { prefix, count }` (both with `user_message()` i18n keys)
+- **Startup LRU**: on every interactive-mode launch, `cleanup_old_sessions(50)` prunes oldest-by-updated_at; silent to user, logged at `warn` on failure
+- **`tempfile` dev-dep** in `qbird-code-infra` (8 new SessionStore unit tests)
+- **8 unit tests + 1 integration test** for the session lifecycle (total 9 new tests)
+
 ---
 
 ## [0.2.19] - 2026-06-28

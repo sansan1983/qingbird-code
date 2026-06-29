@@ -369,6 +369,15 @@ async fn main() {
         std::fs::create_dir_all(&session_dirs).ok();
         let db_path = session_dirs.join("sessions.db");
         let session_store = SessionStore::open(&db_path).ok();
+        let archive_dir = dirs::data_dir()
+            .map(|p| p.join("qingbird").join("sessions.archive"))
+            .unwrap_or_else(|| std::path::PathBuf::from(".qingbird/sessions.archive"));
+        std::fs::create_dir_all(&archive_dir).ok();
+        if let Some(ref store) = session_store
+            && let Err(e) = store.cleanup_old_sessions(50)
+        {
+            tracing::warn!("Session LRU cleanup failed: {}", e);
+        }
         let mut current_session_id = uuid::Uuid::new_v4().to_string();
 
         let mut context_manager = qbird_code_infra::memory::ContextManager::new(
@@ -455,6 +464,8 @@ async fn main() {
                         println!("{}", t!("interactive_help_usage"));
                         println!("{}", t!("interactive_help_sessions"));
                         println!("{}", t!("interactive_help_session_load"));
+                        println!("{}", t!("interactive_help_session_delete"));
+                        println!("{}", t!("interactive_help_session_rename"));
                         println!();
                         println!("{}", t!("interactive_help_sdd_title"));
                         println!("{}", t!("interactive_help_sdd_run"));
@@ -463,7 +474,6 @@ async fn main() {
                         println!();
                         println!("{}", t!("interactive_help_undo_planned"));
                         println!("{}", t!("interactive_help_profile_planned"));
-                        println!("{}", t!("interactive_help_session_delete_planned"));
                         println!();
                     }
                     "/usage" => {
@@ -557,6 +567,63 @@ async fn main() {
                                                 t!("interactive_session_not_found", id = sub_arg)
                                             );
                                         }
+                                    }
+                                }
+                            }
+                            "delete" => {
+                                if sub_arg.is_empty() {
+                                    println!("{}", t!("interactive_session_delete_usage"));
+                                } else if let Some(ref store) = session_store {
+                                    match store.delete(sub_arg, &archive_dir) {
+                                        Ok(()) => {
+                                            println!(
+                                                "{}",
+                                                t!("interactive_session_deleted", id = sub_arg)
+                                            );
+                                            if current_session_id == sub_arg {
+                                                current_session_id =
+                                                    uuid::Uuid::new_v4().to_string();
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!("{}", e.user_message());
+                                        }
+                                    }
+                                } else {
+                                    eprintln!("{}", t!("err_session_store_unavailable"));
+                                }
+                            }
+                            "rename" => {
+                                if sub_arg.is_empty() {
+                                    println!("{}", t!("interactive_session_rename_usage"));
+                                } else {
+                                    let rename_parts: Vec<&str> = sub_arg.splitn(2, ' ').collect();
+                                    let id = rename_parts.first().copied().unwrap_or("");
+                                    let new_name =
+                                        rename_parts.get(1).copied().unwrap_or("").trim();
+                                    if id.is_empty() || new_name.is_empty() {
+                                        println!(
+                                            "{}",
+                                            t!("interactive_session_rename_missing_name")
+                                        );
+                                    } else if let Some(ref store) = session_store {
+                                        match store.rename(id, new_name) {
+                                            Ok(()) => {
+                                                println!(
+                                                    "{}",
+                                                    t!(
+                                                        "interactive_session_renamed",
+                                                        id = id,
+                                                        name = new_name
+                                                    )
+                                                );
+                                            }
+                                            Err(e) => {
+                                                eprintln!("{}", e.user_message());
+                                            }
+                                        }
+                                    } else {
+                                        eprintln!("{}", t!("err_session_store_unavailable"));
                                     }
                                 }
                             }

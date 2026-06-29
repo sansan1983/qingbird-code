@@ -45,6 +45,12 @@ pub enum EflowError {
 
     #[error("internal error: {0}")]
     Internal(String),
+
+    #[error("session not found: {id}")]
+    SessionNotFound { id: String },
+
+    #[error("session prefix {prefix} is ambiguous ({count} matches)")]
+    SessionAmbiguous { prefix: String, count: usize },
 }
 
 pub type Result<T> = std::result::Result<T, EflowError>;
@@ -85,6 +91,15 @@ impl EflowError {
             Self::Io(err) => t!("err_io", msg = &err.to_string()).into_owned(),
             Self::Serialization(msg) => t!("err_serialization", msg = msg.as_str()).into_owned(),
             Self::Internal(msg) => t!("err_internal", msg = msg.as_str()).into_owned(),
+            Self::SessionNotFound { id } => {
+                t!("err_session_not_found", id = id.as_str()).into_owned()
+            }
+            Self::SessionAmbiguous { prefix, count } => t!(
+                "err_session_ambiguous",
+                prefix = prefix.as_str(),
+                count = count
+            )
+            .into_owned(),
         }
     }
 }
