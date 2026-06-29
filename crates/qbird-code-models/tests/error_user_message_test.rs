@@ -26,7 +26,9 @@ fn test_user_message_memory() {
 
 #[test]
 fn test_user_message_profile_not_found() {
-    let err = EflowError::ProfileNotFound("developer".into());
+    let err = EflowError::ProfileNotFound {
+        name: "developer".into(),
+    };
     let msg = err.user_message();
     assert!(!msg.is_empty());
     assert!(msg.contains("developer"));
@@ -136,7 +138,7 @@ fn test_user_message_all_variants_non_empty() {
             reason: "y".into(),
         },
         EflowError::TaskCancelled("x".into()),
-        EflowError::ProfileNotFound("x".into()),
+        EflowError::ProfileNotFound { name: "x".into() },
         EflowError::SkillNotFound("x".into()),
         EflowError::PermissionDenied("x".into()),
         EflowError::Io(std::io::Error::other("x")),

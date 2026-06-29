@@ -11,11 +11,12 @@ use qbird_code_agents::{ReactLoop, ReactLoopConfig};
 use qbird_code_infra::config::{find_config, load_config};
 use qbird_code_infra::http_client::HttpLlmClient;
 use qbird_code_infra::memory::{MemoryManager, SessionStore};
+use qbird_code_infra::profile::Profile;
 use qbird_code_infra::providers::{
     AnthropicProvider, DeepseekAnthropicProvider, DeepseekProvider, OllamaProvider, OpenAIProvider,
 };
 use qbird_code_infra::runtime_overrides::{CliOverrides, RuntimeOverrides};
-use qbird_code_models::{Message, RetryPolicy};
+use qbird_code_models::{Message, RetryPolicy, RiskLevel};
 use qbird_code_tools::{
     ExecuteCommandTool, GlobTool, ListDirTool, ReadFileTool, SearchCodeTool, ToolRegistry,
     WebFetchTool, WriteFileTool,
@@ -65,19 +66,88 @@ struct Cli {
     /// Disable streaming mode (overrides --stream)
     #[arg(long, default_value = "false")]
     no_stream: bool,
+
+    /// 加载用户 profile 文件 (`<data_dir>/qingbird/profiles/<name>.yaml`)。
+    /// 优先级: `--profile` > yaml `profiles.default` > 无 profile。
+    #[arg(long)]
+    profile: Option<String>,
 }
 
 fn build_system_message(registry: &ToolRegistry, provider_name: &str) -> Message {
+    Message::system(build_system_prompt_text(registry, provider_name))
+}
+
+fn build_system_prompt_text(registry: &ToolRegistry, provider_name: &str) -> String {
     let defs = registry.definitions();
     let tool_names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
-    Message::system(
-        t!(
-            "system_prompt",
-            provider = provider_name,
-            tools = tool_names.join(", ")
-        )
-        .to_string(),
+    t!(
+        "system_prompt",
+        provider = provider_name,
+        tools = tool_names.join(", ")
     )
+    .to_string()
+}
+
+/// Parse a risk-threshold string ("L0".. "L3") into the enum. None = unknown.
+fn parse_risk_threshold(s: &str) -> Option<RiskLevel> {
+    match s.to_ascii_uppercase().as_str() {
+        "L0" => Some(RiskLevel::L0),
+        "L1" => Some(RiskLevel::L1),
+        "L2" => Some(RiskLevel::L2),
+        "L3" => Some(RiskLevel::L3),
+        _ => None,
+    }
+}
+
+/// Apply a profile onto an existing `Arc<ToolRegistry>` mid-session.
+///
+/// Clones the inner `ToolRegistry` (cheap — all fields Clone, tools are
+/// `Arc<dyn Tool>`), mutates the clone, rewraps it. Replaces the caller's
+/// `tool_registry: &mut Arc<ToolRegistry>`. Caller is the sole owner, so
+/// `Arc::strong_count == 1` — clone + drop old + arc-new is fine.
+///
+/// Profile `provider` / `model` fields are merged but do NOT re-init the
+/// live `HttpLlmClient` / `Box<dyn Provider>` (out of scope for v0.3.0
+/// — see `merge_into` doc). Warnings about this limitation are pushed
+/// into `warnings` so the caller can surface them to the user.
+fn apply_profile_to_registry(
+    profile: &Profile,
+    tool_registry: &mut Arc<ToolRegistry>,
+    system_prompt: &mut String,
+    provider_active: &str,
+    model_active: &str,
+    warnings: &mut Vec<String>,
+) {
+    let mut allowed: Option<Vec<String>> = tool_registry.allowed_tools();
+    let current_risk = match tool_registry.risk_threshold() {
+        RiskLevel::L0 => "L0",
+        RiskLevel::L1 => "L1",
+        RiskLevel::L2 => "L2",
+        RiskLevel::L3 => "L3",
+    };
+    let mut risk: Option<String> = Some(current_risk.to_string());
+    let mut provider = provider_active.to_string();
+    let mut model = model_active.to_string();
+    profile.merge_into(
+        system_prompt,
+        &mut allowed,
+        &mut risk,
+        &mut provider,
+        &mut model,
+        warnings,
+    );
+
+    // Mutate the registry by clone + replace (sole-owner fast path).
+    let mut reg = (**tool_registry).clone();
+    if let Some(allow) = allowed {
+        reg.set_allowed_tools(Some(allow));
+    }
+    if let Some(r_str) = risk
+        && let Some(rl) = parse_risk_threshold(&r_str)
+    {
+        reg.set_risk_threshold(rl);
+    }
+    *tool_registry = Arc::new(reg);
 }
 
 fn init_llm(
@@ -276,6 +346,64 @@ async fn main() {
     registry.set_allowed_paths(cfg.security.allowed_paths.clone());
     // 19-07: 风险阈值从 yaml 读，替代历史硬编码 L3
     registry.set_risk_threshold(cfg.security.risk_threshold);
+
+    // === 4a. 解析 + 应用 profile（Task 30-02）===
+    // 优先级: --profile CLI flag > yaml profiles.default > 无
+    // 此时 LLM 已 init（确定性）、registry 刚组装好；profile 仍可在
+    // model=... / provider=... 已被 reads 的状态下覆盖。
+    let profile_dir = Profile::default_dir();
+    let resolved_profile_name: Option<String> =
+        match (&cli.profile, cfg.profiles.default.is_empty()) {
+            (Some(name), _) => Some(name.clone()),
+            (None, false) => Some(cfg.profiles.default.clone()),
+            (None, true) => None,
+        };
+    let mut active_profile: Option<String> = None;
+    let mut active_allowed_tools: Option<Vec<String>> = None;
+    let mut active_risk_override: Option<String> = None;
+    let mut profile_overridden_system_prompt: Option<String> = None;
+
+    if let Some(ref pname) = resolved_profile_name {
+        match Profile::load(&profile_dir, pname) {
+            Ok(p) => {
+                tracing::info!(profile = %p.name, "profile loaded");
+                let mut sp = build_system_prompt_text(&registry, &active);
+                let mut provider_active = active.clone();
+                let mut model_active = model.clone();
+                let mut profile_warnings: Vec<String> = Vec::new();
+                p.merge_into(
+                    &mut sp,
+                    &mut active_allowed_tools,
+                    &mut active_risk_override,
+                    &mut provider_active,
+                    &mut model_active,
+                    &mut profile_warnings,
+                );
+                if let Some(ref allow) = active_allowed_tools {
+                    registry.set_allowed_tools(Some(allow.clone()));
+                }
+                if let Some(ref r) = active_risk_override
+                    && let Some(rl) = parse_risk_threshold(r)
+                {
+                    registry.set_risk_threshold(rl);
+                }
+                profile_overridden_system_prompt = Some(sp);
+                active_profile = Some(p.name.clone());
+                // Surface provider/model-restart-required warnings to the user.
+                // Without this, a user with `provider: ollama` in their profile
+                // silently gets `deepseek` (LLM was already constructed above).
+                for w in &profile_warnings {
+                    eprintln!("{w}");
+                    tracing::warn!("{w}");
+                }
+            }
+            Err(e) => {
+                eprintln!("{}", e.user_message());
+                std::process::exit(1);
+            }
+        }
+    }
+
     // 提取 thinking 配置（仅 DeepSeek 支持）
     let (thinking_enabled, thinking_effort) = match active.as_str() {
         "deepseek" | "deepseek-anthropic" => (
@@ -284,7 +412,7 @@ async fn main() {
         ),
         _ => (false, "high".into()),
     };
-    let tool_registry = Arc::new(registry);
+    let mut tool_registry = Arc::new(registry);
 
     // === 4b. 初始化技能注册表 ===
     let mut skill_registry = SkillRegistry::new();
@@ -318,7 +446,10 @@ async fn main() {
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![
-            build_system_message(&tool_registry, &active),
+            match &profile_overridden_system_prompt {
+                Some(sp) => Message::system(sp.clone()),
+                None => build_system_message(&tool_registry, &active),
+            },
             Message::user(&prompt),
         ];
 
@@ -357,7 +488,10 @@ async fn main() {
             stream_enabled,
             ..ReactLoopConfig::default()
         });
-        let mut messages = vec![build_system_message(&tool_registry, &active)];
+        let mut messages = vec![match &profile_overridden_system_prompt {
+            Some(sp) => Message::system(sp.clone()),
+            None => build_system_message(&tool_registry, &active),
+        }];
         let mut cumulative_prompt: u64 = 0;
         let mut cumulative_completion: u64 = 0;
         let mut cumulative_cache_hit: u64 = 0;
@@ -473,7 +607,7 @@ async fn main() {
                         println!("{}", t!("interactive_help_sdd_status"));
                         println!();
                         println!("{}", t!("interactive_help_undo_planned"));
-                        println!("{}", t!("interactive_help_profile_planned"));
+                        println!("{}", t!("interactive_help_profile"));
                         println!();
                     }
                     "/usage" => {
@@ -791,6 +925,81 @@ async fn main() {
                             println!("{}", t!("interactive_provider_switched", name = new));
                             if needs_model_reset {
                                 println!("{}", t!("interactive_provider_reset_model"));
+                            }
+                        }
+                    }
+                    "/profile" => {
+                        if arg.is_empty() {
+                            match &active_profile {
+                                Some(name) => {
+                                    println!(
+                                        "{}",
+                                        t!("interactive_profile_current", name = name.as_str())
+                                    );
+                                }
+                                None => {
+                                    println!("{}", t!("interactive_profile_usage"));
+                                }
+                            }
+                        } else if arg == "list" {
+                            match Profile::list(&profile_dir) {
+                                Ok(list) => {
+                                    println!("{}", t!("interactive_profile_list_title"));
+                                    for n in &list {
+                                        println!("  {n}");
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("{}", e.user_message());
+                                }
+                            }
+                        } else {
+                            // Switch profile mid-session.
+                            match Profile::load(&profile_dir, arg) {
+                                Ok(p) => {
+                                    // Re-apply onto messages[0] (system prompt)
+                                    // and tool_registry.set_allowed_tools +
+                                    // set_risk_threshold (via clone+replace).
+                                    let mut sp = if let Some(m) = messages.first() {
+                                        m.content.clone()
+                                    } else {
+                                        build_system_prompt_text(&tool_registry, &active)
+                                    };
+                                    let mut switch_warnings: Vec<String> = Vec::new();
+                                    apply_profile_to_registry(
+                                        &p,
+                                        &mut tool_registry,
+                                        &mut sp,
+                                        &active,
+                                        &model,
+                                        &mut switch_warnings,
+                                    );
+                                    // Re-write messages[0] with the new prompt.
+                                    if let Some(m) = messages.first_mut() {
+                                        m.content = sp.clone();
+                                    }
+                                    active_profile = Some(p.name.clone());
+                                    println!(
+                                        "{}",
+                                        t!("interactive_profile_loaded", name = p.name.as_str())
+                                    );
+                                    // Mid-session provider/model overrides cannot
+                                    // re-init the live LLM client. Surface this
+                                    // explicitly so the user understands why
+                                    // their `provider:` change doesn't take effect.
+                                    for w in &switch_warnings {
+                                        eprintln!("{w}");
+                                        tracing::warn!("{w}");
+                                    }
+                                    if !switch_warnings.is_empty() {
+                                        eprintln!(
+                                            "Note: provider/model changes apply to new requests; existing LLM client unchanged."
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("{}", e.user_message());
+                                }
                             }
                         }
                     }

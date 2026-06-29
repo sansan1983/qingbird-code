@@ -9,4 +9,7 @@ pub mod locale;
 pub mod runtime_overrides;
 
 pub mod memory;
+pub mod profile;
 pub mod providers;
+
+pub use profile::Profile;

@@ -6,6 +6,8 @@ cfg_err_invalid_active: "Invalid llm.active: '%{value}'. Valid values: %{valid}"
 cfg_err_profile_not_found: "Profile file not found: %{path}"
 cfg_err_zero_mem_limit: "memory.working_memory_limit must be greater than 0"
 err_profile_not_found: "Profile not found: %{name}"
+err_profile_malformed: "Profile %{name} malformed: %{reason}"
+err_tool_not_allowed: "Tool %{tool} not in allowed list. Allowed: %{allowed}"
 
 err_tool_not_found: "Tool not found: %{name}"
 err_tool_l3_required: "Tool '%{name}' requires L3+ permission"
@@ -119,6 +121,16 @@ interactive_help_sdd_title: "SDD workflow commands:"
 interactive_help_sdd_run: "  /sdd run          Run SDD workflow"
 interactive_help_sdd_confirm: "  /sdd confirm      Confirm current HARD-GATE"
 interactive_help_sdd_status: "  /sdd status       Show SDD status"
+
+# === Profile commands (v0.3.0 — Task 30-02) ===
+interactive_profile_loaded: "Profile loaded: %{name}"
+interactive_profile_list_title: "Available profiles:"
+interactive_profile_current: "Current profile: %{name}"
+interactive_profile_usage: "Usage: /profile [list|<name>]"
+interactive_help_profile: "  /profile [list|<name>] — Switch or view profile"
+# Provider/model require restart (v0.3.0 — Task 30-02 follow-up)
+interactive_profile_warn_provider: "Note: profile provider (%{value}) requires restart"
+interactive_profile_warn_model: "Note: profile model (%{value}) requires restart"
 
 # === System prompt ===
 system_prompt: "You are qingbird, an efficient coding assistant. Current LLM Provider: %{provider}.\n\nAvailable tools: %{tools}\n\nCall tools to complete the task. After each tool call you will receive the result. Decide the next step based on results. Provide a summary when done."

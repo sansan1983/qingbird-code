@@ -28,8 +28,14 @@ pub enum EflowError {
     #[error("task cancelled: {0}")]
     TaskCancelled(String),
 
-    #[error("profile not found: {0}")]
-    ProfileNotFound(String),
+    #[error("Profile not found: {name}")]
+    ProfileNotFound { name: String },
+
+    #[error("Profile malformed ({name}): {reason}")]
+    ProfileMalformed { name: String, reason: String },
+
+    #[error("Tool not allowed: {tool}")]
+    ToolNotAllowed { tool: String, allowed: Vec<String> },
 
     #[error("skill not found: {0}")]
     SkillNotFound(String),
@@ -79,8 +85,23 @@ impl EflowError {
             )
             .into_owned(),
             Self::TaskCancelled(id) => t!("err_task_cancelled", id = id.as_str()).into_owned(),
-            Self::ProfileNotFound(name) => {
+            Self::ProfileNotFound { name } => {
                 t!("err_profile_not_found", name = name.as_str()).into_owned()
+            }
+            Self::ProfileMalformed { name, reason } => t!(
+                "err_profile_malformed",
+                name = name.as_str(),
+                reason = reason.as_str()
+            )
+            .into_owned(),
+            Self::ToolNotAllowed { tool, allowed } => {
+                let allowed_csv = allowed.join(", ");
+                t!(
+                    "err_tool_not_allowed",
+                    tool = tool.as_str(),
+                    allowed = allowed_csv.as_str()
+                )
+                .into_owned()
             }
             Self::SkillNotFound(name) => {
                 t!("err_skill_not_found", name = name.as_str()).into_owned()

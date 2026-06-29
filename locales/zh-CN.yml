@@ -6,6 +6,8 @@ cfg_err_invalid_active: "llm.active 无效: '%{value}'，合法值: %{valid}"
 cfg_err_profile_not_found: "profile 文件不存在: %{path}"
 cfg_err_zero_mem_limit: "memory.working_memory_limit 必须大于 0"
 err_profile_not_found: "未找到 profile: %{name}"
+err_profile_malformed: "profile %{name} 格式错误: %{reason}"
+err_tool_not_allowed: "工具 %{tool} 不在白名单中。允许的工具：%{allowed}"
 
 err_tool_not_found: "未找到工具: %{name}"
 err_tool_l3_required: "工具 '%{name}' 需要 L3 及以上权限"
@@ -121,6 +123,16 @@ interactive_help_sdd_title: "SDD 工作流命令:"
 interactive_help_sdd_run: "  /sdd run          运行 SDD 工作流"
 interactive_help_sdd_confirm: "  /sdd confirm      确认当前 HARD-GATE"
 interactive_help_sdd_status: "  /sdd status       查看 SDD 状态"
+
+# === Profile 命令（v0.3.0 — Task 30-02） ===
+interactive_profile_loaded: "已加载 profile: %{name}"
+interactive_profile_list_title: "可用 profile:"
+interactive_profile_current: "当前 profile: %{name}"
+interactive_profile_usage: "用法: /profile [list|<name>]"
+interactive_help_profile: "  /profile [list|<name>] — 切换或查看 profile"
+# Provider/model 需重启生效（v0.3.0 — Task 30-02 follow-up）
+interactive_profile_warn_provider: "注意: profile 指定的 provider (%{value}) 需要重启 qingbird 才会生效"
+interactive_profile_warn_model: "注意: profile 指定的 model (%{value}) 需要重启 qingbird 才会生效"
 
 # === 系统提示词 ===
 system_prompt: "你是 qingbird，一个高效的编码助手。当前 LLM Provider：%{provider}。\n\n可用工具：%{tools}\n\n请通过调用工具来完成任务。每次调用工具后会得到执行结果，根据结果决定下一步。任务完成时给出总结。"

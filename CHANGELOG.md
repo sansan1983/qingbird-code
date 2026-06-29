@@ -185,6 +185,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Profile system** (`--profile <name>` flag + `/profile` slash command): user profile files at `<data_dir>/qingbird/profiles/<name>.yaml` override parts of `qingbird.yaml` — `system_prompt` (replace, not append), `tools_allow` (whitelist enforced in `ToolRegistry.execute`), `risk_threshold`, `provider`, `model`. Resolution order: `--profile` CLI flag > `qingbird.yaml` `profiles.default` > no profile. Mid-session `/profile <name>`, `/profile list`, `/profile` (current). `Profile::load`, `Profile::list`, `Profile::merge_into`, `Profile::default_dir`. `ToolRegistry.set_allowed_tools` + whitelist check in `execute`. New `EflowError` variants: `ProfileNotFound { name }`, `ProfileMalformed { name, reason }`, `ToolNotAllowed { tool, allowed }` — all with `user_message()` i18n keys
+- **10 unit tests** for `Profile` (load/list/merge/replace semantics/default dir), **3 tests** for `ToolRegistry` `allowed_tools` whitelist (block/admit/none-allows-all), **3 tests** for the CLI `--profile` flag path (load → merge → user_message on missing → list)
+
+### Known limitations
+
+- Profile `provider` and `model` fields require restart to take effect; mid-session `/profile <name>` applies other fields immediately but logs a warning (and prints to stderr) when these two fields would have changed something. The `HttpLlmClient` + `Box<dyn Provider>` are constructed at startup before the profile is merged, so a profile with `provider: ollama` would silently keep `deepseek` until a follow-up task reorders / re-inits the LLM at the profile-application point. Same caveat applies to `--profile` at startup. Tracked as a known limitation of v0.3.0; new i18n keys `interactive_profile_warn_provider` / `interactive_profile_warn_model` (both locales) provide the user-facing message.
 - **Session lifecycle** (`/session delete <id>` / `/session rename <id> <name>`): delete with auto-archive to `<data_dir>/qingbird/sessions.archive/<id>.jsonl` (one line per message, JSON `role/content/timestamp`); rename persists across reopens; prefix-match deletion (exact wins, then `LIKE prefix%`, ambiguous → `SessionAmbiguous` error)
 - **SessionStore new API**: `delete(id_or_prefix, archive_dir)`, `rename(id, new_name)`, `list_with_meta() -> Vec<SessionMeta>` (no LIMIT 20), `cleanup_old_sessions(keep) -> Vec<deleted_ids>`
 - **SessionMeta struct**: `id / name / created_at / updated_at / message_count`
