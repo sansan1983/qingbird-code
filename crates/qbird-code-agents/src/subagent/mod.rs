@@ -15,6 +15,7 @@ pub mod profile;
 
 pub use config::{SubagentProfileConfig, load_profiles};
 pub use executor::{
-    ChildEvent, ChildRecord, ChildStatus, SpawnPriority, SubagentExecutor, SubagentSpawnHints,
+    ChildEvent, ChildRecord, ChildStatus, SpawnPriority, SubagentExecutor, SubagentExecutorTrait,
+    SubagentSpawnHints,
 };
 pub use profile::{SubagentMode, SubagentProfile, ToolPolicy, builtin_profiles};

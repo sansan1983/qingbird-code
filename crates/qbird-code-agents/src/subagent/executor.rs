@@ -258,3 +258,47 @@ impl SubagentExecutorBuilder {
         })
     }
 }
+
+/// `DelegateTaskTool` 等下游消费者用的抽象，让工具实现不直接依赖具体
+/// `SubagentExecutor`（方便测试 mock）。
+#[async_trait::async_trait]
+pub trait SubagentExecutorTrait: Send + Sync {
+    fn list_profile_names(&self) -> Vec<String>;
+    fn validate_profile(&self, name: &str) -> Result<(), EflowError>;
+    async fn spawn_child_with_provider(
+        &self,
+        profile_name: &str,
+        prompt: &str,
+        hints: &SubagentSpawnHints,
+        provider: &dyn Provider,
+        http_client: &HttpLlmClient,
+    ) -> Result<ChildRecord, EflowError>;
+}
+
+#[async_trait::async_trait]
+impl SubagentExecutorTrait for SubagentExecutor {
+    fn list_profile_names(&self) -> Vec<String> {
+        SubagentExecutor::list_profile_names(self)
+    }
+    fn validate_profile(&self, name: &str) -> Result<(), EflowError> {
+        SubagentExecutor::validate_profile(self, name).map(|_| ())
+    }
+    async fn spawn_child_with_provider(
+        &self,
+        profile_name: &str,
+        prompt: &str,
+        hints: &SubagentSpawnHints,
+        provider: &dyn Provider,
+        http_client: &HttpLlmClient,
+    ) -> Result<ChildRecord, EflowError> {
+        SubagentExecutor::spawn_child_with_provider(
+            self,
+            profile_name,
+            prompt,
+            hints,
+            provider,
+            http_client,
+        )
+        .await
+    }
+}
