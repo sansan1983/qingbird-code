@@ -4,12 +4,12 @@
 
 | 项 | 值 |
 |--- |--- |
-| **上次会话** | 2026-06-28 |
-| **已完成** | Phase 1 (v0.2.18) + Phase 2 (v0.2.19) 已合 main；Streaming、MemoryManager、ContextManager、RuntimeOverrides、RetryPolicy、validate()、fast_model、risk_threshold、memory.db 路径统一全部 ship |
-| **下一步** | Phase 3 (v0.3.0)：11 个 task，从 Session 生命周期 → Profile 系统 → edit 工具 → 成本追踪 → 文档 |
-| **当前版本** | 0.2.19 |
-| **已修复** | api_key 空字符串回退、ToolCall.type 字段缺失、工具输出显示、yaml 模型名更新 |
-| **备注** | Phase 3 进行中：`docs/superpowers/plans/2026-06-27-qingbird-v0.3-implementation-plan.md` |
+| **上次会话** | 2026-06-29 |
+| **已完成** | Phase 1 (v0.2.18) + Phase 2 (v0.2.19) + Phase 3 (v0.3.0) 全部合入 milestone/v0.3；edit 工具、Profile 系统、Session 生命周期、成本追踪、配置校验、/provider、/usage cache、清理节流、示例 profile、357 测试、用户文档 |
+| **下一步** | v0.3.0 已完成，准备合并到 main（maintainer PR） |
+| **当前版本** | 0.3.0 |
+| **已修复** | api_key 空字符串回退、ToolCall.type 字段缺失、工具输出显示、yaml 模型名更新、stale provider_planned i18n key、hardcoded English string |
+| **备注** | Phase 3 完成：`docs/superpowers/plans/2026-06-27-qingbird-v0.3-implementation-plan.md`；milestone/v0.3 分支 13 commits，48 files changed |
 
 ## △ V0.3.0 — 日常编码助手可用态
 
