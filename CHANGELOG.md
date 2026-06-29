@@ -185,6 +185,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Edit tool** (`edit` — 8th built-in tool): precise substring replacement in files with single-match enforcement, line-level diff summary via `similar` crate, `allowed_paths` and risk-level checks. `EditTool` struct with `Tool` trait implementation
+- **UndoStack** (20-deep LIFO ring buffer): `UndoStack` + `UndoEntry` in `qbird-code-tools`, `Arc<Mutex<UndoStack>>` wired into `EditTool` so every successful edit auto-pushes the pre-edit file snapshot
+- **`/undo` slash command** in interactive mode: pops the undo stack and writes the file back to its previous content; rejected in `--execute` mode
+- **i18n keys** for edit/undo: `interactive_edit_diff_summary`, `interactive_edit_success`, `interactive_undo_success`, `interactive_help_undo`, `err_tool_edit_not_found`, `err_tool_edit_ambiguous`, `err_undo_stack_empty`, `err_undo_unavailable_in_execute`, `err_undo_lock_failed` (zh-CN + en-US)
+- **12 unit tests** for EditTool (match/no-match/ambiguous/diff/allowed_paths/risk/no-file) and UndoStack (push/pop/limit/profile-preserved/execute-blocked)
+- **1 integration test** for edit → undo round trip
+
+### Changed
+
 - **Profile system** (`--profile <name>` flag + `/profile` slash command): user profile files at `<data_dir>/qingbird/profiles/<name>.yaml` override parts of `qingbird.yaml` — `system_prompt` (replace, not append), `tools_allow` (whitelist enforced in `ToolRegistry.execute`), `risk_threshold`, `provider`, `model`. Resolution order: `--profile` CLI flag > `qingbird.yaml` `profiles.default` > no profile. Mid-session `/profile <name>`, `/profile list`, `/profile` (current). `Profile::load`, `Profile::list`, `Profile::merge_into`, `Profile::default_dir`. `ToolRegistry.set_allowed_tools` + whitelist check in `execute`. New `EflowError` variants: `ProfileNotFound { name }`, `ProfileMalformed { name, reason }`, `ToolNotAllowed { tool, allowed }` — all with `user_message()` i18n keys
 - **10 unit tests** for `Profile` (load/list/merge/replace semantics/default dir), **3 tests** for `ToolRegistry` `allowed_tools` whitelist (block/admit/none-allows-all), **3 tests** for the CLI `--profile` flag path (load → merge → user_message on missing → list)
 

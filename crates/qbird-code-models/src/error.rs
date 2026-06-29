@@ -57,6 +57,23 @@ pub enum EflowError {
 
     #[error("session prefix {prefix} is ambiguous ({count} matches)")]
     SessionAmbiguous { prefix: String, count: usize },
+
+    #[error("Edit string not found in {path}")]
+    ToolEditNotFound {
+        path: String,
+        search_excerpt: String,
+    },
+
+    #[error("Edit string matches {count} locations in {path}")]
+    ToolEditAmbiguous {
+        path: String,
+        count: usize,
+        line_numbers: Vec<usize>,
+        search_excerpt: String,
+    },
+
+    #[error("Undo stack is empty")]
+    UndoStackEmpty,
 }
 
 pub type Result<T> = std::result::Result<T, EflowError>;
@@ -121,6 +138,36 @@ impl EflowError {
                 count = count
             )
             .into_owned(),
+            Self::ToolEditNotFound {
+                path,
+                search_excerpt,
+            } => t!(
+                "err_tool_edit_not_found",
+                path = path.as_str(),
+                search = search_excerpt.as_str()
+            )
+            .into_owned(),
+            Self::ToolEditAmbiguous {
+                path,
+                count,
+                line_numbers,
+                search_excerpt,
+            } => {
+                let lines_csv = line_numbers
+                    .iter()
+                    .map(|n| n.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                t!(
+                    "err_tool_edit_ambiguous",
+                    path = path.as_str(),
+                    count = count,
+                    lines = lines_csv.as_str(),
+                    search = search_excerpt.as_str()
+                )
+                .into_owned()
+            }
+            Self::UndoStackEmpty => t!("err_undo_stack_empty").into_owned(),
         }
     }
 }

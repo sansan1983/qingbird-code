@@ -15,10 +15,10 @@ const HELP_KEYS: &[&str] = &[
     "interactive_help_sdd_run",
     "interactive_help_sdd_confirm",
     "interactive_help_sdd_status",
-    "interactive_help_undo_planned",
-    "interactive_help_profile_planned",
+    "interactive_help_undo",
+    "interactive_help_profile",
     "interactive_help_provider_planned",
-    "interactive_help_session_delete_planned",
+    "interactive_help_session_delete",
 ];
 
 fn read_yml(name: &str) -> String {
@@ -128,21 +128,15 @@ fn test_help_minimum_line_count() {
 
 #[test]
 fn test_help_planned_commands_marked() {
-    // All 4 Phase-3 placeholder commands must be tagged with [planned] in
-    // both locales so users know they are not yet implemented.
+    // The only remaining Phase-3 placeholder command is /provider.
+    // Profile, session delete, and /undo are now implemented.
     for name in ["zh-CN", "en-US"] {
         let content = read_yml(name);
-        for key in [
-            "interactive_help_undo_planned",
-            "interactive_help_profile_planned",
-            "interactive_help_provider_planned",
-            "interactive_help_session_delete_planned",
-        ] {
-            let v = lookup(&content, key).unwrap_or_else(|| panic!("{key} missing in {name}"));
-            assert!(
-                v.contains("[planned]"),
-                "{key} in {name} missing [planned] marker: {v}"
-            );
-        }
+        let key = "interactive_help_provider_planned";
+        let v = lookup(&content, key).unwrap_or_else(|| panic!("{key} missing in {name}"));
+        assert!(
+            v.contains("[planned]"),
+            "{key} in {name} missing [planned] marker: {v}"
+        );
     }
 }

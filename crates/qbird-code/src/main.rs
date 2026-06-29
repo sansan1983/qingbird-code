@@ -3,7 +3,7 @@ rust_i18n::i18n!("../../locales", fallback = "en-US");
 use rust_i18n::t;
 
 use std::io::{self, BufRead, Write};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use clap::Parser;
 use qbird_code_agents::skill::{SddProposal, SkillContext, SkillRegistry};
@@ -18,8 +18,8 @@ use qbird_code_infra::providers::{
 use qbird_code_infra::runtime_overrides::{CliOverrides, RuntimeOverrides};
 use qbird_code_models::{Message, RetryPolicy, RiskLevel};
 use qbird_code_tools::{
-    ExecuteCommandTool, GlobTool, ListDirTool, ReadFileTool, SearchCodeTool, ToolRegistry,
-    WebFetchTool, WriteFileTool,
+    EditTool, ExecuteCommandTool, GlobTool, ListDirTool, ReadFileTool, SearchCodeTool,
+    ToolRegistry, UndoStack, WebFetchTool, WriteFileTool,
 };
 /// qingbird — Efficient Flow Agent Collaboration Framework
 #[derive(Parser)]
@@ -343,6 +343,13 @@ async fn main() {
     registry.register(Arc::new(GlobTool));
     registry.register(Arc::new(ListDirTool));
     registry.register(Arc::new(WebFetchTool));
+
+    // Undo stack lives outside ToolRegistry so profile switches cannot clear it.
+    let undo_stack: Arc<Mutex<UndoStack>> = Arc::new(Mutex::new(UndoStack::new()));
+    registry.register(Arc::new(
+        EditTool::new().with_undo_stack(undo_stack.clone()),
+    ));
+
     registry.set_allowed_paths(cfg.security.allowed_paths.clone());
     // 19-07: 风险阈值从 yaml 读，替代历史硬编码 L3
     registry.set_risk_threshold(cfg.security.risk_threshold);
@@ -606,7 +613,7 @@ async fn main() {
                         println!("{}", t!("interactive_help_sdd_confirm"));
                         println!("{}", t!("interactive_help_sdd_status"));
                         println!();
-                        println!("{}", t!("interactive_help_undo_planned"));
+                        println!("{}", t!("interactive_help_undo"));
                         println!("{}", t!("interactive_help_profile"));
                         println!();
                     }
@@ -1003,6 +1010,32 @@ async fn main() {
                             }
                         }
                     }
+                    "/undo" => match undo_stack.lock() {
+                        Ok(mut stack) => match stack.pop() {
+                            Some(entry) => {
+                                let path = entry.path.clone();
+                                let content = entry.previous_content.clone();
+                                drop(stack);
+                                match std::fs::write(&path, &content) {
+                                    Ok(()) => {
+                                        println!(
+                                            "{}",
+                                            t!("interactive_undo_success", path = path.display())
+                                        );
+                                    }
+                                    Err(e) => {
+                                        eprintln!("{}", t!("err_io", msg = e.to_string()));
+                                    }
+                                }
+                            }
+                            None => {
+                                eprintln!("{}", t!("err_undo_stack_empty"));
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!("{}", t!("err_undo_lock_failed", msg = e.to_string()));
+                        }
+                    },
                     _ => {
                         println!("{}", t!("interactive_unknown_cmd", cmd = cmd));
                     }
