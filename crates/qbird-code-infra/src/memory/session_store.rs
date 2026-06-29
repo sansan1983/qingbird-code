@@ -45,6 +45,25 @@ impl SessionStore {
             );",
         )
         .map_err(|e| EflowError::Memory(format!("Failed to create session tables: {}", e)))?;
+
+        // v0.3.1 migration: sessions 表加 relation / parent_session_id / role
+        let columns: Vec<String> = conn
+            .prepare("PRAGMA table_info(sessions)")
+            .map_err(|e| EflowError::Memory(e.to_string()))?
+            .query_map([], |row| row.get::<_, String>(1))
+            .map_err(|e| EflowError::Memory(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        if !columns.iter().any(|c| c == "relation") {
+            conn.execute_batch(
+                "ALTER TABLE sessions ADD COLUMN relation TEXT NOT NULL DEFAULT 'main';
+                 ALTER TABLE sessions ADD COLUMN parent_session_id TEXT;
+                 ALTER TABLE sessions ADD COLUMN role TEXT;",
+            )
+            .map_err(|e| EflowError::Memory(format!("Failed to migrate sessions schema: {}", e)))?;
+        }
+
         Ok(Self {
             db: Mutex::new(conn),
         })
@@ -52,11 +71,32 @@ impl SessionStore {
 
     #[allow(clippy::type_complexity)]
     pub fn list_sessions(&self) -> Result<Vec<(String, String, i64, i64, i64)>> {
+        self.list_sessions_filtered(false).map(|rows| {
+            rows.into_iter()
+                .map(|(id, name, c, u, n, _rel)| (id, name, c, u, n))
+                .collect()
+        })
+    }
+
+    /// 列出 session；`include_side=true` 时包含 subagent 子会话
+    #[allow(clippy::type_complexity)]
+    pub fn list_sessions_filtered(
+        &self,
+        include_side: bool,
+    ) -> Result<Vec<(String, String, i64, i64, i64, String)>> {
         let db = self
             .db
             .lock()
             .map_err(|e| EflowError::Internal(e.to_string()))?;
-        let mut stmt = db.prepare("SELECT id, name, created_at, updated_at, message_count FROM sessions ORDER BY updated_at DESC LIMIT 20")
+        let sql = if include_side {
+            "SELECT id, name, created_at, updated_at, message_count, relation
+             FROM sessions ORDER BY updated_at DESC LIMIT 50"
+        } else {
+            "SELECT id, name, created_at, updated_at, message_count, relation
+             FROM sessions WHERE relation = 'main' ORDER BY updated_at DESC LIMIT 20"
+        };
+        let mut stmt = db
+            .prepare(sql)
             .map_err(|e| EflowError::Memory(e.to_string()))?;
         let rows = stmt
             .query_map([], |row| {
@@ -66,6 +106,7 @@ impl SessionStore {
                     row.get::<_, i64>(2)?,
                     row.get::<_, i64>(3)?,
                     row.get::<_, i64>(4)?,
+                    row.get::<_, String>(5)?,
                 ))
             })
             .map_err(|e| EflowError::Memory(e.to_string()))?;
@@ -74,6 +115,61 @@ impl SessionStore {
             result.push(row.map_err(|e| EflowError::Memory(e.to_string()))?);
         }
         Ok(result)
+    }
+
+    /// 保存子会话（subagent 用）。`relation='side'`，带 `parent_session_id` / `role`。
+    #[allow(clippy::too_many_arguments)]
+    pub fn save_side_session(
+        &self,
+        session_id: &str,
+        parent_session_id: &str,
+        role: &str,
+        name: &str,
+        messages: &[Message],
+    ) -> Result<()> {
+        let db = self
+            .db
+            .lock()
+            .map_err(|e| EflowError::Internal(e.to_string()))?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+
+        db.execute(
+            "INSERT INTO sessions
+                (id, name, created_at, updated_at, message_count, relation, parent_session_id, role)
+             VALUES (?1, ?2, ?3, ?3, ?4, 'side', ?5, ?6)
+             ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                updated_at = excluded.updated_at,
+                message_count = excluded.message_count",
+            params![
+                session_id,
+                name,
+                now,
+                messages.len() as i64,
+                parent_session_id,
+                role
+            ],
+        )
+        .map_err(|e| EflowError::Memory(e.to_string()))?;
+
+        db.execute(
+            "DELETE FROM session_messages WHERE session_id = ?1",
+            params![session_id],
+        )
+        .map_err(|e| EflowError::Memory(e.to_string()))?;
+
+        for msg in messages {
+            db.execute(
+                "INSERT INTO session_messages (session_id, role, content, timestamp)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![session_id, msg.role_str(), msg.content, now],
+            )
+            .map_err(|e| EflowError::Memory(e.to_string()))?;
+        }
+        Ok(())
     }
 
     pub fn save_messages(&self, session_id: &str, messages: &[Message]) -> Result<()> {
