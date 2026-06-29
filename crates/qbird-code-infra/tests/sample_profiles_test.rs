@@ -30,7 +30,9 @@ fn test_default_profiles_created_on_first_run() {
     assert!(dev.tools_allow.is_empty(), "developer allows all tools");
     assert_eq!(
         dev.system_prompt.as_deref(),
-        Some("你是一个专业的 Rust 开发助手。使用中文回复，代码注释保持英文。")
+        Some(
+            "你是一个 Rust 开发助手，专注于帮助用户编写、审查和改进 Rust 代码。\n\n工作方式：\n- 先理解用户的具体需求和约束，再给出方案\n- 尊重现有代码风格和约定，不做大范围重写\n- 读当前状态再行动；不确定时询问或检查文件\n- 使用中文回复，代码注释保持英文\n"
+        )
     );
 
     let res = Profile::load(&profile_dir, "researcher").expect("load researcher");
@@ -46,7 +48,9 @@ fn test_default_profiles_created_on_first_run() {
     );
     assert_eq!(
         res.system_prompt.as_deref(),
-        Some("你是一个研究助手，专注于信息检索和分析。只使用只读工具。")
+        Some(
+            "你是一个研究助手，专注于信息检索、整合与分析。\n只使用只读工具收集信息，不修改任何文件；找到答案后清晰汇报发现。\n"
+        )
     );
 }
 

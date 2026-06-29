@@ -131,7 +131,14 @@ impl Profile {
 
         let developer_yaml = r#"name: developer
 description: "Rust development assistant"
-system_prompt: "你是一个专业的 Rust 开发助手。使用中文回复，代码注释保持英文。"
+system_prompt: |
+  你是一个 Rust 开发助手，专注于帮助用户编写、审查和改进 Rust 代码。
+
+  工作方式：
+  - 先理解用户的具体需求和约束，再给出方案
+  - 尊重现有代码风格和约定，不做大范围重写
+  - 读当前状态再行动；不确定时询问或检查文件
+  - 使用中文回复，代码注释保持英文
 tools_allow: []
 risk_threshold: L3
 thinking_enabled: true
@@ -139,7 +146,9 @@ thinking_enabled: true
 
         let researcher_yaml = r#"name: researcher
 description: "Research assistant (read-only)"
-system_prompt: "你是一个研究助手，专注于信息检索和分析。只使用只读工具。"
+system_prompt: |
+  你是一个研究助手，专注于信息检索、整合与分析。
+  只使用只读工具收集信息，不修改任何文件；找到答案后清晰汇报发现。
 tools_allow:
   - read_file
   - search_code
