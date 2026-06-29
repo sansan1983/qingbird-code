@@ -71,7 +71,6 @@ interactive_sdd_status_idle: "No pending SDD proposal"
 interactive_edit_diff_summary: "old:{old_lines} / new:{new_lines} / ±{delta}"
 interactive_undo_success: "Undone {path}"
 interactive_help_undo: "  /undo              Revert the last edit tool call (keeps last 20)"
-interactive_help_provider_planned: "  /provider <name>   [planned] Switch provider (v0.3.0)"
 interactive_help_provider: "  /provider <name>   Switch provider (current: %{name})"
 sdd_skills_header: "SDD skills registered: %{count}"
 sdd_skill_entry: "  [%{level}] %{id} — %{name}"
@@ -139,6 +138,7 @@ interactive_help_profile: "  /profile [list|<name>] — Switch or view profile"
 # Provider/model require restart (v0.3.0 — Task 30-02 follow-up)
 interactive_profile_warn_provider: "Note: profile provider (%{value}) requires restart"
 interactive_profile_warn_model: "Note: profile model (%{value}) requires restart"
+interactive_profile_restart_note: "Note: provider/model changes apply to new requests; existing LLM client unchanged."
 
 # === System prompt ===
 system_prompt: "You are qingbird, an efficient coding assistant. Current LLM Provider: %{provider}.\n\nAvailable tools: %{tools}\n\nCall tools to complete the task. After each tool call you will receive the result. Decide the next step based on results. Provide a summary when done."

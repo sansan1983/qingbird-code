@@ -17,7 +17,6 @@ const HELP_KEYS: &[&str] = &[
     "interactive_help_sdd_status",
     "interactive_help_undo",
     "interactive_help_profile",
-    "interactive_help_provider_planned",
     "interactive_help_session_delete",
 ];
 
@@ -124,19 +123,4 @@ fn test_help_minimum_line_count() {
         non_empty >= 11,
         "expected at least 11 non-empty help keys, got {non_empty}"
     );
-}
-
-#[test]
-fn test_help_planned_commands_marked() {
-    // The only remaining Phase-3 placeholder command is /provider.
-    // Profile, session delete, and /undo are now implemented.
-    for name in ["zh-CN", "en-US"] {
-        let content = read_yml(name);
-        let key = "interactive_help_provider_planned";
-        let v = lookup(&content, key).unwrap_or_else(|| panic!("{key} missing in {name}"));
-        assert!(
-            v.contains("[planned]"),
-            "{key} in {name} missing [planned] marker: {v}"
-        );
-    }
 }

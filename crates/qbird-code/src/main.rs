@@ -1098,9 +1098,7 @@ async fn main() {
                                         tracing::warn!("{w}");
                                     }
                                     if !switch_warnings.is_empty() {
-                                        eprintln!(
-                                            "Note: provider/model changes apply to new requests; existing LLM client unchanged."
-                                        );
+                                        eprintln!("{}", t!("interactive_profile_restart_note"));
                                     }
                                 }
                                 Err(e) => {

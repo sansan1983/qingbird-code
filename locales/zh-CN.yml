@@ -73,7 +73,6 @@ interactive_sdd_status_idle: "当前无待确认的 SDD proposal"
 interactive_edit_diff_summary: "old:{old_lines} / new:{new_lines} / ±{delta}"
 interactive_undo_success: "已撤销 {path}"
 interactive_help_undo: "  /undo              撤销上一次 edit 工具调用（保留最近 20 步）"
-interactive_help_provider_planned: "  /provider <name>   [planned] 切换 Provider（v0.3.0）"
 interactive_help_provider: "  /provider <name>   切换 Provider（当前: %{name}）"
 sdd_skills_header: "已注册 SDD 技能: %{count}"
 sdd_skill_entry: "  [%{level}] %{id} — %{name}"
@@ -141,6 +140,7 @@ interactive_help_profile: "  /profile [list|<name>] — 切换或查看 profile"
 # Provider/model 需重启生效（v0.3.0 — Task 30-02 follow-up）
 interactive_profile_warn_provider: "注意: profile 指定的 provider (%{value}) 需要重启 qingbird 才会生效"
 interactive_profile_warn_model: "注意: profile 指定的 model (%{value}) 需要重启 qingbird 才会生效"
+interactive_profile_restart_note: "注意: provider/model 变更将在下次请求时生效；现有 LLM 客户端不受影响"
 
 # === 系统提示词 ===
 system_prompt: "你是 qingbird，一个高效的编码助手。当前 LLM Provider：%{provider}。\n\n可用工具：%{tools}\n\n请通过调用工具来完成任务。每次调用工具后会得到执行结果，根据结果决定下一步。任务完成时给出总结。"
