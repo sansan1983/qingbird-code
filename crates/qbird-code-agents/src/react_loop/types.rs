@@ -71,7 +71,7 @@ pub trait AgentHook: Send {
 }
 
 /// ReAct 循环配置
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ReactLoopConfig {
     pub max_iterations: usize,
     pub model: String,
@@ -87,6 +87,9 @@ pub struct ReactLoopConfig {
     pub context_checkpoint_threshold: f64,
     /// Streaming mode toggle (--stream / --no-stream)
     pub stream_enabled: bool,
+    /// v0.3.1：可选 subagent executor；delegate_task 工具的真正执行者。
+    /// `None` 时 delegate_task 调用会立即返回 `Internal` 错误。
+    pub subagent_executor: Option<std::sync::Arc<crate::subagent::SubagentExecutor>>,
 }
 
 impl Default for ReactLoopConfig {
@@ -102,6 +105,7 @@ impl Default for ReactLoopConfig {
             context_token_limit: 32000,
             context_checkpoint_threshold: 0.8,
             stream_enabled: false,
+            subagent_executor: None,
         }
     }
 }

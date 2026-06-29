@@ -7,7 +7,8 @@ use std::sync::{Arc, Mutex};
 
 use clap::Parser;
 use qbird_code_agents::skill::{SddProposal, SkillContext, SkillRegistry};
-use qbird_code_agents::{ReactLoop, ReactLoopConfig};
+use qbird_code_agents::subagent::{SubagentExecutor, SubagentExecutorTrait, load_profiles};
+use qbird_code_agents::{DelegateTaskTool, ReactLoop, ReactLoopConfig};
 use qbird_code_infra::config::{estimate_cost, find_config, format_cost, load_config};
 use qbird_code_infra::config_validate::validate_config;
 use qbird_code_infra::http_client::HttpLlmClient;
@@ -440,6 +441,38 @@ async fn main() {
         ),
         _ => (false, "high".into()),
     };
+
+    // === 4c. 构造 SubagentExecutor + 注册 DelegateTaskTool (v0.3.1) ===
+    // temp_registry 是 registry 的 snapshot（此时已含所有 profile 应用的
+    // allowed_tools / risk_threshold / allowed_paths），subagent executor
+    // 共享主 agent 的安全设置。delegate_task_tool 单独注册到主 registry
+    // （不进入 subagent 的 registry，避免子代理递归派发）。
+    let temp_registry_arc = Arc::new(registry.clone());
+    let subagent_profiles = match load_profiles(None) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{}", e.user_message());
+            std::process::exit(1);
+        }
+    };
+    let subagent_executor = match SubagentExecutor::builder()
+        .profiles(subagent_profiles)
+        .base_config(ReactLoopConfig {
+            model: model.clone(),
+            ..ReactLoopConfig::default()
+        })
+        .tool_registry(temp_registry_arc)
+        .build()
+    {
+        Ok(e) => Arc::new(e),
+        Err(e) => {
+            eprintln!("{}", e.user_message());
+            std::process::exit(1);
+        }
+    };
+    let delegate_task_tool =
+        DelegateTaskTool::new(subagent_executor.clone() as Arc<dyn SubagentExecutorTrait>);
+    registry.register(Arc::new(delegate_task_tool));
     let mut tool_registry = Arc::new(registry);
 
     // === 4b. 初始化技能注册表 ===
@@ -471,6 +504,7 @@ async fn main() {
             thinking_enabled,
             thinking_effort: thinking_effort.clone(),
             stream_enabled,
+            subagent_executor: Some(subagent_executor.clone()),
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![
@@ -543,6 +577,7 @@ async fn main() {
             thinking_enabled,
             thinking_effort: thinking_effort.clone(),
             stream_enabled,
+            subagent_executor: Some(subagent_executor.clone()),
             ..ReactLoopConfig::default()
         });
         let mut messages = vec![match &profile_overridden_system_prompt {

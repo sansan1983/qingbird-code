@@ -276,11 +276,23 @@ impl ReactLoop {
                         .all(|tc| types::READ_ONLY_TOOLS.contains(&tc.function.name.as_str()));
 
                     if is_all_readonly {
-                        self.execute_tools_parallel(&tool_calls, tool_registry, messages)
-                            .await?;
+                        self.execute_tools_parallel(
+                            &tool_calls,
+                            tool_registry,
+                            messages,
+                            provider,
+                            http_client,
+                        )
+                        .await?;
                     } else {
-                        self.execute_tools_sequential(&tool_calls, tool_registry, messages)
-                            .await?;
+                        self.execute_tools_sequential(
+                            &tool_calls,
+                            tool_registry,
+                            messages,
+                            provider,
+                            http_client,
+                        )
+                        .await?;
                     }
 
                     // === 决策: 工具执行后继续 ===
@@ -304,6 +316,8 @@ impl ReactLoop {
         tool_calls: &[ToolCall],
         tool_registry: &Arc<ToolRegistry>,
         messages: &mut Vec<Message>,
+        provider: &dyn Provider,
+        http_client: &HttpLlmClient,
     ) -> Result<(), EflowError> {
         use futures_util::stream::{FuturesUnordered, StreamExt};
 
@@ -317,6 +331,8 @@ impl ReactLoop {
                 serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::json!({}));
             let call_id = tc.id.clone();
             let call_name = tc.function.name.clone();
+            let is_delegate = call_name == "delegate_task";
+            let tc_clone = tc.clone();
 
             println!(
                 "⚙ {}({})",
@@ -324,14 +340,22 @@ impl ReactLoop {
                 truncate_str(&tc.function.arguments, 120)
             );
             futures.push(async move {
-                let result = registry.execute(&name, args, task_id).await;
+                let result = if is_delegate {
+                    self.execute_delegate_task(&tc_clone, provider, http_client)
+                        .await
+                } else {
+                    registry
+                        .execute(&name, args, task_id)
+                        .await
+                        .map(|o| o.content)
+                };
                 (call_id, call_name, result)
             });
         }
 
         while let Some((call_id, call_name, result)) = futures.next().await {
             let content = match result {
-                Ok(output) => output.content,
+                Ok(c) => c,
                 Err(e) => format!("错误: {}", e),
             };
             print_tool_output(&call_name, &content);
@@ -346,6 +370,8 @@ impl ReactLoop {
         tool_calls: &[ToolCall],
         tool_registry: &Arc<ToolRegistry>,
         messages: &mut Vec<Message>,
+        provider: &dyn Provider,
+        http_client: &HttpLlmClient,
     ) -> Result<(), EflowError> {
         let task_id = uuid::Uuid::new_v4();
 
@@ -358,12 +384,17 @@ impl ReactLoop {
                 tc.function.name,
                 truncate_str(&tc.function.arguments, 120)
             );
-            let result = tool_registry
-                .execute(&tc.function.name, args, task_id)
-                .await;
-            let content = match result {
-                Ok(output) => output.content,
-                Err(e) => format!("错误: {}", e),
+            let content = if tc.function.name == "delegate_task" {
+                self.execute_delegate_task(tc, provider, http_client)
+                    .await?
+            } else {
+                let result = tool_registry
+                    .execute(&tc.function.name, args, task_id)
+                    .await;
+                match result {
+                    Ok(output) => output.content,
+                    Err(e) => format!("错误: {}", e),
+                }
             };
             print_tool_output(&tc.function.name, &content);
             messages.push(Message::tool_result(
@@ -374,6 +405,53 @@ impl ReactLoop {
         }
 
         Ok(())
+    }
+
+    /// 跑 `delegate_task` 工具调用：调 `SubagentExecutor::spawn_child_with_provider`
+    /// 并把 ChildRecord 序列化成 pretty JSON 返回（与 DelegateTaskTool.execute_with_provider
+    /// 输出格式一致，避免 ReactLoop 直接接 SubagentExecutor 时与 DelegateTaskTool 输出分裂）。
+    async fn execute_delegate_task(
+        &self,
+        tc: &ToolCall,
+        provider: &dyn Provider,
+        http_client: &HttpLlmClient,
+    ) -> Result<String, EflowError> {
+        let executor = self.config.subagent_executor.as_ref().ok_or_else(|| {
+            EflowError::Internal("delegate_task called but subagent_executor is None".into())
+        })?;
+
+        let args: serde_json::Value =
+            serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::json!({}));
+
+        let prompt = args
+            .get("prompt")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| EflowError::Internal("delegate_task: missing prompt".into()))?;
+        let label = args
+            .get("label")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| EflowError::Internal("delegate_task: missing label".into()))?;
+        let profile = args
+            .get("profile")
+            .and_then(|v| v.as_str())
+            .unwrap_or("general");
+
+        let hints = crate::subagent::SubagentSpawnHints::default();
+        let record = executor
+            .spawn_child_with_provider(profile, prompt, &hints, provider, http_client)
+            .await?;
+
+        let output = serde_json::json!({
+            "child_id": record.child_id,
+            "label": label,
+            "status": format!("{:?}", record.status),
+            "summary": record.summary,
+            "profile": record.profile,
+            "tool_policy": format!("{:?}", record.tool_policy),
+            "duration_ms": record.duration_ms,
+        });
+
+        Ok(serde_json::to_string_pretty(&output).unwrap_or_default())
     }
 }
 

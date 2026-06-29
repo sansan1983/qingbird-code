@@ -137,18 +137,24 @@ impl SubagentExecutor {
         };
 
         let react_loop = ReactLoop::new(child_config);
-        let result = react_loop
-            .run(
-                provider,
-                http_client,
-                &mut messages,
-                &child_tool_schemas,
-                &self.tool_registry,
-                Some(max_iter),
-                None,
-                None,
-            )
-            .await;
+        // Box::pin 破坏类型级递归：run → execute_tools_* → execute_delegate_task
+        // → spawn_child_with_provider → react_loop.run。无 Box::pin 时 future
+        // size 无法静态确定（无限递归）。
+        // 这里内层 boxed future 不要求 Send：递归链上每个 async fn 都通过
+        // Box<dyn Future + 'a> 类型擦除，让编译器不再追问 Send 要求。
+        // 实际语义：v0.3.1 同步等子 agent 完成，整个链路单线程顺序 await，
+        // Send 不必要。
+        let inner_run_fut = Box::pin(react_loop.run(
+            provider,
+            http_client,
+            &mut messages,
+            &child_tool_schemas,
+            &self.tool_registry,
+            Some(max_iter),
+            None,
+            None,
+        ));
+        let result = inner_run_fut.await;
 
         let duration_ms = started.elapsed().as_millis() as u64;
 
